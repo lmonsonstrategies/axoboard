@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="AxoBoard configurable operations dashboard wireframe" />
+  <title>AxoBoard — Product wireframe</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22%2316c7b7%22/><path d=%22M18 44V24m14 20V18m14 26V28%22 stroke=%22%23081019%22 stroke-width=%228%22 stroke-linecap=%22round%22/></svg>" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Product navigation">
+      <a class="brand" href="#builder" aria-label="AxoBoard home">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span><strong>AxoBoard</strong><small>Operations OS</small></span>
+      </a>
+
+      <div class="tenant-switcher">
+        <span class="tenant-avatar">N</span>
+        <span><small>Workspace</small><strong>Northstar Co.</strong></span>
+        <button type="button" aria-label="Switch workspace">⌄</button>
+      </div>
+
+      <nav class="primary-nav">
+        <button class="nav-item is-active" type="button" data-screen="builder"><span>▦</span>Dashboards</button>
+        <button class="nav-item" type="button" data-screen="integrations"><span>⌁</span>Integrations <b>5</b></button>
+        <button class="nav-item" type="button" data-screen="templates"><span>◇</span>Templates</button>
+        <button class="nav-item" type="button" data-screen="governance"><span>◎</span>Governance</button>
+      </nav>
+
+      <div class="nav-divider"></div>
+
+      <nav class="secondary-nav" aria-label="Workspace utilities">
+        <button type="button"><span>⚡</span>Alerts <b>3</b></button>
+        <button type="button"><span>↗</span>Action center</button>
+        <button type="button"><span>◫</span>Audit log</button>
+      </nav>
+
+      <div class="sidebar-health">
+        <div><span>Platform health</span><strong><i></i> Operational</strong></div>
+        <small>5/5 sources inside SLO</small>
+      </div>
+
+      <div class="sidebar-user">
+        <span class="user-avatar">LM</span>
+        <span><strong>Leroy Monson</strong><small>Workspace admin</small></span>
+        <button type="button" aria-label="User menu">•••</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <section class="screen is-active" id="builder" data-screen-panel="builder">
+        <header class="topbar">
+          <div class="breadcrumbs"><span>Dashboards</span><i>/</i><strong>Revenue Command</strong><span class="draft-badge">Draft</span></div>
+          <div class="topbar-actions">
+            <button class="icon-button" type="button" aria-label="Undo">↶</button>
+            <button class="icon-button" type="button" aria-label="Redo">↷</button>
+            <span class="saved-state"><i></i>Saved 12 sec ago</span>
+            <div class="mode-switch" aria-label="Dashboard mode">
+              <button class="is-active" type="button" data-mode="edit">Edit</button>
+              <button type="button" data-mode="view">Preview</button>
+            </div>
+            <button class="button button-ghost" type="button">Share</button>
+            <button class="button button-primary" type="button" id="publishButton">Publish v12</button>
+          </div>
+        </header>
+
+        <div class="builder-layout">
+          <aside class="card-palette" aria-label="Card palette">
+            <div class="panel-title"><span><small>BUILD</small><strong>Add a card</strong></span><button type="button" aria-label="Close palette">×</button></div>
+            <label class="search-field"><span>⌕</span><input type="search" placeholder="Search card types" /></label>
+            <div class="palette-section">
+              <small>DATA</small>
+              <button class="palette-card" type="button" data-card-type="Metric"><span class="card-icon">12</span><span><strong>Metric</strong><small>Single KPI + comparison</small></span><b>＋</b></button>
+              <button class="palette-card" type="button" data-card-type="Trend"><span class="card-icon">⌁</span><span><strong>Trend</strong><small>Time-series performance</small></span><b>＋</b></button>
+              <button class="palette-card" type="button" data-card-type="Table"><span class="card-icon">▤</span><span><strong>Table</strong><small>Records and rankings</small></span><b>＋</b></button>
+              <button class="palette-card" type="button" data-card-type="Pipeline"><span class="card-icon">▽</span><span><strong>Pipeline</strong><small>Stage conversion</small></span><b>＋</b></button>
+            </div>
+            <div class="palette-section">
+              <small>OPERATIONS</small>
+              <button class="palette-card" type="button" data-card-type="Goal"><span class="card-icon">◎</span><span><strong>Goal</strong><small>Target and pacing</small></span><b>＋</b></button>
+              <button class="palette-card" type="button" data-card-type="Status"><span class="card-icon">●</span><span><strong>Status</strong><small>People or system state</small></span><b>＋</b></button>
+              <button class="palette-card" type="button" data-card-type="Action queue"><span class="card-icon">⚡</span><span><strong>Action queue</strong><small>Assign and resolve work</small></span><b>＋</b></button>
+            </div>
+          </aside>
+
+          <section class="dashboard-stage" aria-label="Dashboard canvas">
+            <div class="stage-heading">
+              <div><small>LIVE OPERATIONS</small><h1>Revenue Command</h1><p>Every number has an owner, definition, and freshness state.</p></div>
+              <div class="stage-tools"><button type="button">Today⌄</button><button type="button">All teams⌄</button><button type="button" aria-label="Open TV mode">▣ TV mode</button></div>
+            </div>
+
+            <div class="freshness-strip">
+              <span><i></i>All systems current</span><span>Last full sync 38 seconds ago</span><button type="button">View data health →</button>
+            </div>
+
+            <div class="dashboard-grid" id="dashboardGrid">
+              <article class="dashboard-card metric-card is-selected" tabindex="0" data-card-name="Net sales today">
+                <div class="drag-handle">⠿</div><button class="card-menu" type="button" aria-label="Card menu">•••</button>
+                <div class="card-eyebrow"><span>NET SALES TODAY</span><i class="status-dot"></i></div>
+                <strong class="metric-value">$53,482</strong>
+                <div class="metric-change positive">↗ 29.4% <span>vs 30-day pace</span></div>
+                <div class="sparkline" aria-label="Increasing sales trend"><span style="height:25%"></span><span style="height:32%"></span><span style="height:28%"></span><span style="height:48%"></span><span style="height:42%"></span><span style="height:66%"></span><span style="height:88%"></span></div>
+                <footer><span>Shopify · 38s ago</span><button type="button">Definition</button></footer>
+              </article>
+
+              <article class="dashboard-card metric-card" tabindex="0" data-card-name="Orders today">
+                <div class="drag-handle">⠿</div><button class="card-menu" type="button" aria-label="Card menu">•••</button>
+                <div class="card-eyebrow"><span>ORDERS TODAY</span><i class="status-dot"></i></div>
+                <strong class="metric-value">19</strong>
+                <div class="metric-change positive">↗ 132% <span>vs 8.2 baseline</span></div>
+                <div class="goal-track"><span style="width:76%"></span></div>
+                <footer><span>Shopify · 38s ago</span><button type="button">Definition</button></footer>
+              </article>
+
+              <article class="dashboard-card metric-card" tabindex="0" data-card-name="Open pipeline">
+                <div class="drag-handle">⠿</div><button class="card-menu" type="button" aria-label="Card menu">•••</button>
+                <div class="card-eyebrow"><span>OPEN PIPELINE</span><i class="status-dot"></i></div>
+                <strong class="metric-value">$1.84M</strong>
+                <div class="metric-change neutral">71 deals <span>weighted $612K</span></div>
+                <div class="goal-track"><span style="width:58%"></span></div>
+                <footer><span>HubSpot · 1m ago</span><button type="button">Definition</button></footer>
+              </article>
+
+              <article class="dashboard-card wide-card" tabindex="0" data-card-name="Pipeline by stage">
+                <div class="drag-handle">⠿</div><button class="card-menu" type="button" aria-label="Card menu">•••</button>
+                <div class="card-heading"><div><small>PIPELINE FLOW</small><h2>Pipeline by stage</h2></div><button type="button">Last 30 days⌄</button></div>
+                <div class="pipeline-bars">
+                  <div><span>Qualified</span><i><b style="width:91%"></b></i><strong>44</strong></div>
+                  <div><span>Proposal</span><i><b style="width:72%"></b></i><strong>31</strong></div>
+                  <div><span>Decision</span><i><b style="width:43%"></b></i><strong>18</strong></div>
+                  <div><span>Won</span><i><b style="width:29%"></b></i><strong>12</strong></div>
+                </div>
+                <footer><span>HubSpot · 1m ago · Metric owner: RevOps</span><button type="button">Open pipeline →</button></footer>
+              </article>
+
+              <article class="dashboard-card action-card" tabindex="0" data-card-name="Exceptions requiring action">
+                <div class="drag-handle">⠿</div><button class="card-menu" type="button" aria-label="Card menu">•••</button>
+                <div class="card-heading"><div><small>ACTION QUEUE</small><h2>Needs attention</h2></div><span class="count-badge">4 open</span></div>
+                <ul class="action-list">
+                  <li><span class="severity high">!</span><span><strong>2 paid orders missing owner</strong><small>Oldest: 43 minutes</small></span><button type="button">Assign</button></li>
+                  <li><span class="severity medium">↻</span><span><strong>HubSpot sync retried</strong><small>Recovered · review 3 records</small></span><button type="button">Review</button></li>
+                  <li><span class="severity low">○</span><span><strong>1 stale proposal</strong><small>No activity for 7 days</small></span><button type="button">Open</button></li>
+                </ul>
+                <footer><span>3 sources · 22s ago</span><button type="button">View action center →</button></footer>
+              </article>
+
+              <button class="add-zone" id="canvasAddButton" type="button"><span>＋</span><strong>Add another card</strong><small>Choose a certified metric or operational action</small></button>
+            </div>
+          </section>
+
+          <aside class="inspector" aria-label="Card settings">
+            <div class="panel-title"><span><small>INSPECTOR</small><strong>Metric card</strong></span><button type="button" aria-label="Close inspector">×</button></div>
+            <div class="inspector-tabs"><button class="is-active" type="button">Data</button><button type="button">Display</button><button type="button">Actions</button></div>
+            <div class="form-stack">
+              <label>Title<input id="cardTitleInput" type="text" value="Net sales today" /></label>
+              <label>Certified dataset<button class="select-button" type="button"><span><i class="source-icon shopify">S</i>Shopify Orders</span><b>⌄</b></button></label>
+              <label>Metric<button class="select-button" type="button"><span><em>✓</em>Net sales</span><b>⌄</b></button><small class="verified-copy">Certified by Finance · v4</small></label>
+              <div class="field-row"><label>Date range<button class="select-button" type="button"><span>Today</span><b>⌄</b></button></label><label>Compare<button class="select-button" type="button"><span>30d pace</span><b>⌄</b></button></label></div>
+              <label>Filters<button class="filter-chip" type="button"><span>＋ Add filter</span></button></label>
+            </div>
+            <div class="definition-preview">
+              <span>METRIC DEFINITION</span>
+              <p>Gross sales − discounts − refunds, excluding tax and shipping.</p>
+              <button type="button">View lineage →</button>
+            </div>
+            <div class="inspector-footer"><button class="button button-danger" type="button">Remove</button><button class="button button-primary" type="button">Apply</button></div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="screen" id="integrations" data-screen-panel="integrations">
+        <header class="topbar page-topbar"><div><small>DATA PLANE</small><h1>Integrations</h1></div><div class="topbar-actions"><button class="button button-ghost" type="button">View sync log</button><button class="button button-primary" type="button">＋ Add connection</button></div></header>
+        <div class="page-body">
+          <section class="health-hero"><div><span class="health-orb">✓</span><span><small>CONNECTION HEALTH</small><strong>5 of 5 sources are current</strong><p>2,847 records processed in the last hour. No failed jobs.</p></span></div><button type="button">Open diagnostics →</button></section>
+          <div class="section-heading"><div><small>CONNECTED</small><h2>Production sources</h2></div><label class="search-field compact"><span>⌕</span><input type="search" placeholder="Search integrations" /></label></div>
+          <div class="integration-grid">
+            <article class="integration-card"><div><span class="integration-logo hubspot">H</span><span><strong>HubSpot</strong><small>CRM · OAuth</small></span><i class="status-pill current">Current</i></div><dl><div><dt>Last sync</dt><dd>1 min ago</dd></div><div><dt>Records</dt><dd>18,429</dd></div><div><dt>SLO</dt><dd>5 min</dd></div></dl><footer><span><i></i>Webhooks + incremental sync</span><button type="button">Manage</button></footer></article>
+            <article class="integration-card"><div><span class="integration-logo shopify">S</span><span><strong>Shopify</strong><small>Commerce · OAuth</small></span><i class="status-pill current">Current</i></div><dl><div><dt>Last event</dt><dd>38 sec ago</dd></div><div><dt>Orders</dt><dd>42,108</dd></div><div><dt>SLO</dt><dd>1 min</dd></div></dl><footer><span><i></i>Webhook stream healthy</span><button type="button">Manage</button></footer></article>
+            <article class="integration-card"><div><span class="integration-logo sheets">G</span><span><strong>Google Sheets</strong><small>Spreadsheet · Service account</small></span><i class="status-pill current">Current</i></div><dl><div><dt>Last sync</dt><dd>4 min ago</dd></div><div><dt>Rows</dt><dd>7,812</dd></div><div><dt>SLO</dt><dd>15 min</dd></div></dl><footer><span><i></i>3 workbooks connected</span><button type="button">Manage</button></footer></article>
+            <article class="integration-card"><div><span class="integration-logo postgres">P</span><span><strong>PostgreSQL</strong><small>Database · Read only</small></span><i class="status-pill current">Current</i></div><dl><div><dt>Last query</dt><dd>2 min ago</dd></div><div><dt>Datasets</dt><dd>6</dd></div><div><dt>SLO</dt><dd>5 min</dd></div></dl><footer><span><i></i>TLS connection verified</span><button type="button">Manage</button></footer></article>
+          </div>
+          <div class="section-heading catalog-heading"><div><small>CATALOG</small><h2>Add another source</h2></div><span>Connector requests are reviewed for reuse and security.</span></div>
+          <div class="catalog-grid">
+            <button type="button"><span class="integration-logo salesforce">Sf</span><span><strong>Salesforce</strong><small>CRM</small></span><b>Connect</b></button>
+            <button type="button"><span class="integration-logo stripe">St</span><span><strong>Stripe</strong><small>Payments</small></span><b>Connect</b></button>
+            <button type="button"><span class="integration-logo quickbooks">Q</span><span><strong>QuickBooks</strong><small>Accounting</small></span><b>Connect</b></button>
+            <button type="button"><span class="integration-logo api">{ }</span><span><strong>REST / Webhook</strong><small>Custom source</small></span><b>Configure</b></button>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="templates" data-screen-panel="templates">
+        <header class="topbar page-topbar"><div><small>START WITH PROVEN OPERATIONS</small><h1>Template library</h1></div><div class="topbar-actions"><button class="button button-primary" type="button">Create template</button></div></header>
+        <div class="page-body">
+          <div class="filter-row"><button class="is-active" type="button">All templates</button><button type="button">Revenue</button><button type="button">Service</button><button type="button">Commerce</button><button type="button">Executive</button></div>
+          <div class="template-grid">
+            <article class="template-card featured"><div class="template-preview revenue-preview"><span>$53.5K</span><i></i><i></i><i></i><b>19 orders</b></div><div><small>REVENUE OPERATIONS</small><h2>Revenue Command Center</h2><p>Daily sales, pipeline flow, rep pacing, exceptions, and action queues.</p><ul><li>HubSpot</li><li>Shopify</li><li>Sheets</li></ul><button class="button button-primary" type="button">Use template</button></div></article>
+            <article class="template-card"><div class="template-preview service-preview"><span>3 available</span><div><i></i><i></i><i></i><i></i></div><b>4 away</b></div><div><small>CUSTOMER SERVICE</small><h2>Service Team Live</h2><p>Availability, queues, SLA risk, capacity, customer sentiment, and ownership.</p><ul><li>HubSpot</li><li>Dialpad</li></ul><button class="button button-ghost" type="button">Preview</button></div></article>
+            <article class="template-card"><div class="template-preview exec-preview"><span>94%</span><div class="ring"></div><b>Goals on pace</b></div><div><small>EXECUTIVE</small><h2>Operating Review</h2><p>Weekly scorecard, goal pacing, notable changes, risks, and commitments.</p><ul><li>Any certified dataset</li></ul><button class="button button-ghost" type="button">Preview</button></div></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="governance" data-screen-panel="governance">
+        <header class="topbar page-topbar"><div><small>CONTROL PLANE</small><h1>Workspace governance</h1></div><div class="topbar-actions"><button class="button button-ghost" type="button">Export audit log</button><button class="button button-primary" type="button">Invite user</button></div></header>
+        <div class="page-body governance-body">
+          <div class="settings-nav" role="tablist" aria-label="Settings sections"><button class="is-active" type="button">Branding</button><button type="button">People & roles</button><button type="button">Security</button><button type="button">Data retention</button><button type="button">Billing & usage</button></div>
+          <section class="settings-panel">
+            <div class="settings-heading"><div><small>WHITE LABEL</small><h2>Brand experience</h2><p>Apply a tenant theme without changing product behavior or accessibility.</p></div><span class="plan-badge">Operations plan</span></div>
+            <div class="branding-grid">
+              <div class="brand-form">
+                <label>Workspace name<input type="text" value="Northstar Operations" /></label>
+                <label>Custom domain<div class="input-with-badge"><input type="text" value="dash.northstar.co" /><span>Verified</span></div></label>
+                <label>Logo<div class="logo-upload"><span class="tenant-avatar large">N</span><span><strong>northstar-logo.svg</strong><small>SVG · 18 KB</small></span><button type="button">Replace</button></div></label>
+                <div class="field-row"><label>Primary color<input class="color-input" type="text" value="#12B8A6" /></label><label>Surface theme<button class="select-button" type="button"><span>Dark industrial</span><b>⌄</b></button></label></div>
+                <div class="accessibility-check"><span>✓</span><span><strong>Contrast check passed</strong><small>All configured text and controls meet WCAG AA.</small></span></div>
+              </div>
+              <div class="theme-preview"><div class="theme-preview-bar"><span class="tenant-avatar">N</span><strong>Northstar</strong><i></i><i></i></div><div class="theme-preview-body"><small>REVENUE TODAY</small><strong>$53,482</strong><span>↗ 29.4%</span><div><i></i><i></i><i></i><i></i><i></i></div></div><p>Preview updates as brand settings change.</p></div>
+            </div>
+            <footer class="settings-footer"><span>Last changed by Leroy · 2 days ago</span><button class="button button-primary" type="button">Save branding</button></footer>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"><span>✓</span><p><strong>Dashboard published</strong><small>Version 12 is now live.</small></p></div>
+  <script src="app.js"></script>
+</body>
+</html>
