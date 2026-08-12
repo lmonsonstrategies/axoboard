@@ -1,0 +1,14 @@
+{
+  "name": "axoboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AxoBoard standalone SaaS application",
+  "scripts": {
+    "start": "node server.mjs",
+    "check": "node --check server.mjs && node --check wireframes/app.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -2,9 +2,9 @@
 
 ## Product promise
 
-**Build a trusted operating dashboard from the systems a company already uses—then let teams act on what they see.**
+**Turn trusted performance data into visible progress, personalized celebrations, and team momentum.**
 
-AxoBoard is not a warehouse, spreadsheet replacement, or unrestricted BI query tool. It is the governed operational layer used in daily meetings, team screens, exception handling, and performance reviews.
+AxoBoard is not a warehouse, spreadsheet replacement, unrestricted BI query tool, or generic game platform. It is the configurable performance layer used on team dashboards and TV screens to celebrate wins, reinforce goals, and run branded competitions.
 
 ## Fork strategy
 
@@ -18,7 +18,7 @@ Use a **selective extraction** strategy:
 2. Build the AxoBoard control/data planes independently.
 3. Port one proven card at a time behind those contracts.
 4. Connect Murphy as the first tenant through configuration and adapters.
-5. Keep Murphy-only games, commissions, and internal workflows in the Murphy repository unless they become reusable templates.
+5. Extract the reusable Murphy Kombat mechanics into a generic game preset engine. Murphy-specific names, sprites, scoring rules, and assets remain tenant configuration—not AxoBoard defaults.
 
 ## Architecture outline
 
@@ -65,6 +65,12 @@ Every stored row, cache key, event, job, log, and object-storage path must carry
 | ActionDefinition / ActionRun | Governed writeback or automation trigger |
 | AuditEvent | Administrative and data-affecting activity |
 | UsageLedger | API calls, rows, refreshes, storage, AI/compute cost |
+| BrandTheme | Workspace logo, palette, typography, terminology, motion and accessibility settings |
+| CelebrationTemplate | Trigger, visual style, copy, sound, audience, duration and intensity |
+| SoundAsset | Tenant-owned audio, metadata, assignments, moderation and playback policy |
+| GamePreset | Game identity, teams, arena, sprites, sounds, scoring and win condition |
+| ScoreEvent | Idempotent metric event translated into a game score change |
+| AssetLibraryItem | Tenant-scoped logos, sprites, backgrounds and celebration artwork |
 
 ## Card contract
 
@@ -107,6 +113,30 @@ Roles:
 - Editor: compose dashboards from certified assets.
 - Data steward: create/certify datasets and metrics.
 - Admin: integrations, users, branding, security, billing.
+
+## Customization experience
+
+Customization must feel safe to nontechnical users:
+
+1. Start from a proven preset.
+2. Change one plain-language setting at a time.
+3. See the real result immediately in a live preview.
+4. Validate sound, motion, contrast, file format and permissions automatically.
+5. Save a draft without affecting viewers.
+6. Publish a version and retain one-click rollback.
+
+The same BrandTheme should power dashboards, celebrations, My Sounds and Kombat Studio. Component defaults inherit from the theme, while an individual celebration or game preset may override approved tokens.
+
+Murphy Kombat becomes a customer preset built on generic contracts. A preset can fully replace:
+
+- product-facing game name and terminology;
+- team and fighter names;
+- point source, scoring increments, bonuses and win conditions;
+- fighter sprites, arena imagery and celebration effects;
+- colors, typography, sounds and winner copy;
+- schedule, eligible participants and display destinations.
+
+Every scoring event requires a stable `event_id`, source reference, timestamp, tenant, game preset and deterministic points calculation. Replays must not duplicate score.
 
 ## Integration priorities
 
@@ -177,6 +207,9 @@ Exit: one Murphy card can be represented entirely by generic configuration.
 - metric, trend, table, goal, status, and text cards;
 - dashboard draft/publish/version/rollback;
 - responsive viewer and TV mode;
+- celebration triggers, templates, replay controls and motion-safe viewer behavior;
+- My Sounds upload, preview, assignment and volume controls;
+- configurable Kombat preset with generic scoring and tenant-owned assets;
 - integration health and freshness UI.
 
 Exit: Murphy plus one external partner can operate in isolated tenants.
@@ -185,6 +218,8 @@ Exit: Murphy plus one external partner can operate in isolated tenants.
 
 - templates, alerts, scheduled delivery, API/webhook intake;
 - white-label theme/logo/domain;
+- sprite and arena asset library, validation and moderation;
+- reusable celebration and game preset library;
 - action cards with approvals and audit;
 - usage metering and plan enforcement;
 - self-service onboarding and diagnostics.
@@ -209,6 +244,8 @@ Exit: three paying external partners and 70% reusable configuration.
 - full data warehouse functionality;
 - a public plugin marketplace;
 - per-customer code branches.
+- arbitrary uploaded executable game code;
+- copyrighted character or audio libraries bundled without licenses.
 
 ## Success instrumentation
 
@@ -223,6 +260,10 @@ Track from the first tenant:
 - percent of deployment assembled without custom code;
 - infrastructure and third-party cost per tenant;
 - expansion, churn, and gross margin.
+- celebration replay and acknowledgement rate;
+- percentage of workspaces that publish a custom brand, sound or game preset;
+- median time from setup to first published celebration;
+- competition participation and scoring-event error rate.
 
 ## Top failure modes and detection
 
@@ -231,3 +272,6 @@ Track from the first tenant:
 3. **Metric definition drift** — certified metric registry, owners, version history, impact preview, and dashboard dependency graph.
 4. **Connector cost explosion** — per-tenant call/row ledger, rate-limit telemetry, incremental sync coverage, and pricing quotas.
 5. **Customization trap** — report custom-code percentage and implementation hours before approving any customer request.
+6. **Celebration fatigue** — track mute/dismiss behavior, enforce rate limits, quiet hours and per-user controls.
+7. **Duplicate or disputed scores** — idempotent score events, visible source lineage, replay-safe calculations and admin correction audit.
+8. **Unsafe or unlicensed uploads** — file scanning, size/type limits, tenant ownership attestation and takedown controls.

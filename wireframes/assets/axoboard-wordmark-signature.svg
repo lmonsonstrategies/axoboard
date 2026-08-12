@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 96" role="img" aria-labelledby="title desc">
+  <title id="title">AxoBoard signature wordmark</title>
+  <desc id="desc">A custom angular monoline AxoBoard wordmark inspired by Leroy Monson's handwriting.</desc>
+  <g fill="none" stroke="#34233A" stroke-width="4" stroke-linecap="round" stroke-linejoin="miter">
+    <path d="M8 80 C15 64 20 34 29 12 C33 35 40 58 51 77"/><path d="M16 57 C25 48 38 48 47 58"/><path d="M27 13 C24 31 23 65 26 84" opacity=".78"/>
+    <path d="M61 36 C70 43 78 57 91 72"/><path d="M94 30 C84 44 74 58 64 74"/>
+    <path d="M108 34 L134 29 L139 67 L113 72 Z"/>
+    <path d="M158 72 L160 20 L190 16 L177 38 L196 45 L184 67 Z"/><path d="M161 41 L178 38" opacity=".82"/>
+    <path d="M207 39 L232 34 L238 66 L212 70 Z"/>
+    <path d="M249 65 L257 39 L278 36 L281 68"/><path d="M252 55 L278 53"/>
+    <path d="M294 68 L297 36 L317 34 L308 49 L326 48"/>
+    <path d="M337 66 L343 41 L365 35 L373 62 L342 69 Z"/><path d="M370 61 C381 47 394 30 420 22 C403 37 388 52 378 71 C373 80 370 87 368 92"/>
+  </g>
+</svg>

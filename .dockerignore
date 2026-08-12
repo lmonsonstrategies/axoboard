@@ -1,0 +1,11 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+.state.md
+artifacts
+assets
+docs
+node_modules
+*.log

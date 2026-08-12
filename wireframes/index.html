@@ -3,230 +3,424 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="AxoBoard configurable operations dashboard wireframe" />
-  <title>AxoBoard — Product wireframe</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22%2316c7b7%22/><path d=%22M18 44V24m14 20V18m14 26V28%22 stroke=%22%23081019%22 stroke-width=%228%22 stroke-linecap=%22round%22/></svg>" />
+  <meta name="description" content="AxoBoard celebration and customization product prototype" />
+  <title>AxoBoard — Dashboard Builder</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2218%22 fill=%22%23FBE7EF%22/><circle cx=%2232%22 cy=%2233%22 r=%2216%22 fill=%22%23FFF9FB%22 stroke=%22%23E96F98%22 stroke-width=%223%22/><circle cx=%2226%22 cy=%2231%22 r=%222%22 fill=%22%2334233A%22/><circle cx=%2238%22 cy=%2231%22 r=%222%22 fill=%22%2334233A%22/><path d=%22M27 38q5 4 10 0%22 fill=%22none%22 stroke=%22%2334233A%22 stroke-width=%222%22 stroke-linecap=%22round%22/></svg>" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <a class="skip-link" href="#mainContent">Skip to content</a>
   <div class="app-shell">
     <aside class="sidebar" aria-label="Product navigation">
-      <a class="brand" href="#builder" aria-label="AxoBoard home">
-        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span><strong>AxoBoard</strong><small>Operations OS</small></span>
-      </a>
+      <button class="brand" type="button" data-screen="dashboard" aria-label="Open Dashboard Builder">
+        <img class="brand-logo" src="assets/axoboard-logo-low-poly.png" alt="" />
+        <span><strong>AxoBoard</strong><small>Celebrate the work</small></span>
+      </button>
 
-      <div class="tenant-switcher">
-        <span class="tenant-avatar">N</span>
-        <span><small>Workspace</small><strong>Northstar Co.</strong></span>
+      <div class="workspace-switcher">
+        <span class="workspace-avatar">A</span>
+        <span><small>Workspace</small><strong>Acme Sales</strong></span>
         <button type="button" aria-label="Switch workspace">⌄</button>
       </div>
 
       <nav class="primary-nav">
-        <button class="nav-item is-active" type="button" data-screen="builder"><span>▦</span>Dashboards</button>
-        <button class="nav-item" type="button" data-screen="integrations"><span>⌁</span>Integrations <b>5</b></button>
-        <button class="nav-item" type="button" data-screen="templates"><span>◇</span>Templates</button>
-        <button class="nav-item" type="button" data-screen="governance"><span>◎</span>Governance</button>
+        <button class="nav-item is-active" type="button" data-screen="dashboard"><span>▦</span><b>Dashboards</b></button>
+        <button class="nav-item" type="button" data-screen="integrations"><span>⌁</span><b>Integrations</b></button>
+        <button class="nav-item" type="button" data-screen="displays"><span>▣</span><b>TV & Displays</b></button>
+        <button class="nav-item" type="button" data-screen="automations"><span>ϟ</span><b>Automations</b></button>
+        <button class="nav-item" type="button" data-screen="workspace"><span>⌂</span><b>Workspace Admin</b></button>
+        <button class="nav-item" type="button" data-screen="celebrations"><span>✦</span><b>Celebration HQ</b></button>
+        <button class="nav-item" type="button" data-screen="sounds"><span>♫</span><b>My Sounds</b></button>
+        <button class="nav-item" type="button" data-screen="kombat"><span>⚔</span><b>Kombat Studio</b></button>
+        <button class="nav-item" type="button" data-screen="brand"><span>◉</span><b>Brand Studio</b></button>
       </nav>
 
-      <div class="nav-divider"></div>
-
-      <nav class="secondary-nav" aria-label="Workspace utilities">
-        <button type="button"><span>⚡</span>Alerts <b>3</b></button>
-        <button type="button"><span>↗</span>Action center</button>
-        <button type="button"><span>◫</span>Audit log</button>
-      </nav>
-
-      <div class="sidebar-health">
-        <div><span>Platform health</span><strong><i></i> Operational</strong></div>
-        <small>5/5 sources inside SLO</small>
+      <div class="sidebar-tip">
+        <span class="mini-axo" aria-hidden="true">•ᴗ•</span>
+        <div><strong>Make it yours</strong><p>Change the colors, sounds, names, rules, and reactions.</p></div>
       </div>
 
       <div class="sidebar-user">
-        <span class="user-avatar">LM</span>
-        <span><strong>Leroy Monson</strong><small>Workspace admin</small></span>
-        <button type="button" aria-label="User menu">•••</button>
+        <span class="user-avatar">JL</span>
+        <span><strong>Jordan Lee</strong><small>Workspace owner</small></span>
+        <button type="button" aria-label="Open profile menu">•••</button>
       </div>
     </aside>
 
-    <main class="main-content">
-      <section class="screen is-active" id="builder" data-screen-panel="builder">
-        <header class="topbar">
-          <div class="breadcrumbs"><span>Dashboards</span><i>/</i><strong>Revenue Command</strong><span class="draft-badge">Draft</span></div>
-          <div class="topbar-actions">
-            <button class="icon-button" type="button" aria-label="Undo">↶</button>
-            <button class="icon-button" type="button" aria-label="Redo">↷</button>
-            <span class="saved-state"><i></i>Saved 12 sec ago</span>
-            <div class="mode-switch" aria-label="Dashboard mode">
-              <button class="is-active" type="button" data-mode="edit">Edit</button>
-              <button type="button" data-mode="view">Preview</button>
-            </div>
-            <button class="button button-ghost" type="button">Share</button>
-            <button class="button button-primary" type="button" id="publishButton">Publish v12</button>
-          </div>
+    <main class="main-content" id="mainContent">
+      <section class="screen is-active" data-screen-panel="dashboard" aria-labelledby="dashboardTitle">
+        <header class="page-header dashboard-header">
+          <div><small>LIVE PERFORMANCE</small><h1 id="dashboardTitle">Sales command pond</h1><p>Custom KPIs, trusted sources, and a clear view of what needs attention.</p></div>
+          <div class="header-actions"><button class="button button-ghost" id="templateGalleryButton" type="button">▤ Templates</button><button class="button button-ghost" id="shareDashboardButton" type="button">↗ Share</button><button class="button button-primary" id="addKpiButton" type="button">＋ Add KPI</button></div>
         </header>
 
-        <div class="builder-layout">
-          <aside class="card-palette" aria-label="Card palette">
-            <div class="panel-title"><span><small>BUILD</small><strong>Add a card</strong></span><button type="button" aria-label="Close palette">×</button></div>
-            <label class="search-field"><span>⌕</span><input type="search" placeholder="Search card types" /></label>
-            <div class="palette-section">
-              <small>DATA</small>
-              <button class="palette-card" type="button" data-card-type="Metric"><span class="card-icon">12</span><span><strong>Metric</strong><small>Single KPI + comparison</small></span><b>＋</b></button>
-              <button class="palette-card" type="button" data-card-type="Trend"><span class="card-icon">⌁</span><span><strong>Trend</strong><small>Time-series performance</small></span><b>＋</b></button>
-              <button class="palette-card" type="button" data-card-type="Table"><span class="card-icon">▤</span><span><strong>Table</strong><small>Records and rankings</small></span><b>＋</b></button>
-              <button class="palette-card" type="button" data-card-type="Pipeline"><span class="card-icon">▽</span><span><strong>Pipeline</strong><small>Stage conversion</small></span><b>＋</b></button>
+        <div class="dashboard-toolbar surface">
+          <div><span class="live-dot"></span><strong>Sales performance</strong><small>4 KPIs · refreshed 2m ago</small></div>
+          <div><button type="button">Today⌄</button><button type="button">Edit layout</button><button id="openTvMode" type="button">TV mode ↗</button></div>
+        </div>
+
+        <section class="kpi-grid" aria-label="Customizable key performance indicators">
+          <article class="surface kpi-card kpi-card-featured" data-drilldown="net-sales" tabindex="0"><header><span class="source-mark google">G</span><small>Google Sheets · Summary!D8</small><button type="button" aria-label="Edit net sales KPI">•••</button></header><p>Net sales today</p><strong>$55,396</strong><div class="kpi-change positive">↗ 12.4% <span>vs yesterday</span></div><div class="kpi-spark aqua" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><footer><span>Click for source rows</span><b>85% of goal</b></footer></article>
+          <article class="surface kpi-card" data-drilldown="pipeline" tabindex="0"><header><span class="source-mark hubspot">H</span><small>HubSpot · deals.amount</small><button type="button" aria-label="Edit pipeline KPI">•••</button></header><p>Open pipeline</p><strong>$1.28M</strong><div class="kpi-change positive">↗ 8.2% <span>this month</span></div><div class="mini-progress"><i style="width:72%"></i></div><footer><span>Click for 48 deals</span><b>On track</b></footer></article>
+          <article class="surface kpi-card" data-drilldown="deals-won" tabindex="0"><header><span class="source-mark hubspot">H</span><small>HubSpot · count deals</small><button type="button" aria-label="Edit deals won KPI">•••</button></header><p>Deals won</p><strong>34</strong><div class="kpi-change positive">＋6 <span>vs last week</span></div><div class="kpi-spark pink" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><footer><span>Click for winning deals</span><b>6 to go</b></footer></article>
+          <article class="surface kpi-card" data-drilldown="team-track" tabindex="0"><header><span class="source-mark google">G</span><small>Google Sheets · Reps!G4:G18</small><button type="button" aria-label="Edit attainment KPI">•••</button></header><p>Team on track</p><strong>82.9%</strong><div class="kpi-change neutral">13 of 16 <span>reps pacing</span></div><div class="mini-progress gfp"><i style="width:82.9%"></i></div><footer><span>Click for rep rows</span><b>Healthy</b></footer></article>
+        </section>
+
+        <div class="dashboard-lower-grid">
+          <article class="surface trend-card"><header><div><small>NET SALES · LAST 7 DAYS</small><h2>Revenue momentum</h2></div><div class="legend"><span class="aqua-dot"></span>This week <span class="pink-dot"></span>Prior week</div></header><div class="trend-chart" aria-label="Revenue trend chart"><div class="chart-y"><span>$80K</span><span>$60K</span><span>$40K</span><span>$20K</span><span>$0</span></div><svg viewBox="0 0 720 220" role="img" aria-label="Net sales increased through the week"><defs><linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#43bde8" stop-opacity=".28"/><stop offset="1" stop-color="#43bde8" stop-opacity="0"/></linearGradient></defs><path class="chart-gridline" d="M0 20H720M0 65H720M0 110H720M0 155H720M0 200H720"/><path class="chart-area" d="M0 176 L120 146 L240 159 L360 100 L480 116 L600 60 L720 42 L720 220 L0 220Z"/><path class="chart-line prior" d="M0 184 L120 165 L240 140 L360 148 L480 105 L600 110 L720 82"/><path class="chart-line current" d="M0 176 L120 146 L240 159 L360 100 L480 116 L600 60 L720 42"/><circle cx="720" cy="42" r="6" fill="#43bde8"/></svg><div class="chart-x"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div></div></article>
+          <aside class="surface attention-card"><header><span class="round-icon">◎</span><div><small>ACTION CENTER</small><h2>Needs attention</h2></div><span class="attention-count">3</span></header><ul><li><span class="status-orb warning"></span><div><strong>Pipeline coverage dipped</strong><small>2.7× against a 3× target</small></div><button type="button">View</button></li><li><span class="status-orb good"></span><div><strong>Team crossed 80%</strong><small>Celebration ready to publish</small></div><button type="button">Celebrate</button></li><li><span class="status-orb info"></span><div><strong>Sheet mapping changed</strong><small>Reps!G4:G18 has 1 new row</small></div><button type="button">Review</button></li></ul><button class="button button-soft full" type="button">Configure alerts</button></aside>
+        </div>
+      </section>
+
+      <section class="screen" data-screen-panel="integrations" aria-labelledby="integrationsTitle">
+        <header class="page-header">
+          <div><small>YOUR DATA, CONNECTED</small><h1 id="integrationsTitle">Integrations</h1><p>Bring trusted metrics into AxoBoard without copying data by hand.</p></div>
+          <div class="header-actions"><button class="button button-primary" id="browseIntegrations" type="button">＋ Add integration</button></div>
+        </header>
+        <div class="integration-layout">
+          <section class="integration-main">
+            <div class="integration-summary surface"><div><strong>2</strong><span>Connected sources</span></div><div><strong>4</strong><span>Active KPI mappings</span></div><div><strong>2m</strong><span>Last refresh</span></div><div><strong class="healthy-text">Healthy</strong><span>Sync status</span></div></div>
+            <h2 class="section-title">Connected</h2>
+            <div class="integration-grid">
+              <article class="surface integration-card is-connected"><header><span class="integration-logo google">G</span><span class="connection-pill">● Connected</span></header><h3>Google Sheets</h3><p>Select a spreadsheet, worksheet, and exact cells or ranges to watch.</p><dl><div><dt>Account</dt><dd>jordan@acme.co</dd></div><div><dt>Mappings</dt><dd>2 KPIs</dd></div><div><dt>Refresh</dt><dd>Every 5 min</dd></div></dl><footer><button class="button button-ghost connect-source" type="button" data-source="google">Manage</button><button class="button button-soft build-source-kpi" type="button" data-source="google">＋ Build KPI</button></footer></article>
+              <article class="surface integration-card is-connected"><header><span class="integration-logo hubspot">H</span><span class="connection-pill">● Connected</span></header><h3>HubSpot</h3><p>Choose CRM objects, standard or custom properties, filters, and aggregations.</p><dl><div><dt>Portal</dt><dd>Acme Sales</dd></div><div><dt>Mappings</dt><dd>2 KPIs</dd></div><div><dt>Refresh</dt><dd>Every 5 min</dd></div></dl><footer><button class="button button-ghost connect-source" type="button" data-source="hubspot">Manage</button><button class="button button-soft build-source-kpi" type="button" data-source="hubspot">＋ Build KPI</button></footer></article>
             </div>
-            <div class="palette-section">
-              <small>OPERATIONS</small>
-              <button class="palette-card" type="button" data-card-type="Goal"><span class="card-icon">◎</span><span><strong>Goal</strong><small>Target and pacing</small></span><b>＋</b></button>
-              <button class="palette-card" type="button" data-card-type="Status"><span class="card-icon">●</span><span><strong>Status</strong><small>People or system state</small></span><b>＋</b></button>
-              <button class="palette-card" type="button" data-card-type="Action queue"><span class="card-icon">⚡</span><span><strong>Action queue</strong><small>Assign and resolve work</small></span><b>＋</b></button>
+            <h2 class="section-title">Add another source</h2>
+            <div class="integration-catalog surface"><button type="button"><span>▤</span><b>Shopify</b><small>Orders and revenue</small><i>Coming next</i></button><button type="button"><span>◫</span><b>PostgreSQL</b><small>Certified SQL views</small><i>Planned</i></button><button type="button"><span>↯</span><b>Webhook / API</b><small>Push custom events</small><i>Planned</i></button><button type="button"><span>＋</span><b>Request source</b><small>Tell us what you use</small><i>Suggest</i></button></div>
+          </section>
+          <aside class="surface integration-health"><div class="panel-heading"><div><small>CONNECTION HEALTH</small><h2>Fresh and observable</h2></div><span class="autosave">● Live</span></div><div class="health-row"><span class="integration-logo google small">G</span><div><strong>Google Sheets</strong><small>Last sync 2m ago · 18 cells</small></div><b>✓</b></div><div class="health-row"><span class="integration-logo hubspot small">H</span><div><strong>HubSpot</strong><small>Last sync 4m ago · 1,284 records</small></div><b>✓</b></div><div class="freshness-rule"><span>◷</span><div><strong>Freshness guardrails</strong><p>AxoBoard flags stale metrics, mapping breaks, OAuth expiry, and rate-limit delays before a bad number reaches the TV.</p></div></div></aside>
+        </div>
+      </section>
+
+      <section class="screen" data-screen-panel="displays" aria-labelledby="displaysTitle">
+        <header class="page-header">
+          <div><small>VISIBLE WHERE WORK HAPPENS</small><h1 id="displaysTitle">TV & Displays</h1><p>Pair screens, rotate dashboards, and manage every wallboard remotely.</p></div>
+          <div class="header-actions"><button class="button button-ghost" id="previewLoopButton" type="button">▷ Preview loop</button><button class="button button-primary" id="pairScreenButton" type="button">＋ Pair a screen</button></div>
+        </header>
+        <div class="display-layout">
+          <section class="display-main">
+            <div class="display-summary surface"><div><span class="status-orb good"></span><strong>3 screens online</strong><small>Last heartbeat 18s ago</small></div><div><b>2</b><span>Active loops</span></div><div><b>99.98%</b><span>30-day uptime</span></div><button type="button">Manage access</button></div>
+            <h2 class="section-title">Screens</h2>
+            <div class="screen-grid">
+              <article class="surface screen-device is-online"><div class="device-preview sales-mini"><span>$55K</span><i></i><i></i><i></i></div><div class="device-copy"><span class="connection-pill">● Online</span><h3>Sales Floor TV</h3><p>Front office · 4K · Chrome</p><dl><div><dt>Now showing</dt><dd>Sales performance</dd></div><div><dt>Loop</dt><dd>Revenue pulse · 3 views</dd></div><div><dt>Last heartbeat</dt><dd>18 seconds ago</dd></div></dl></div><footer><button type="button">Change content</button><button type="button">•••</button></footer></article>
+              <article class="surface screen-device is-online"><div class="device-preview concierge-mini"><span>82.9%</span><i></i><i></i><i></i></div><div class="device-copy"><span class="connection-pill">● Online</span><h3>Concierge Wall</h3><p>Service bay · 1080p · Fire TV</p><dl><div><dt>Now showing</dt><dd>Concierge Pulse</dd></div><div><dt>Loop</dt><dd>Customer heartbeat · 2 views</dd></div><div><dt>Last heartbeat</dt><dd>31 seconds ago</dd></div></dl></div><footer><button type="button">Change content</button><button type="button">•••</button></footer></article>
+              <article class="surface screen-device is-scheduled"><div class="device-preview executive-mini"><span>2.7×</span><i></i><i></i><i></i></div><div class="device-copy"><span class="schedule-pill">◷ Sleeping</span><h3>Executive Display</h3><p>Conference room · 4K · Apple TV</p><dl><div><dt>Next wake</dt><dd>Tomorrow · 7:00 AM</dd></div><div><dt>Loop</dt><dd>Executive daily · 4 views</dd></div><div><dt>Schedule</dt><dd>Mon–Fri · 7 AM–6 PM</dd></div></dl></div><footer><button type="button">Wake screen</button><button type="button">•••</button></footer></article>
             </div>
+          </section>
+          <aside class="surface loop-builder"><div class="panel-heading"><div><small>DASHBOARD LOOP</small><h2>Revenue pulse</h2></div><span class="autosave">● Live</span></div><p>Drag views or use the move buttons to change their rotation order.</p><ol id="loopSequence"><li draggable="true"><b>1</b><span><strong>Sales performance</strong><small>45 seconds</small></span><button type="button" data-move-loop aria-label="Move Sales performance down">↓</button></li><li draggable="true"><b>2</b><span><strong>Pipeline health</strong><small>30 seconds</small></span><button type="button" data-move-loop aria-label="Move Pipeline health down">↓</button></li><li draggable="true"><b>3</b><span><strong>Murphy Kombat</strong><small>20 seconds</small></span><button type="button" data-move-loop aria-label="Move Murphy Kombat to top">↑</button></li></ol><button class="add-loop-view" type="button">＋ Add dashboard or game</button><div class="loop-settings"><label>Transition<select><option>Gentle fade</option><option>Aquatic slide</option><option>Instant</option></select></label><label>Active hours<select><option>Mon–Fri · 7 AM–8 PM</option><option>Always on</option><option>Custom schedule</option></select></label></div><button class="button button-primary full" id="saveLoopButton" type="button">Save loop</button></aside>
+        </div>
+      </section>
+
+      <section class="screen" data-screen-panel="automations" aria-labelledby="automationsTitle">
+        <header class="page-header">
+          <div><small>FROM SIGNAL TO ACTION</small><h1 id="automationsTitle">Automations</h1><p>One trusted KPI event can alert the team, celebrate a win, and move the game.</p></div>
+          <div class="header-actions"><button class="button button-primary" id="newAutomationButton" type="button">＋ New automation</button></div>
+        </header>
+        <div class="automation-layout">
+          <section class="automation-main">
+            <div class="automation-summary surface"><div><strong>5</strong><span>Active rules</span></div><div><strong>128</strong><span>Runs this month</span></div><div><strong>100%</strong><span>Successful today</span></div><div><strong>0</strong><span>Duplicate events</span></div></div>
+            <h2 class="section-title">Active rules</h2>
+            <div class="rule-list">
+              <article class="surface rule-card" data-rule="sales-goal"><header><span class="rule-icon goal">◎</span><div><h3>Sales goal crossed</h3><p>When Net sales today reaches 100% of goal</p></div><label class="toggle"><input type="checkbox" checked /><span></span></label></header><div class="rule-flow"><div><small>WHEN</small><strong>Net sales today ≥ $65,000</strong></div><i>→</i><div><small>THEN</small><span class="action-chip celebration">✦ Celebrate</span><span class="action-chip slack"># Slack</span><span class="action-chip kombat">⚔ +100 pts</span></div></div><footer><span>Last ran Aug 11 · 4:42 PM</span><button type="button">Edit rule</button></footer></article>
+              <article class="surface rule-card" data-rule="coverage"><header><span class="rule-icon warning">!</span><div><h3>Pipeline coverage needs attention</h3><p>When coverage stays below 3× for 30 minutes</p></div><label class="toggle"><input type="checkbox" checked /><span></span></label></header><div class="rule-flow"><div><small>WHEN</small><strong>Pipeline coverage &lt; 3× for 30m</strong></div><i>→</i><div><small>THEN</small><span class="action-chip slack"># Slack</span><span class="action-chip email">✉ Email</span><span class="action-chip owner">◎ Owner</span></div></div><footer><span>Last ran today · 10:18 AM</span><button type="button">Edit rule</button></footer></article>
+              <article class="surface rule-card" data-rule="deal"><header><span class="rule-icon deal">$</span><div><h3>Big deal landed</h3><p>When a HubSpot deal closes over $15,000</p></div><label class="toggle"><input type="checkbox" checked /><span></span></label></header><div class="rule-flow"><div><small>WHEN</small><strong>Closed won amount ≥ $15,000</strong></div><i>→</i><div><small>THEN</small><span class="action-chip celebration">✦ Celebrate</span><span class="action-chip sound">♫ Sound</span><span class="action-chip kombat">⚔ +50 pts</span></div></div><footer><span>Last ran today · 1:06 PM</span><button type="button">Edit rule</button></footer></article>
+            </div>
+          </section>
+          <aside class="surface automation-guardrails"><div class="panel-heading"><div><small>TRUST & CONTROL</small><h2>Built not to spam</h2></div><span class="autosave">✓ Safe</span></div><ul><li><span>↻</span><div><strong>Event deduplication</strong><p>Stable event IDs prevent repeat alerts, points, and celebrations.</p></div></li><li><span>◷</span><div><strong>Cooldowns & quiet hours</strong><p>Limit frequency by rule, person, channel, or screen.</p></div></li><li><span>⌁</span><div><strong>Source lineage</strong><p>Every run links back to the KPI snapshot and provider record.</p></div></li><li><span>↶</span><div><strong>Replay and rollback</strong><p>Retry failed destinations without replaying successful ones.</p></div></li></ul><button class="button button-soft full" id="viewRunLogButton" type="button">View run log</button></aside>
+        </div>
+      </section>
+
+      <section class="screen" data-screen-panel="workspace" aria-labelledby="workspaceTitle">
+        <header class="page-header">
+          <div><small>YOUR AXOBOARD SERVICE</small><h1 id="workspaceTitle">Workspace Admin</h1><p>Onboard your team, control access, monitor plan usage, and keep the workspace launch-ready.</p></div>
+          <div class="header-actions"><button class="button button-ghost" id="inviteMemberButton" type="button">＋ Invite member</button><button class="button button-primary" id="launchChecklistButton" type="button">✓ Launch checklist</button></div>
+        </header>
+        <div class="service-layout">
+          <section class="service-main">
+            <article class="surface customer-hero"><div><span class="workspace-avatar large">A</span><div><small>DESIGN-PARTNER WORKSPACE</small><h2 id="serviceWorkspaceName">Acme Sales</h2><p>Customer-facing beta · tenant isolated · mobile ready</p></div></div><span class="readiness-ring"><b id="readinessPercent">72%</b><small>launch ready</small></span></article>
+            <div class="service-grid">
+              <article class="surface launch-card"><header><div><small>GET TO VALUE FAST</small><h2>Launch checklist</h2></div><b id="launchStepCount">5 of 7</b></header><ul id="launchChecklist"><li class="complete"><span>✓</span><div><strong>Create your workspace</strong><small>Identity, timezone, and owner</small></div><button type="button" data-service-action="workspace">Review</button></li><li class="complete"><span>✓</span><div><strong>Apply your brand</strong><small>Logo, color, and language</small></div><button type="button" data-screen="brand">Review</button></li><li class="complete"><span>✓</span><div><strong>Connect Google Sheets</strong><small>Two healthy KPI mappings</small></div><button type="button" data-screen="integrations">Review</button></li><li class="complete"><span>✓</span><div><strong>Invite your team</strong><small>4 active members</small></div><button type="button" data-service-action="members">Manage</button></li><li class="complete"><span>✓</span><div><strong>Publish a dashboard</strong><small>Sales performance is live</small></div><button type="button" data-screen="dashboard">Review</button></li><li><span>6</span><div><strong>Pair a team display</strong><small>Put AxoBoard where the team works</small></div><button type="button" data-screen="displays">Set up</button></li><li><span>7</span><div><strong>Test a celebration rule</strong><small>Confirm sound, audience, and quiet hours</small></div><button type="button" data-screen="automations">Set up</button></li></ul></article>
+              <article class="surface plan-card"><header><div><small>PLAN & USAGE</small><h2>Growth beta</h2></div><span class="connection-pill">● Active</span></header><p>Design-partner access. Final commercial pricing is configured before public launch.</p><div class="usage-meter"><span><b>Members</b><small>4 of 10</small></span><i><b style="width:40%"></b></i></div><div class="usage-meter"><span><b>TV screens</b><small>3 of 5</small></span><i><b style="width:60%"></b></i></div><div class="usage-meter"><span><b>Data sources</b><small>2 of 5</small></span><i><b style="width:40%"></b></i></div><div class="usage-meter"><span><b>Automation runs</b><small>128 of 2,500</small></span><i><b style="width:8%"></b></i></div><button class="button button-soft full" id="managePlanButton" type="button">Manage plan & billing</button></article>
+            </div>
+            <article class="surface members-card"><header><div><small>PEOPLE & PERMISSIONS</small><h2>Workspace members</h2></div><button type="button" id="manageRolesButton">Manage roles</button></header><div class="member-row member-head"><span>Person</span><span>Role</span><span>Last active</span><span>Status</span></div><div class="member-row"><span><b>JL</b><strong>Jordan Lee<small>jordan@acme.co</small></strong></span><span>Owner</span><span>Now</span><span class="healthy-text">Active</span></div><div class="member-row"><span><b>MP</b><strong>Maya Patel<small>maya@acme.co</small></strong></span><span>Editor</span><span>12m ago</span><span class="healthy-text">Active</span></div><div class="member-row"><span><b>EB</b><strong>Ethan Brooks<small>ethan@acme.co</small></strong></span><span>Viewer</span><span>1h ago</span><span class="healthy-text">Active</span></div><div class="member-row"><span><b>SM</b><strong>Sofia Martinez<small>sofia@acme.co</small></strong></span><span>Viewer</span><span>Yesterday</span><span class="healthy-text">Active</span></div></article>
+          </section>
+          <aside class="service-side">
+            <article class="surface service-health"><div class="panel-heading"><div><small>SERVICE HEALTH</small><h2>Ready and observable</h2></div><span class="autosave">● Healthy</span></div><ul><li><span>⌁</span><div><strong>Data sources</strong><small>2 connected · all fresh</small></div><b>✓</b></li><li><span>▣</span><div><strong>Displays</strong><small>3 online · 99.98% uptime</small></div><b>✓</b></li><li><span>ϟ</span><div><strong>Automations</strong><small>128 runs · 0 duplicates</small></div><b>✓</b></li><li><span>◉</span><div><strong>Mobile readiness</strong><small>All routes passed</small></div><b>✓</b></li></ul></article>
+            <article class="surface support-card"><span class="mini-axo large">•ᴗ•</span><small>CUSTOMER SUCCESS</small><h2>Need a hand?</h2><p>Open setup guidance, report a problem, or prepare a support request with diagnostic context.</p><button class="button button-primary full" id="supportButton" type="button">Contact support</button><button class="button button-ghost full" id="setupGuideButton" type="button">Open setup guide</button></article>
           </aside>
+        </div>
+      </section>
 
-          <section class="dashboard-stage" aria-label="Dashboard canvas">
-            <div class="stage-heading">
-              <div><small>LIVE OPERATIONS</small><h1>Revenue Command</h1><p>Every number has an owner, definition, and freshness state.</p></div>
-              <div class="stage-tools"><button type="button">Today⌄</button><button type="button">All teams⌄</button><button type="button" aria-label="Open TV mode">▣ TV mode</button></div>
+      <section class="screen" data-screen-panel="celebrations" aria-labelledby="celebrationsTitle">
+        <header class="page-header celebration-header">
+          <div><small>THIS WEEK</small><h1 id="celebrationsTitle">Sales Celebration HQ <span>✦</span></h1><p>Big wins. Shared loud. Momentum that lasts.</p></div>
+          <div class="header-actions"><button class="button button-ghost" type="button">This week⌄</button><button class="button button-primary" id="celebrateButton" type="button">＋ Celebrate win</button></div>
+        </header>
+
+        <div class="celebration-layout">
+          <div class="celebration-main">
+            <div class="metrics-row">
+              <article class="surface goal-card">
+                <div class="card-title"><span class="round-icon">◎</span><strong>Team goal</strong><span class="success-pill">82.9%</span></div>
+                <h2>$248,760</h2><p>raised of $300,000 goal</p>
+                <div class="progress"><span style="width:82.9%"></span></div>
+                <footer><b>$51,240 to go</b><span>3 days left</span></footer>
+              </article>
+              <article class="surface performers-card">
+                <div class="card-title"><span class="round-icon">♛</span><strong>Top performers</strong><button type="button">View all →</button></div>
+                <ol class="performer-list">
+                  <li><b>1</b><span class="avatar avatar-maya">MP</span><span><strong>Maya Patel</strong><small>12 wins</small></span><em>$78,420</em></li>
+                  <li><b>2</b><span class="avatar avatar-ethan">EB</span><span><strong>Ethan Brooks</strong><small>9 wins</small></span><em>$61,230</em></li>
+                  <li><b>3</b><span class="avatar avatar-sofia">SM</span><span><strong>Sofia Martinez</strong><small>8 wins</small></span><em>$47,810</em></li>
+                </ol>
+              </article>
             </div>
 
-            <div class="freshness-strip">
-              <span><i></i>All systems current</span><span>Last full sync 38 seconds ago</span><button type="button">View data health →</button>
-            </div>
-
-            <div class="dashboard-grid" id="dashboardGrid">
-              <article class="dashboard-card metric-card is-selected" tabindex="0" data-card-name="Net sales today">
-                <div class="drag-handle">⠿</div><button class="card-menu" type="button" aria-label="Card menu">•••</button>
-                <div class="card-eyebrow"><span>NET SALES TODAY</span><i class="status-dot"></i></div>
-                <strong class="metric-value">$53,482</strong>
-                <div class="metric-change positive">↗ 29.4% <span>vs 30-day pace</span></div>
-                <div class="sparkline" aria-label="Increasing sales trend"><span style="height:25%"></span><span style="height:32%"></span><span style="height:28%"></span><span style="height:48%"></span><span style="height:42%"></span><span style="height:66%"></span><span style="height:88%"></span></div>
-                <footer><span>Shopify · 38s ago</span><button type="button">Definition</button></footer>
-              </article>
-
-              <article class="dashboard-card metric-card" tabindex="0" data-card-name="Orders today">
-                <div class="drag-handle">⠿</div><button class="card-menu" type="button" aria-label="Card menu">•••</button>
-                <div class="card-eyebrow"><span>ORDERS TODAY</span><i class="status-dot"></i></div>
-                <strong class="metric-value">19</strong>
-                <div class="metric-change positive">↗ 132% <span>vs 8.2 baseline</span></div>
-                <div class="goal-track"><span style="width:76%"></span></div>
-                <footer><span>Shopify · 38s ago</span><button type="button">Definition</button></footer>
-              </article>
-
-              <article class="dashboard-card metric-card" tabindex="0" data-card-name="Open pipeline">
-                <div class="drag-handle">⠿</div><button class="card-menu" type="button" aria-label="Card menu">•••</button>
-                <div class="card-eyebrow"><span>OPEN PIPELINE</span><i class="status-dot"></i></div>
-                <strong class="metric-value">$1.84M</strong>
-                <div class="metric-change neutral">71 deals <span>weighted $612K</span></div>
-                <div class="goal-track"><span style="width:58%"></span></div>
-                <footer><span>HubSpot · 1m ago</span><button type="button">Definition</button></footer>
-              </article>
-
-              <article class="dashboard-card wide-card" tabindex="0" data-card-name="Pipeline by stage">
-                <div class="drag-handle">⠿</div><button class="card-menu" type="button" aria-label="Card menu">•••</button>
-                <div class="card-heading"><div><small>PIPELINE FLOW</small><h2>Pipeline by stage</h2></div><button type="button">Last 30 days⌄</button></div>
-                <div class="pipeline-bars">
-                  <div><span>Qualified</span><i><b style="width:91%"></b></i><strong>44</strong></div>
-                  <div><span>Proposal</span><i><b style="width:72%"></b></i><strong>31</strong></div>
-                  <div><span>Decision</span><i><b style="width:43%"></b></i><strong>18</strong></div>
-                  <div><span>Won</span><i><b style="width:29%"></b></i><strong>12</strong></div>
-                </div>
-                <footer><span>HubSpot · 1m ago · Metric owner: RevOps</span><button type="button">Open pipeline →</button></footer>
-              </article>
-
-              <article class="dashboard-card action-card" tabindex="0" data-card-name="Exceptions requiring action">
-                <div class="drag-handle">⠿</div><button class="card-menu" type="button" aria-label="Card menu">•••</button>
-                <div class="card-heading"><div><small>ACTION QUEUE</small><h2>Needs attention</h2></div><span class="count-badge">4 open</span></div>
-                <ul class="action-list">
-                  <li><span class="severity high">!</span><span><strong>2 paid orders missing owner</strong><small>Oldest: 43 minutes</small></span><button type="button">Assign</button></li>
-                  <li><span class="severity medium">↻</span><span><strong>HubSpot sync retried</strong><small>Recovered · review 3 records</small></span><button type="button">Review</button></li>
-                  <li><span class="severity low">○</span><span><strong>1 stale proposal</strong><small>No activity for 7 days</small></span><button type="button">Open</button></li>
+            <div class="lower-grid">
+              <article class="surface achievements-card">
+                <div class="card-title"><span class="round-icon">✹</span><strong>Recent achievements</strong></div>
+                <ul class="achievement-list">
+                  <li><span>↗</span><div><strong>Momentum Masters</strong><small>10 wins in one week</small></div><time>Today</time></li>
+                  <li><span>◎</span><div><strong>Quarter Crusher</strong><small>Hit 80% of quarterly goal</small></div><time>May 16</time></li>
+                  <li><span>ϟ</span><div><strong>Win streak</strong><small>5 wins in a row</small></div><time>May 14</time></li>
+                  <li><span>☆</span><div><strong>Big deal</strong><small>Closed a deal over $15K</small></div><time>May 12</time></li>
                 </ul>
-                <footer><span>3 sources · 22s ago</span><button type="button">View action center →</button></footer>
               </article>
 
-              <button class="add-zone" id="canvasAddButton" type="button"><span>＋</span><strong>Add another card</strong><small>Choose a certified metric or operational action</small></button>
+              <article class="surface wins-card">
+                <div class="card-title"><span class="live-dot"></span><strong>Live wins</strong><button type="button">See all →</button></div>
+                <ul class="wins-list">
+                  <li><span class="avatar avatar-maya">MP</span><span><strong>Maya Patel</strong><small>closed <b>$18,420</b></small></span><time>Just now</time><button class="replay-mini" type="button" aria-label="Replay Maya's win">✦</button></li>
+                  <li><span class="avatar avatar-ethan">EB</span><span><strong>Ethan Brooks</strong><small>closed <b>$9,850</b></small></span><time>2m</time><button class="replay-mini" type="button" aria-label="Replay Ethan's win">✦</button></li>
+                  <li><span class="avatar avatar-sofia">SM</span><span><strong>Sofia Martinez</strong><small>closed <b>$6,200</b></small></span><time>5m</time><button class="replay-mini" type="button" aria-label="Replay Sofia's win">✦</button></li>
+                  <li><span class="avatar avatar-liam">LC</span><span><strong>Liam Chen</strong><small>closed <b>$4,100</b></small></span><time>8m</time><button class="replay-mini" type="button" aria-label="Replay Liam's win">✦</button></li>
+                </ul>
+              </article>
             </div>
-          </section>
 
-          <aside class="inspector" aria-label="Card settings">
-            <div class="panel-title"><span><small>INSPECTOR</small><strong>Metric card</strong></span><button type="button" aria-label="Close inspector">×</button></div>
-            <div class="inspector-tabs"><button class="is-active" type="button">Data</button><button type="button">Display</button><button type="button">Actions</button></div>
-            <div class="form-stack">
-              <label>Title<input id="cardTitleInput" type="text" value="Net sales today" /></label>
-              <label>Certified dataset<button class="select-button" type="button"><span><i class="source-icon shopify">S</i>Shopify Orders</span><b>⌄</b></button></label>
-              <label>Metric<button class="select-button" type="button"><span><em>✓</em>Net sales</span><b>⌄</b></button><small class="verified-copy">Certified by Finance · v4</small></label>
-              <div class="field-row"><label>Date range<button class="select-button" type="button"><span>Today</span><b>⌄</b></button></label><label>Compare<button class="select-button" type="button"><span>30d pace</span><b>⌄</b></button></label></div>
-              <label>Filters<button class="filter-chip" type="button"><span>＋ Add filter</span></button></label>
+            <aside class="momentum-banner"><span class="mini-axo large">•ᴗ•</span><div><strong>You’ve created 23 celebrations this week!</strong><p>Keep the good vibes—and wins—going.</p></div><button class="button button-ghost" type="button">Send team shoutout ♡</button></aside>
+          </div>
+
+          <aside class="surface celebration-controls" aria-label="Celebration preferences">
+            <div class="panel-heading"><div><small>LIVE PREVIEW</small><h2>Celebration style</h2></div><span class="autosave">● Saved</span></div>
+            <div class="style-grid" role="group" aria-label="Celebration visual style">
+              <button class="is-active" type="button" data-celebration-style="Confetti"><span>✦</span>Confetti</button>
+              <button type="button" data-celebration-style="Fireworks"><span>✺</span>Fireworks</button>
+              <button type="button" data-celebration-style="Bubbles"><span>○</span>Bubbles</button>
+              <button type="button" data-celebration-style="Axolotl wave"><span class="mini-axo">•ᴗ•</span>Axo wave</button>
             </div>
-            <div class="definition-preview">
-              <span>METRIC DEFINITION</span>
-              <p>Gross sales − discounts − refunds, excluding tax and shipping.</p>
-              <button type="button">View lineage →</button>
-            </div>
-            <div class="inspector-footer"><button class="button button-danger" type="button">Remove</button><button class="button button-primary" type="button">Apply</button></div>
+            <label class="range-field"><span><b>Hype level</b><output id="hypeOutput">High</output></span><input id="hypeRange" type="range" min="1" max="4" value="3" /><small><i>Low</i><i>Medium</i><i>High</i><i>MAX</i></small></label>
+            <label class="field-label">Sound<select id="celebrationSound"><option>Victory Splash</option><option>Confetti Burst</option><option>High Five</option><option>Silent</option></select></label>
+            <label class="field-label">Apply to<select><option>All team celebrations</option><option>Deal won only</option><option>Goals and records</option></select></label>
+            <button class="button button-soft full" id="previewCelebration" type="button">▷ Preview celebration</button>
+            <p class="helper-copy"><span>✓</span> Changes preview instantly. Nothing goes live until you publish.</p>
           </aside>
         </div>
       </section>
 
-      <section class="screen" id="integrations" data-screen-panel="integrations">
-        <header class="topbar page-topbar"><div><small>DATA PLANE</small><h1>Integrations</h1></div><div class="topbar-actions"><button class="button button-ghost" type="button">View sync log</button><button class="button button-primary" type="button">＋ Add connection</button></div></header>
-        <div class="page-body">
-          <section class="health-hero"><div><span class="health-orb">✓</span><span><small>CONNECTION HEALTH</small><strong>5 of 5 sources are current</strong><p>2,847 records processed in the last hour. No failed jobs.</p></span></div><button type="button">Open diagnostics →</button></section>
-          <div class="section-heading"><div><small>CONNECTED</small><h2>Production sources</h2></div><label class="search-field compact"><span>⌕</span><input type="search" placeholder="Search integrations" /></label></div>
-          <div class="integration-grid">
-            <article class="integration-card"><div><span class="integration-logo hubspot">H</span><span><strong>HubSpot</strong><small>CRM · OAuth</small></span><i class="status-pill current">Current</i></div><dl><div><dt>Last sync</dt><dd>1 min ago</dd></div><div><dt>Records</dt><dd>18,429</dd></div><div><dt>SLO</dt><dd>5 min</dd></div></dl><footer><span><i></i>Webhooks + incremental sync</span><button type="button">Manage</button></footer></article>
-            <article class="integration-card"><div><span class="integration-logo shopify">S</span><span><strong>Shopify</strong><small>Commerce · OAuth</small></span><i class="status-pill current">Current</i></div><dl><div><dt>Last event</dt><dd>38 sec ago</dd></div><div><dt>Orders</dt><dd>42,108</dd></div><div><dt>SLO</dt><dd>1 min</dd></div></dl><footer><span><i></i>Webhook stream healthy</span><button type="button">Manage</button></footer></article>
-            <article class="integration-card"><div><span class="integration-logo sheets">G</span><span><strong>Google Sheets</strong><small>Spreadsheet · Service account</small></span><i class="status-pill current">Current</i></div><dl><div><dt>Last sync</dt><dd>4 min ago</dd></div><div><dt>Rows</dt><dd>7,812</dd></div><div><dt>SLO</dt><dd>15 min</dd></div></dl><footer><span><i></i>3 workbooks connected</span><button type="button">Manage</button></footer></article>
-            <article class="integration-card"><div><span class="integration-logo postgres">P</span><span><strong>PostgreSQL</strong><small>Database · Read only</small></span><i class="status-pill current">Current</i></div><dl><div><dt>Last query</dt><dd>2 min ago</dd></div><div><dt>Datasets</dt><dd>6</dd></div><div><dt>SLO</dt><dd>5 min</dd></div></dl><footer><span><i></i>TLS connection verified</span><button type="button">Manage</button></footer></article>
-          </div>
-          <div class="section-heading catalog-heading"><div><small>CATALOG</small><h2>Add another source</h2></div><span>Connector requests are reviewed for reuse and security.</span></div>
-          <div class="catalog-grid">
-            <button type="button"><span class="integration-logo salesforce">Sf</span><span><strong>Salesforce</strong><small>CRM</small></span><b>Connect</b></button>
-            <button type="button"><span class="integration-logo stripe">St</span><span><strong>Stripe</strong><small>Payments</small></span><b>Connect</b></button>
-            <button type="button"><span class="integration-logo quickbooks">Q</span><span><strong>QuickBooks</strong><small>Accounting</small></span><b>Connect</b></button>
-            <button type="button"><span class="integration-logo api">{ }</span><span><strong>REST / Webhook</strong><small>Custom source</small></span><b>Configure</b></button>
-          </div>
-        </div>
-      </section>
+      <section class="screen" data-screen-panel="sounds" aria-labelledby="soundsTitle">
+        <header class="page-header">
+          <div><small>PERSONALIZE THE MOMENT</small><h1 id="soundsTitle">My Sounds</h1><p>Make every win sound like your team.</p></div>
+          <div class="header-actions"><button class="button button-ghost" type="button">? Help</button><button class="button button-primary" id="uploadSoundButton" type="button">↑ Upload sound</button></div>
+        </header>
 
-      <section class="screen" id="templates" data-screen-panel="templates">
-        <header class="topbar page-topbar"><div><small>START WITH PROVEN OPERATIONS</small><h1>Template library</h1></div><div class="topbar-actions"><button class="button button-primary" type="button">Create template</button></div></header>
-        <div class="page-body">
-          <div class="filter-row"><button class="is-active" type="button">All templates</button><button type="button">Revenue</button><button type="button">Service</button><button type="button">Commerce</button><button type="button">Executive</button></div>
-          <div class="template-grid">
-            <article class="template-card featured"><div class="template-preview revenue-preview"><span>$53.5K</span><i></i><i></i><i></i><b>19 orders</b></div><div><small>REVENUE OPERATIONS</small><h2>Revenue Command Center</h2><p>Daily sales, pipeline flow, rep pacing, exceptions, and action queues.</p><ul><li>HubSpot</li><li>Shopify</li><li>Sheets</li></ul><button class="button button-primary" type="button">Use template</button></div></article>
-            <article class="template-card"><div class="template-preview service-preview"><span>3 available</span><div><i></i><i></i><i></i><i></i></div><b>4 away</b></div><div><small>CUSTOMER SERVICE</small><h2>Service Team Live</h2><p>Availability, queues, SLA risk, capacity, customer sentiment, and ownership.</p><ul><li>HubSpot</li><li>Dialpad</li></ul><button class="button button-ghost" type="button">Preview</button></div></article>
-            <article class="template-card"><div class="template-preview exec-preview"><span>94%</span><div class="ring"></div><b>Goals on pace</b></div><div><small>EXECUTIVE</small><h2>Operating Review</h2><p>Weekly scorecard, goal pacing, notable changes, risks, and commitments.</p><ul><li>Any certified dataset</li></ul><button class="button button-ghost" type="button">Preview</button></div></article>
-          </div>
-        </div>
-      </section>
-
-      <section class="screen" id="governance" data-screen-panel="governance">
-        <header class="topbar page-topbar"><div><small>CONTROL PLANE</small><h1>Workspace governance</h1></div><div class="topbar-actions"><button class="button button-ghost" type="button">Export audit log</button><button class="button button-primary" type="button">Invite user</button></div></header>
-        <div class="page-body governance-body">
-          <div class="settings-nav" role="tablist" aria-label="Settings sections"><button class="is-active" type="button">Branding</button><button type="button">People & roles</button><button type="button">Security</button><button type="button">Data retention</button><button type="button">Billing & usage</button></div>
-          <section class="settings-panel">
-            <div class="settings-heading"><div><small>WHITE LABEL</small><h2>Brand experience</h2><p>Apply a tenant theme without changing product behavior or accessibility.</p></div><span class="plan-badge">Operations plan</span></div>
-            <div class="branding-grid">
-              <div class="brand-form">
-                <label>Workspace name<input type="text" value="Northstar Operations" /></label>
-                <label>Custom domain<div class="input-with-badge"><input type="text" value="dash.northstar.co" /><span>Verified</span></div></label>
-                <label>Logo<div class="logo-upload"><span class="tenant-avatar large">N</span><span><strong>northstar-logo.svg</strong><small>SVG · 18 KB</small></span><button type="button">Replace</button></div></label>
-                <div class="field-row"><label>Primary color<input class="color-input" type="text" value="#12B8A6" /></label><label>Surface theme<button class="select-button" type="button"><span>Dark industrial</span><b>⌄</b></button></label></div>
-                <div class="accessibility-check"><span>✓</span><span><strong>Contrast check passed</strong><small>All configured text and controls meet WCAG AA.</small></span></div>
-              </div>
-              <div class="theme-preview"><div class="theme-preview-bar"><span class="tenant-avatar">N</span><strong>Northstar</strong><i></i><i></i></div><div class="theme-preview-body"><small>REVENUE TODAY</small><strong>$53,482</strong><span>↗ 29.4%</span><div><i></i><i></i><i></i><i></i><i></i></div></div><p>Preview updates as brand settings change.</p></div>
+        <div class="sounds-layout">
+          <section class="sounds-library">
+            <button class="upload-zone" type="button" id="uploadZone"><span>↑</span><strong>Upload a sound</strong><small>Drag and drop, or click to browse · MP3, WAV, M4A up to 25MB</small></button>
+            <div class="library-toolbar"><label class="search-box"><span>⌕</span><input type="search" placeholder="Search sounds…" /></label><select aria-label="Filter sounds by tag"><option>All tags</option><option>Wins</option><option>Goals</option><option>Games</option></select><select aria-label="Sort sounds"><option>Recently added</option><option>A–Z</option><option>Most used</option></select></div>
+            <div class="sound-table" role="list" aria-label="Sound library">
+              <button class="sound-row is-selected" type="button" role="listitem" data-sound="Victory Splash" data-duration="00:03" data-tags="Win · Water"><span class="play-control">▶</span><span class="sound-meta"><strong>Victory Splash</strong><small>Win · Water</small></span><span class="waveform"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><time>00:03</time><span class="assignment-count">2 events</span><b>★</b></button>
+              <button class="sound-row" type="button" role="listitem" data-sound="High Five" data-duration="00:02" data-tags="Win · Team"><span class="play-control">▶</span><span class="sound-meta"><strong>High Five</strong><small>Win · Team</small></span><span class="waveform alt"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><time>00:02</time><span class="assignment-count">1 event</span><b>☆</b></button>
+              <button class="sound-row" type="button" role="listitem" data-sound="Confetti Burst" data-duration="00:04" data-tags="Fun · Party"><span class="play-control">▶</span><span class="sound-meta"><strong>Confetti Burst</strong><small>Fun · Party</small></span><span class="waveform"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><time>00:04</time><span class="assignment-count">3 events</span><b>☆</b></button>
+              <button class="sound-row" type="button" role="listitem" data-sound="Level Up" data-duration="00:03" data-tags="Achievement · Game"><span class="play-control">▶</span><span class="sound-meta"><strong>Level Up</strong><small>Achievement · Game</small></span><span class="waveform alt"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><time>00:03</time><span class="assignment-count">1 event</span><b>☆</b></button>
+              <button class="sound-row" type="button" role="listitem" data-sound="Calm Chime" data-duration="00:05" data-tags="Subtle · Chime"><span class="play-control">▶</span><span class="sound-meta"><strong>Calm Chime</strong><small>Subtle · Chime</small></span><span class="waveform"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><time>00:05</time><span class="assignment-count">0 events</span><b>☆</b></button>
             </div>
-            <footer class="settings-footer"><span>Last changed by Leroy · 2 days ago</span><button class="button button-primary" type="button">Save branding</button></footer>
           </section>
+
+          <aside class="surface sound-inspector" aria-label="Selected sound settings">
+            <div class="selected-sound"><span class="sound-art">♬</span><div><small>SELECTED SOUND</small><h2 id="soundName">Victory Splash</h2><button id="soundPreviewButton" type="button">▶ Preview <time id="soundDuration">00:03</time></button></div><button class="favorite-button" type="button" aria-label="Favorite sound">★</button></div>
+            <div class="form-section"><strong>Assigned to</strong><div class="chips"><button type="button">🏆 Deal won ×</button><button type="button">🎯 Team goal reached ×</button><button class="add-chip" type="button">＋ Add event</button></div></div>
+            <label class="field-label">Trigger<select><option>Deal won</option><option>Team goal reached</option><option>Personal record</option></select></label>
+            <label class="field-label">Team scope<select><option>Everyone in team</option><option>Selected people</option><option>Private to winner</option></select></label>
+            <label class="range-field"><span><b>Volume</b><output id="volumeOutput">80%</output></span><input id="volumeRange" type="range" min="0" max="100" value="80" /></label>
+            <div class="sound-preview-strip"><button id="wavePlay" type="button" aria-label="Preview selected sound">▶</button><span class="waveform large"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><time id="soundDurationSecondary">00:03</time></div>
+            <button class="button button-primary full" id="saveSound" type="button">✓ Save sound</button>
+            <p class="success-message">✓ Your sound will be available to your team right away.</p>
+          </aside>
+        </div>
+      </section>
+
+      <section class="screen" data-screen-panel="kombat" aria-labelledby="kombatTitle">
+        <header class="page-header compact-header">
+          <div><small>FULLY REBRANDABLE TEAM GAME</small><h1 id="kombatTitle">Kombat Studio <span>✦</span></h1><p>Name it, score it, skin it, and make the win unmistakably yours.</p></div>
+          <div class="header-actions"><label class="preset-picker">Preset<select><option>Murphy Kombat</option><option>Blank team battle</option></select></label><span class="autosave">● All changes saved</span></div>
+        </header>
+
+        <div class="kombat-layout">
+          <aside class="surface studio-steps">
+            <div class="step complete"><b>1</b><span><strong>Game identity</strong><small>Names, teams, terms</small></span><i>✓</i></div>
+            <div class="step active"><b>2</b><span><strong>Customize</strong><small>Make it your own</small></span></div>
+            <nav aria-label="Game customization sections"><button class="is-active" type="button">👾 Fighter sprites</button><button type="button">▧ Arena</button><button type="button">◉ Colors</button><button type="button">♫ Sounds</button><button type="button">▣ Scoring rules</button><button type="button">♛ Win condition</button></nav>
+            <div class="step"><b>3</b><span><strong>Preview & publish</strong><small>Test and go live</small></span></div>
+            <p class="studio-tip"><span>💡</span><strong>Everything is rebrandable.</strong> Change any name, color, image, rule, or sound.</p>
+          </aside>
+
+          <section class="game-stage" aria-label="Live game preview">
+            <div class="preview-heading"><div><span class="live-dot"></span><strong>Live preview</strong><small>This is how your game looks to players.</small></div><div><button type="button" aria-label="Desktop preview">▣</button><button type="button" aria-label="Mobile preview">▯</button><button type="button" aria-label="Open fullscreen preview">↗</button></div></div>
+            <div class="arena" id="arenaPreview">
+              <div class="scoreboard"><div><strong id="teamOnePreview">Bluefin</strong><span><i id="teamOneBar" style="width:72%"></i></span><b id="teamOneScore">72</b></div><p>ROUND <b>2</b></p><div><strong id="teamTwoPreview">Coral Crew</strong><span><i id="teamTwoBar" style="width:85%"></i></span><b id="teamTwoScore">85</b></div></div>
+              <div class="arena-lights"><i></i><i></i><i></i><i></i><i></i></div>
+              <div class="winner-copy"><small>FIRST TO <span id="winTargetPreview">100</span></small><strong><span id="winnerTeam">Coral Crew</span> wins!</strong></div>
+              <div class="fighters"><div class="fighter fighter-one"><span class="fighter-gills">✦</span><b>•ᴗ•</b><i></i><small id="fighterOneLabel">Team Bluefin</small></div><div class="fighter fighter-two"><span class="fighter-gills">✦</span><b>•ᴗ•</b><i></i><small id="fighterTwoLabel">Team Coral</small></div></div>
+              <div class="arena-floor"></div>
+            </div>
+            <div class="editable-labels"><span>In-game UI—click any label to rename it</span><button type="button">Aa <b id="renameChipOne">Bluefin</b> ✎</button><button type="button">Aa <b id="renameChipTwo">Coral Crew</b> ✎</button><button type="button">♛ First to <b id="targetChip">100</b> ✎</button></div>
+          </section>
+
+          <aside class="surface game-inspector" aria-label="Game configuration">
+            <div class="inspector-scroll">
+              <fieldset><legend>✎ Game identity</legend><label>Game name<input id="gameNameInput" type="text" value="Murphy Kombat" maxlength="40" /></label><div class="field-row"><label>Team 1 name<input id="teamOneInput" type="text" value="Bluefin" maxlength="20" /></label><label>Team 2 name<input id="teamTwoInput" type="text" value="Coral Crew" maxlength="20" /></label></div></fieldset>
+              <fieldset><legend>▣ Scoring rules</legend><div class="field-row"><label>Scoring type<select><option>Points</option><option>Revenue</option><option>Wins</option><option>Custom metric</option></select></label><label>Points per action<input id="pointsInput" type="number" min="1" value="10" /></label></div><label>Win condition<select id="winCondition"><option value="100">First to 100</option><option value="250">First to 250</option><option value="500">First to 500</option><option value="time">Highest score by deadline</option></select></label></fieldset>
+              <fieldset><legend>👾 Fighter sprites</legend><div class="sprite-pickers"><button type="button"><span class="sprite blue">•ᴗ•</span><small>Team 1 sprite</small><b>Change</b></button><button type="button"><span class="sprite coral">•ᴗ•</span><small>Team 2 sprite</small><b>Change</b></button></div></fieldset>
+              <fieldset><legend>▧ Arena</legend><div class="arena-options"><button type="button">🌊</button><button type="button">🏟</button><button class="is-active" type="button">🌌</button><button type="button">🏢</button><button type="button">＋</button></div></fieldset>
+              <fieldset><legend>◉ Team colors</legend><div class="color-pickers"><label>Team 1<input id="teamOneColor" type="color" value="#38A8EA" /></label><label>Team 2<input id="teamTwoColor" type="color" value="#F55286" /></label></div></fieldset>
+              <fieldset><legend>♫ Sounds</legend><label>Victory fanfare<select><option>Victory Splash</option><option>Cheerful Win</option><option>Level Up</option><option>Silent</option></select></label></fieldset>
+            </div>
+            <footer><button class="button button-ghost" id="previewGame" type="button">▷ Preview</button><button class="button button-primary" id="publishGame" type="button">↗ Publish preset</button></footer>
+          </aside>
+        </div>
+      </section>
+
+      <section class="screen" data-screen-panel="brand" aria-labelledby="brandTitle">
+        <header class="page-header">
+          <div><div class="eyebrow-row"><small>WHITE-LABEL FOUNDATION</small><span class="gfp-chip">AQUATIC + GFP</span></div><h1 id="brandTitle">Brand Studio</h1><p>One theme powers dashboards, celebrations, sounds, and games.</p></div>
+          <div class="header-actions"><span class="autosave">● Draft saved</span><button class="button button-primary" id="publishBrand" type="button">Publish brand</button></div>
+        </header>
+        <div class="brand-layout">
+          <section class="surface brand-form">
+            <div class="panel-heading"><div><small>BRAND BASICS</small><h2>Your workspace identity</h2></div><span class="step-pill">Step 1 of 3</span></div>
+            <label class="field-label">Workspace name<input id="workspaceName" type="text" value="Acme Sales" /></label>
+            <label class="field-label">Logo<div class="logo-drop"><img class="brand-logo large" src="assets/axoboard-logo-low-poly.png" alt="AxoBoard low-poly leucistic axolotl logo" /><span><strong>axoboard-logo-low-poly.png</strong><small>Transparent PNG · 1254×1254</small></span><button type="button">Replace</button></div></label>
+            <div class="field-row"><label class="field-label">Primary color<input id="brandColor" type="color" value="#E96F98" /></label><label class="field-label">Personality<select><option>Playful & polished</option><option>Bold & competitive</option><option>Calm & professional</option></select></label></div>
+            <label class="field-label">Celebration language<input id="celebrationLanguage" type="text" value="Big win!" /></label>
+            <div class="accessibility-check"><span>✓</span><div><strong>Contrast check passed</strong><small>Your text and controls meet WCAG AA.</small></div></div>
+            <button class="button button-primary full" type="button">Save and continue →</button>
+          </section>
+          <aside class="brand-preview" id="brandPreview">
+            <div class="preview-browser"><span></span><span></span><span></span><small>Live preview</small></div>
+            <div class="preview-app"><aside><img class="brand-logo large" src="assets/axoboard-logo-low-poly.png" alt="" /><strong id="workspacePreview">Acme Sales</strong><i></i><i></i><i></i></aside><main><small>CELEBRATION HQ</small><h2 id="languagePreview">Big win!</h2><div class="preview-win"><span class="mini-axo large">•ᴗ•</span><strong>Maya closed<br /><b>$18,420!</b></strong><span class="preview-button">Replay win</span></div><div class="preview-cards"><i></i><i></i><i></i></div></main></div>
+            <p>Preview updates instantly across the entire product.</p>
+          </aside>
         </div>
       </section>
     </main>
   </div>
 
-  <div class="toast" id="toast" role="status" aria-live="polite"><span>✓</span><p><strong>Dashboard published</strong><small>Version 12 is now live.</small></p></div>
+  <div class="feature-overlay" id="workflowModal" role="dialog" aria-modal="true" aria-labelledby="workflowTitle" aria-hidden="true">
+    <div class="feature-modal workflow-modal">
+      <header><div><small id="workflowEyebrow">FEATURE WORKFLOW</small><h2 id="workflowTitle">Configure feature</h2><p id="workflowDescription">Complete the setup without leaving your current workspace.</p></div><button class="feature-close" type="button" data-close-feature="workflowModal" aria-label="Close feature workflow">×</button></header>
+      <div class="workflow-progress" id="workflowProgress" aria-label="Workflow progress"></div>
+      <div class="workflow-layout">
+        <section class="workflow-canvas" id="workflowCanvas"></section>
+        <aside class="workflow-context" id="workflowContext"></aside>
+      </div>
+      <footer class="workflow-footer"><button class="button button-ghost" id="workflowCancel" type="button">Cancel</button><span id="workflowStatus">Prototype draft · no live changes</span><button class="button button-primary" id="workflowPrimary" type="button">Save draft</button></footer>
+    </div>
+  </div>
+
+  <div class="feature-overlay" id="templateModal" role="dialog" aria-modal="true" aria-labelledby="templateModalTitle" aria-hidden="true">
+    <div class="feature-modal template-modal">
+      <header><div><small>OUTCOME RECIPES</small><h2 id="templateModalTitle">Start with the whole playbook</h2><p>Templates install KPIs, goals, alerts, celebrations, and TV layouts together.</p></div><button class="feature-close" type="button" data-close-feature="templateModal" aria-label="Close templates">×</button></header>
+      <div class="template-filters"><button class="is-active" type="button">All teams</button><button type="button">Sales</button><button type="button">Support</button><button type="button">Executive</button></div>
+      <div class="template-grid">
+        <article class="template-card featured-template"><div class="template-art sales-template"><b>$55K</b><i></i><i></i><i></i></div><span>BEST FOR SALES TEAMS</span><h3>Sales Daily Command</h3><p>Revenue pace, pipeline coverage, deals won, rep attainment, alerts, and deal celebrations.</p><ul><li>8 KPI cards</li><li>3 alert rules</li><li>1 TV loop</li><li>2 celebrations</li></ul><button class="button button-primary use-template" type="button" data-template="Sales Daily Command">Use this recipe</button></article>
+        <article class="template-card"><div class="template-art pipeline-template"><b>2.7×</b><i></i><i></i><i></i></div><span>PIPELINE CONTROL</span><h3>Pipeline Health</h3><p>Coverage, stage movement, aging, owner risk, forecast gaps, and manager escalation.</p><ul><li>6 KPI cards</li><li>4 alert rules</li><li>1 manager view</li></ul><button class="button button-soft use-template" type="button" data-template="Pipeline Health">Preview recipe</button></article>
+        <article class="template-card"><div class="template-art concierge-template"><b>94%</b><i></i><i></i><i></i></div><span>CUSTOMER EXPERIENCE</span><h3>Concierge Pulse</h3><p>Availability, tickets, response time, reviews, service goals, and recognition moments.</p><ul><li>7 KPI cards</li><li>2 alert rules</li><li>1 TV loop</li></ul><button class="button button-soft use-template" type="button" data-template="Concierge Pulse">Preview recipe</button></article>
+      </div>
+    </div>
+  </div>
+
+  <div class="feature-overlay" id="shareModal" role="dialog" aria-modal="true" aria-labelledby="shareModalTitle" aria-hidden="true">
+    <div class="feature-modal compact-feature-modal">
+      <header><div><small>SHARE & DELIVER</small><h2 id="shareModalTitle">Put the numbers where people look</h2><p>Secure live links or scheduled snapshots—without requiring every viewer to edit.</p></div><button class="feature-close" type="button" data-close-feature="shareModal" aria-label="Close sharing">×</button></header>
+      <div class="share-tabs"><button class="is-active" type="button" data-share-tab="link">Live link</button><button type="button" data-share-tab="snapshots">Snapshots</button><button type="button" data-share-tab="embed">Embed</button></div>
+      <section class="share-panel is-active" data-share-panel="link"><div class="share-link-row"><input type="text" readonly value="https://view.axoboard.io/sales-pulse-7F3K" aria-label="Dashboard share link" /><button id="copyShareLink" type="button">Copy link</button></div><div class="share-options"><label><span><strong>Require passcode</strong><small>Viewers enter a shared passcode</small></span><input type="checkbox" checked /></label><label><span><strong>Link expires</strong><small>Automatically revoke access</small></span><select><option>In 30 days</option><option>In 7 days</option><option>Never</option></select></label><label><span><strong>Allow drilldown</strong><small>Source data remains permission-aware</small></span><input type="checkbox" /></label></div><button class="button button-primary full" id="createShareLink" type="button">Create secure link</button></section>
+      <section class="share-panel" data-share-panel="snapshots"><div class="destination-grid"><button class="is-selected" type="button"><span>#</span><strong>Slack</strong><small>#sales-wins</small></button><button type="button"><span>T</span><strong>Teams</strong><small>Connect account</small></button><button type="button"><span>✉</span><strong>Email</strong><small>8 recipients</small></button></div><div class="snapshot-config"><label>Schedule<select><option>Weekdays at 8:00 AM</option><option>Every Monday</option><option>End of each shift</option><option>Custom</option></select></label><label>Format<select><option>Dashboard snapshot + KPI summary</option><option>Snapshot only</option><option>KPI summary only</option></select></label></div><button class="button button-primary full" id="saveSnapshotSchedule" type="button">Save delivery schedule</button></section>
+      <section class="share-panel" data-share-panel="embed"><div class="embed-preview">&lt;iframe src="https://view.axoboard.io/embed/sales-pulse" …&gt;</div><p class="helper-copy"><span>✓</span> Embed tokens are scoped, revocable, and never expose editor access.</p><button class="button button-primary full" type="button">Generate embed code</button></section>
+    </div>
+  </div>
+
+  <div class="feature-overlay" id="drilldownModal" role="dialog" aria-modal="true" aria-labelledby="drilldownTitle" aria-hidden="true">
+    <div class="feature-modal drilldown-modal">
+      <header><div><small>SOURCE LINEAGE</small><h2 id="drilldownTitle">Net sales today</h2><p id="drilldownSubtitle">$55,396 · refreshed 2 minutes ago</p></div><button class="feature-close" type="button" data-close-feature="drilldownModal" aria-label="Close drilldown">×</button></header>
+      <div class="lineage-bar"><span class="source-mark google" id="drilldownSourceMark">G</span><div><strong id="drilldownSource">Google Sheets</strong><small id="drilldownPath">2026 Sales Performance → Summary → D8</small></div><span class="connection-pill">● Fresh</span><button id="openSourceButton" type="button">Open source ↗</button></div>
+      <div class="drilldown-summary"><div><small>VALUE</small><strong id="drilldownValue">$55,396</strong></div><div><small>FORMULA</small><strong id="drilldownFormula">Single value · D8</strong></div><div><small>COMPARE</small><strong>＋$6,110</strong></div><div><small>OWNER</small><strong>Sales Ops</strong></div></div>
+      <div class="drilldown-content"><section><div class="table-heading"><div><small>UNDERLYING DATA</small><h3 id="drilldownTableTitle">Source cells and contributing rows</h3></div><button type="button">Export CSV</button></div><div class="source-table"><div class="table-row table-head"><span>Source</span><span>Label</span><span>Value</span><span>Updated</span></div><div class="table-row"><span>Summary!D8</span><strong>Net sales</strong><b>$55,396</b><small>2m ago</small></div><div class="table-row"><span>Daily Sales!B42</span><strong>Order #A-1842</strong><b>$18,420</b><small>18m ago</small></div><div class="table-row"><span>Daily Sales!B41</span><strong>Order #A-1841</strong><b>$9,850</b><small>31m ago</small></div><div class="table-row"><span>Daily Sales!B40</span><strong>Order #A-1840</strong><b>$6,200</b><small>44m ago</small></div></div></section><aside><small>DEFINITION</small><h3>What this KPI means</h3><p>Net recognized sales for the current business day, excluding cancellations, refunds, and test orders.</p><dl><div><dt>Timezone</dt><dd>America/Denver</dd></div><div><dt>Freshness SLO</dt><dd>15 minutes</dd></div><div><dt>Certified by</dt><dd>Sales Ops</dd></div><div><dt>Last changed</dt><dd>Aug 8</dd></div></dl><button class="button button-soft full" type="button">View metric history</button></aside></div>
+    </div>
+  </div>
+
+  <div class="feature-overlay tv-preview-overlay" id="tvPreviewModal" role="dialog" aria-modal="true" aria-labelledby="tvPreviewTitle" aria-hidden="true">
+    <div class="tv-preview-stage"><header><div><img src="assets/axoboard-logo-low-poly.png" alt="" /><span><small>REVENUE PULSE · VIEW 1 OF 3</small><h2 id="tvPreviewTitle">Sales performance</h2></span></div><button data-close-feature="tvPreviewModal" type="button" aria-label="Close TV preview">×</button></header><div class="tv-kpis"><article><small>NET SALES TODAY</small><strong>$55,396</strong><span>↗ 12.4%</span></article><article><small>OPEN PIPELINE</small><strong>$1.28M</strong><span>72% of goal</span></article><article><small>TEAM ON TRACK</small><strong>82.9%</strong><span>13 of 16 reps</span></article></div><div class="tv-chart"><div><small>REVENUE MOMENTUM</small><strong>Finishing stronger than last week</strong></div><svg viewBox="0 0 800 180"><path d="M0 150 L130 126 L260 139 L390 82 L520 98 L650 43 L800 24" fill="none" stroke="#43bde8" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><footer><span class="live-dot"></span> Live · refreshed 2m ago <i></i> Next: Pipeline health in <b id="loopCountdown">45</b>s</footer></div>
+  </div>
+
+  <div class="builder-overlay" id="kpiBuilderModal" role="dialog" aria-modal="true" aria-labelledby="kpiBuilderTitle" aria-hidden="true">
+    <div class="builder-modal">
+      <header class="builder-modal-header"><div><small>NEW DASHBOARD METRIC</small><h2 id="kpiBuilderTitle">Build a KPI</h2></div><button id="closeKpiBuilder" type="button" aria-label="Close KPI builder">×</button></header>
+      <div class="builder-steps" aria-label="KPI builder progress"><span class="is-active" data-builder-step-label="1"><b>1</b>Source</span><i></i><span data-builder-step-label="2"><b>2</b>Data</span><i></i><span data-builder-step-label="3"><b>3</b>Display</span></div>
+
+      <div class="builder-body">
+        <section class="builder-step is-active" data-builder-step="1">
+          <div class="builder-copy"><small>STEP 1</small><h3>Where does this number live?</h3><p>Choose a connected source. AxoBoard only asks for the access needed to build this KPI.</p></div>
+          <div class="source-choice-grid">
+            <button class="source-choice is-selected" type="button" data-kpi-source="google"><span class="integration-logo google">G</span><div><strong>Google Sheets</strong><small>Pick a file, worksheet, cells, or a named range.</small></div><i>✓ Connected</i></button>
+            <button class="source-choice" type="button" data-kpi-source="hubspot"><span class="integration-logo hubspot">H</span><div><strong>HubSpot</strong><small>Pick an object, property, filter, and aggregation.</small></div><i>✓ Connected</i></button>
+          </div>
+          <div class="oauth-note"><span>🔒</span><div><strong>OAuth connection</strong><p>Tokens stay server-side and encrypted. Disconnecting revokes future syncs and starts the configured data-deletion workflow.</p></div><button id="reconnectSource" type="button">Reconnect</button></div>
+        </section>
+
+        <section class="builder-step" data-builder-step="2">
+          <div class="builder-copy"><small>STEP 2</small><h3 id="dataStepTitle">Choose cells to watch</h3><p id="dataStepCopy">Select a spreadsheet, worksheet, and exact A1 range.</p></div>
+          <div class="source-config is-active" data-source-config="google">
+            <div class="config-grid"><label>Spreadsheet<select id="sheetFile"><option>2026 Sales Performance</option><option>Weekly Pipeline Tracker</option><option>Executive Scorecard</option></select></label><label>Worksheet<select id="sheetTab"><option>Summary</option><option>Daily Sales</option><option>Rep Performance</option></select></label></div>
+            <div class="range-builder"><label>Cells or range<div><input id="sheetRange" type="text" value="D8" aria-describedby="rangeHelp" /><button id="selectRangeButton" type="button">Select cells</button></div><small id="rangeHelp">Use A1 notation: D8, G4:G18, or B2:E14</small></label><label>How should AxoBoard read it?<select id="sheetAggregation"><option>Single value</option><option>Sum range</option><option>Average range</option><option>Count non-empty cells</option><option>Latest value</option></select></label></div>
+            <div class="sheet-picker"><header><div><strong>Summary</strong><small>2026 Sales Performance</small></div><span>Click and drag to select</span></header><div class="sheet-grid" id="sheetGrid"><b></b><b>A</b><b>B</b><b>C</b><b>D</b><b>E</b><i>6</i><button type="button">Orders</button><button type="button">34</button><button type="button">Goal</button><button type="button">40</button><button type="button">85%</button><i>7</i><button type="button">Pipeline</button><button type="button">$1.28M</button><button type="button">Coverage</button><button type="button">2.7×</button><button type="button">3×</button><i>8</i><button type="button">Net sales</button><button type="button">Today</button><button type="button">Total</button><button class="is-selected" type="button" data-cell="D8">$55,396</button><button type="button">12.4%</button><i>9</i><button type="button">Returns</button><button type="button">$1,220</button><button type="button">AOV</button><button type="button">$1,629</button><button type="button">↑ 4.1%</button></div></div>
+          </div>
+
+          <div class="source-config" data-source-config="hubspot">
+            <div class="config-grid"><label>CRM object<select id="hubspotObject"><option value="deals">Deals</option><option value="contacts">Contacts</option><option value="tickets">Tickets</option><option value="companies">Companies</option></select></label><label>Property<select id="hubspotProperty"><option value="amount">Deal amount · Currency</option><option value="dealstage">Deal stage · Enumeration</option><option value="closedate">Close date · Date</option><option value="hs_arr">Annual recurring revenue · Currency</option><option value="custom_score">Custom: Sales quality score · Number</option></select></label></div>
+            <div class="config-grid"><label>Aggregation<select id="hubspotAggregation"><option>Sum</option><option>Count records</option><option>Average</option><option>Minimum</option><option>Maximum</option></select></label><label>Date window<select><option>Today</option><option>This week</option><option>This month</option><option>This quarter</option><option>Rolling 30 days</option></select></label></div>
+            <div class="filter-builder"><div><strong>Filters</strong><button type="button">＋ Add filter</button></div><div class="filter-row"><select aria-label="Filter property"><option>Deal stage</option><option>Pipeline</option><option>Owner</option><option>Close date</option></select><select aria-label="Filter operator"><option>is any of</option><option>is none of</option><option>is known</option><option>is after</option></select><select aria-label="Filter value"><option>Closed won</option><option>Open stages</option><option>All values</option></select><button type="button" aria-label="Remove filter">×</button></div></div>
+            <div class="property-preview"><header><strong>Property preview</strong><span>1,284 matching deals</span></header><div><span>Property</span><b>amount</b></div><div><span>Field type</span><b>number · currency</b></div><div><span>Sync access</span><b>read only</b></div><div><span>Example result</span><b>$1,284,600</b></div></div>
+          </div>
+        </section>
+
+        <section class="builder-step" data-builder-step="3">
+          <div class="builder-copy"><small>STEP 3</small><h3>Make the KPI instantly readable</h3><p>Name it, choose a visualization, and decide what “good” looks like.</p></div>
+          <div class="display-config"><div><label>KPI name<input id="kpiName" type="text" value="Net sales today" /></label><label>Number format<select id="kpiFormat"><option>Currency · $55,396</option><option>Number · 55,396</option><option>Percent · 82.9%</option><option>Duration · 04:32</option><option>Compact · $1.2M</option></select></label></div><fieldset><legend>Visualization</legend><div class="visual-choice-grid"><button class="is-selected" type="button" data-visual="number">123<small>Number</small></button><button type="button" data-visual="goal">◔<small>Goal</small></button><button type="button" data-visual="sparkline">⌁<small>Sparkline</small></button><button type="button" data-visual="status">●<small>Status</small></button></div></fieldset><div><label>Goal<input id="kpiGoal" type="text" value="$65,000" /></label><label>Comparison<select><option>Previous day</option><option>Previous week</option><option>Previous period</option><option>Target only</option><option>None</option></select></label></div><div><label>Refresh frequency<select><option>Every 5 minutes</option><option>Every 15 minutes</option><option>Hourly</option><option>Daily</option></select></label><label>Stale after<select><option>15 minutes</option><option>1 hour</option><option>6 hours</option><option>24 hours</option></select></label></div></div>
+          <aside class="kpi-preview-card"><small>LIVE PREVIEW</small><span class="source-mark google" id="previewSourceMark">G</span><p id="previewKpiName">Net sales today</p><strong id="previewKpiValue">$55,396</strong><div class="kpi-change positive">↗ 12.4% <span>vs previous day</span></div><div class="mini-progress"><i style="width:85%"></i></div><footer><span>Goal $65K</span><b>85%</b></footer></aside>
+        </section>
+      </div>
+
+      <footer class="builder-modal-footer"><button class="button button-ghost" id="builderBack" type="button" disabled>← Back</button><span id="builderStatus">Draft changes only</span><button class="button button-primary" id="builderNext" type="button">Choose data →</button></footer>
+    </div>
+  </div>
+
+  <div class="celebration-overlay" id="celebrationOverlay" role="dialog" aria-modal="true" aria-labelledby="winTitle">
+    <div class="confetti" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="win-modal">
+      <button class="close-win" id="closeWin" type="button" aria-label="Close celebration">×</button>
+      <span class="celebration-badge">✦</span>
+      <h2 id="winTitle">Maya closed <strong>$18,420!</strong></h2>
+      <div class="hero-axo" aria-hidden="true"><i></i><b>•ᴗ•</b><i></i><span>♬</span></div>
+      <p><span id="activeStyle">Confetti</span> · <span id="activeSound">Victory Splash</span> · <span id="activeHype">High hype</span></p>
+      <button class="button button-primary" id="replayWin" type="button">↻ Replay win</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"><span>✓</span><p><strong>Saved</strong><small>Your changes are ready.</small></p></div>
   <script src="app.js"></script>
 </body>
 </html>
