@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { extname, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import Stripe from 'stripe';
 
 const { Pool } = pg;
 const appRoot = resolve(fileURLToPath(new URL('.', import.meta.url)));
@@ -17,6 +18,15 @@ const databaseSsl = process.env.DATABASE_SSL === 'true';
 const pool = databaseUrl
   ? new Pool({ connectionString: databaseUrl, ssl: databaseSsl ? { rejectUnauthorized: false } : false, max: 10 })
   : null;
+const appBaseUrl = String(process.env.APP_BASE_URL || `http://127.0.0.1:${port}`).replace(/\/$/, '');
+const stripeSecretKey = String(process.env.STRIPE_SECRET_KEY || '');
+const stripeWebhookSecret = String(process.env.STRIPE_WEBHOOK_SECRET || '');
+const stripeStarterPrice = String(process.env.STRIPE_PRICE_STARTER_MONTHLY || '');
+const stripePortalConfiguration = String(process.env.STRIPE_PORTAL_CONFIGURATION_ID || '');
+const stripeOptions = process.env.NODE_ENV === 'test' && process.env.STRIPE_API_HOST
+  ? { host: process.env.STRIPE_API_HOST, port: Number(process.env.STRIPE_API_PORT), protocol: 'http' }
+  : {};
+const stripe = stripeSecretKey ? new Stripe(stripeSecretKey, { ...stripeOptions, apiVersion: '2025-12-15.clover', maxNetworkRetries: 2, timeout: 10_000 }) : null;
 
 const contentTypes = new Map([
   ['.css', 'text/css; charset=utf-8'], ['.html', 'text/html; charset=utf-8'],
@@ -96,6 +106,17 @@ async function readJson(req) {
   catch { throw new Error('invalid_json'); }
 }
 
+async function readRawBody(req, limit = 1_048_576) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > limit) throw new Error('payload_too_large');
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
 function normalizeEmail(value) { return String(value || '').trim().toLowerCase(); }
 
 function hashPassword(password) {
@@ -149,6 +170,22 @@ async function createSession(client, userId, workspaceId) {
 
 function canAccessApp(status) { return status === 'active'; }
 
+function billingReady() {
+  return Boolean(pool && stripe && stripeWebhookSecret && stripeStarterPrice && /^price_/.test(stripeStarterPrice));
+}
+
+function stripeStatusToLocal(status) {
+  if (status === 'active') return 'active';
+  if (status === 'canceled') return 'canceled';
+  if (['past_due', 'unpaid', 'paused'].includes(status)) return 'past_due';
+  return 'pending_payment';
+}
+
+function safeStripeId(value, prefix) {
+  const id = typeof value === 'string' ? value : value?.id;
+  return typeof id === 'string' && id.startsWith(prefix) ? id : null;
+}
+
 async function workspaceAccessForUser(client, userId) {
   const result = await client.query(`
     SELECT m.workspace_id, COALESCE(s.status, 'pending_payment') AS billing_status
@@ -178,6 +215,157 @@ async function currentSession(req) {
   `, [tokenDigest(token)]);
   const session = result.rows[0] || null;
   return session ? { ...session, can_access_app: canAccessApp(session.billing_status) } : null;
+}
+
+async function billingSession(req) {
+  const session = await currentSession(req);
+  if (!session) return null;
+  if (!['owner', 'admin'].includes(session.role)) return { ...session, billing_forbidden: true };
+  return session;
+}
+
+async function reconcileStripeEvent(client, event) {
+  const object = event.data?.object || {};
+  const eventCreated = Number(event.created || 0);
+  if (!Number.isSafeInteger(eventCreated) || eventCreated <= 0) throw new Error('invalid_stripe_event_created');
+
+  let workspaceId = String(object.metadata?.workspace_id || object.subscription_details?.metadata?.workspace_id || object.parent?.subscription_details?.metadata?.workspace_id || '').trim();
+  const customerId = safeStripeId(object.customer, 'cus_');
+  const subscriptionId = safeStripeId(object.subscription, 'sub_') || safeStripeId(object.parent?.subscription_details?.subscription, 'sub_') || (object.object === 'subscription' ? safeStripeId(object.id, 'sub_') : null);
+  if (event.type.startsWith('invoice.') && !subscriptionId) return;
+  const planKey = object.metadata?.plan_key || object.subscription_details?.metadata?.plan_key || object.parent?.subscription_details?.metadata?.plan_key;
+  if (planKey && planKey !== 'starter_monthly') throw new Error('stripe_plan_not_allowed');
+  if (!workspaceId && customerId) {
+    const lookup = await client.query('SELECT workspace_id FROM subscriptions WHERE stripe_customer_id = $1 LIMIT 1', [customerId]);
+    workspaceId = lookup.rows[0]?.workspace_id || '';
+  }
+  if (!workspaceId) return;
+
+  const existingResult = await client.query('SELECT * FROM subscriptions WHERE workspace_id = $1 FOR UPDATE', [workspaceId]);
+  const existing = existingResult.rows[0];
+  if (!existing) throw new Error('stripe_workspace_not_found');
+  if (customerId) {
+    const customerOwner = await client.query('SELECT workspace_id FROM subscriptions WHERE stripe_customer_id = $1 AND workspace_id <> $2 LIMIT 1', [customerId, workspaceId]);
+    if (customerOwner.rowCount) throw new Error('stripe_customer_cross_workspace');
+  }
+  if (subscriptionId) {
+    const subscriptionOwner = await client.query('SELECT workspace_id FROM subscriptions WHERE stripe_subscription_id = $1 AND workspace_id <> $2 LIMIT 1', [subscriptionId, workspaceId]);
+    if (subscriptionOwner.rowCount) throw new Error('stripe_subscription_cross_workspace');
+  }
+  if (existing.stripe_customer_id && customerId && existing.stripe_customer_id !== customerId) throw new Error('stripe_customer_workspace_mismatch');
+  if (existing.stripe_subscription_id && subscriptionId && existing.stripe_subscription_id !== subscriptionId) throw new Error('stripe_subscription_workspace_mismatch');
+  if (eventCreated < Number(existing.last_stripe_event_created_at || 0)) return;
+
+  let nextStatus = existing.status;
+  if (object.object === 'subscription') nextStatus = stripeStatusToLocal(object.status);
+  if (event.type === 'invoice.paid') nextStatus = 'active';
+  if (event.type === 'invoice.payment_failed') nextStatus = 'past_due';
+  if (event.type === 'customer.subscription.deleted') nextStatus = 'canceled';
+  const periodStart = object.current_period_start ? new Date(object.current_period_start * 1000) : existing.current_period_start;
+  const periodEnd = object.current_period_end ? new Date(object.current_period_end * 1000) : existing.current_period_end;
+  const priceId = object.items?.data?.[0]?.price?.id || existing.stripe_price_id;
+  if (priceId && priceId !== stripeStarterPrice) throw new Error('stripe_price_not_allowed');
+
+  await client.query("SELECT set_config('axoboard.audit_source', $1, true)", [`stripe:${event.type}`]);
+  await client.query("SELECT set_config('axoboard.audit_actor', $1, true)", [event.id]);
+  await client.query(`
+    UPDATE subscriptions SET status = $1,
+      stripe_customer_id = COALESCE($2, stripe_customer_id),
+      stripe_subscription_id = COALESCE($3, stripe_subscription_id),
+      stripe_price_id = COALESCE($4, stripe_price_id),
+      current_period_start = COALESCE($5, current_period_start),
+      current_period_end = COALESCE($6, current_period_end),
+      cancel_at_period_end = $7,
+      last_stripe_event_created_at = $8,
+      updated_at = NOW()
+    WHERE workspace_id = $9
+  `, [nextStatus, customerId, subscriptionId, priceId, periodStart, periodEnd, Boolean(object.cancel_at_period_end), eventCreated, workspaceId]);
+}
+
+async function handleBilling(req, res, pathname) {
+  if (pathname === '/api/billing/stripe/webhook' && req.method === 'POST') {
+    if (!pool || !stripe || !stripeWebhookSecret) return sendJson(res, 503, { error: 'Billing is not configured.' });
+    const rawBody = await readRawBody(req);
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(rawBody, String(req.headers['stripe-signature'] || ''), stripeWebhookSecret);
+    } catch {
+      return sendJson(res, 400, { error: 'Webhook signature was not accepted.' });
+    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const inserted = await client.query(`
+        INSERT INTO stripe_webhook_events (event_id, event_type, livemode, stripe_created_at)
+        VALUES ($1, $2, $3, $4) ON CONFLICT (event_id) DO NOTHING RETURNING event_id
+      `, [event.id, event.type, Boolean(event.livemode), Number(event.created)]);
+      if (!inserted.rowCount) {
+        await client.query('COMMIT');
+        return sendJson(res, 200, { received: true, duplicate: true });
+      }
+      if (event.livemode !== (stripeSecretKey.startsWith('sk_live_'))) throw new Error('stripe_mode_mismatch');
+      if (['checkout.session.completed', 'customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted', 'invoice.paid', 'invoice.payment_failed'].includes(event.type)) {
+        await reconcileStripeEvent(client, event);
+      }
+      await client.query('COMMIT');
+      return sendJson(res, 200, { received: true });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('[billing] webhook failed', event?.id || 'unknown', error?.message || 'unknown');
+      return sendJson(res, 500, { error: 'Webhook processing failed.' });
+    } finally { client.release(); }
+  }
+
+  if (!billingReady()) return sendJson(res, 503, { error: 'Billing is not configured.' });
+  if (!sameOrigin(req)) return sendJson(res, 403, { error: 'Request origin was not accepted.' });
+  const session = await billingSession(req);
+  if (!session) return sendJson(res, 401, { error: 'Authentication required.' });
+  if (session.billing_forbidden) return sendJson(res, 403, { error: 'Workspace billing access is required.' });
+  if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed.' }, { Allow: 'POST' });
+
+  const subscriptionResult = await pool.query('SELECT * FROM subscriptions WHERE workspace_id = $1 LIMIT 1', [session.workspace_id]);
+  const localSubscription = subscriptionResult.rows[0];
+  if (!localSubscription) return sendJson(res, 409, { error: 'Workspace subscription record is missing.' });
+
+  if (pathname === '/api/billing/checkout-session') {
+    if (localSubscription.status === 'active') return sendJson(res, 409, { error: 'Workspace already has active billing.' });
+    let customerId = localSubscription.stripe_customer_id;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: session.email, name: session.workspace_name,
+        metadata: { workspace_id: session.workspace_id }
+      }, { idempotencyKey: `customer:${session.workspace_id}` });
+      customerId = customer.id;
+      const bound = await pool.query(`UPDATE subscriptions SET stripe_customer_id = $1, updated_at = NOW()
+        WHERE workspace_id = $2 AND (stripe_customer_id IS NULL OR stripe_customer_id = $1)`, [customerId, session.workspace_id]);
+      if (!bound.rowCount) return sendJson(res, 409, { error: 'Workspace billing customer conflict.' });
+    }
+    const suppliedKey = String(req.headers['idempotency-key'] || randomUUID());
+    if (!/^[A-Za-z0-9:_-]{8,128}$/.test(suppliedKey)) return sendJson(res, 422, { error: 'Idempotency key was not accepted.' });
+    const checkout = await stripe.checkout.sessions.create({
+      mode: 'subscription', customer: customerId,
+      line_items: [{ price: stripeStarterPrice, quantity: 1 }],
+      client_reference_id: session.workspace_id,
+      metadata: { workspace_id: session.workspace_id, plan_key: 'starter_monthly' },
+      subscription_data: { metadata: { workspace_id: session.workspace_id, plan_key: 'starter_monthly' } },
+      success_url: `${appBaseUrl}/pricing?checkout=success`,
+      cancel_url: `${appBaseUrl}/pricing?checkout=canceled`,
+      consent_collection: { terms_of_service: 'required' },
+      allow_promotion_codes: false
+    }, { idempotencyKey: `checkout:${session.workspace_id}:${suppliedKey}` });
+    return sendJson(res, 200, { url: checkout.url });
+  }
+
+  if (pathname === '/api/billing/portal-session') {
+    if (!localSubscription.stripe_customer_id) return sendJson(res, 409, { error: 'Workspace does not have a billing customer yet.' });
+    const portal = await stripe.billingPortal.sessions.create({
+      customer: localSubscription.stripe_customer_id,
+      return_url: `${appBaseUrl}/pricing`,
+      ...(stripePortalConfiguration ? { configuration: stripePortalConfiguration } : {})
+    });
+    return sendJson(res, 200, { url: portal.url });
+  }
+  return sendJson(res, 404, { error: 'Not found' });
 }
 
 async function handleAuth(req, res, pathname) {
@@ -323,6 +511,7 @@ const server = createServer(async (req, res) => {
       return sendJson(res, database === 'unhealthy' ? 503 : 200, { ok: database !== 'unhealthy', service: 'axoboard-web', version: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.APP_VERSION || 'development', database });
     }
     if (url.pathname.startsWith('/api/auth/')) return await handleAuth(req, res, url.pathname);
+    if (url.pathname.startsWith('/api/billing/')) return await handleBilling(req, res, url.pathname);
     if (url.pathname === '/demo' || url.pathname === '/index.html') return sendJson(res, 404, { error: 'Not found' });
 
     let productSession = null;

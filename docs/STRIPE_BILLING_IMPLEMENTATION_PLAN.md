@@ -1,5 +1,9 @@
 # AxoBoard Stripe billing implementation plan
 
+## Implementation status — 2026-08-13
+
+The sandbox code foundation is complete on `feat/stripe-sandbox-foundation`: Starter Checkout, raw-body signed/idempotent webhooks, customer portal, transactional subscription projection, replay/out-of-order protection, and cross-workspace tests. Remaining activation work is deployment, Railway sandbox variables, Stripe webhook registration, and one retained-QA-workspace sandbox purchase. Live-mode keys and the private owner entitlement remain deliberately deferred until sandbox release gates pass.
+
 This is the shortest safe path from account creation to a paid AxoBoard workspace. The dashboard remains fail-closed until Stripe confirms an active subscription.
 
 ## Architecture

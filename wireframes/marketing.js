@@ -1,4 +1,5 @@
 document.documentElement.classList.add('js');
+if (new URLSearchParams(location.search).has('checkout')) sessionStorage.removeItem('axoboard_checkout_key');
 const menuToggle = document.querySelector('.menu-toggle');
 const siteNav = document.querySelector('.site-nav');
 
@@ -104,5 +105,37 @@ fetch('/api/auth/session', { credentials: 'same-origin' }).then((response) => re
   document.querySelectorAll('a[href="/login"]').forEach((link) => {
     link.textContent = session.canAccessApp ? 'Open workspace' : 'Complete purchase';
     link.href = session.canAccessApp ? '/app' : '/pricing?access=subscription_required';
+  });
+  const starterCheckout = document.querySelector('[data-starter-checkout]');
+  const billingStatus = document.querySelector('[data-billing-status]');
+  if (!starterCheckout) return;
+  if (session.canAccessApp) {
+    starterCheckout.textContent = 'Open workspace';
+    starterCheckout.href = '/app';
+    if (billingStatus) billingStatus.textContent = 'This workspace has active access. Billing changes are applied only from verified Stripe events.';
+    return;
+  }
+  starterCheckout.textContent = 'Continue to secure checkout';
+  starterCheckout.href = '#';
+  if (billingStatus) billingStatus.textContent = 'Your workspace is ready. Complete Starter checkout to activate access after Stripe confirms the subscription.';
+  starterCheckout.addEventListener('click', async (event) => {
+    event.preventDefault();
+    if (starterCheckout.getAttribute('aria-disabled') === 'true') return;
+    starterCheckout.setAttribute('aria-disabled', 'true');
+    starterCheckout.textContent = 'Opening secure checkout…';
+    try {
+      const idempotencyKey = sessionStorage.getItem('axoboard_checkout_key') || crypto.randomUUID();
+      sessionStorage.setItem('axoboard_checkout_key', idempotencyKey);
+      const response = await fetch('/api/billing/checkout-session', {
+        method: 'POST', credentials: 'same-origin', headers: { 'Idempotency-Key': idempotencyKey }
+      });
+      const result = await response.json();
+      if (!response.ok || !result.url) throw new Error(result.error || 'Secure checkout is unavailable.');
+      location.assign(result.url);
+    } catch (error) {
+      starterCheckout.removeAttribute('aria-disabled');
+      starterCheckout.textContent = 'Continue to secure checkout';
+      if (billingStatus) billingStatus.textContent = error.message;
+    }
   });
 }).catch(() => {});

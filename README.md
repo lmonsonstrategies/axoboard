@@ -28,6 +28,7 @@ Required release gates include syntax checks, dependency audit, PostgreSQL entit
 - Public marketing, pricing, FAQ, login, and signup surfaces.
 - Dashboard code and assets require an authenticated session bound to a workspace with an explicit `active` subscription.
 - New accounts default to `pending_payment`; no redirect or browser state can grant access.
+- Starter billing uses Stripe-hosted Checkout and Portal sessions. Only raw-body signature-verified, idempotent Stripe webhooks may change workspace entitlement.
 - The dashboard and integration flows remain prototype workflows until their server-backed milestones are complete.
 - Google Sheets is the first direct connector in development. Other named providers are roadmap items, not live-integration claims.
 

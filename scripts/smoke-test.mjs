@@ -92,6 +92,7 @@ try {
   assert.match(landingHtml, /Quarter target hit!/i);
   assert.match(landingHtml, /Turn live performance into action, recognition, and momentum/i);
   assert.match(landingHtml, /Live preview/i);
+  assert.match(landingHtml, /data-starter-checkout/i);
   for (const price of ['$99', '$249', '$599', 'From $1,500']) assert.ok(landingHtml.includes(price), `landing includes ${price} plan`);
   assert.match(landingHtml, /"@type": "WebApplication"/i);
   assert.match(landingHtml, /rel="canonical" href="https:\/\/axoboard\.io\/"/i);
