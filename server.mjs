@@ -26,7 +26,7 @@ const contentTypes = new Map([
 const pageRoutes = new Map([
   ['/', 'landing.html'], ['/features', 'landing.html'], ['/integrations', 'landing.html'],
   ['/pricing', 'landing.html'], ['/faq', 'landing.html'], ['/login', 'auth.html'],
-  ['/signup', 'auth.html']
+  ['/signup', 'auth.html'], ['/terms', 'terms.html'], ['/privacy', 'privacy.html']
 ]);
 const publicStaticFiles = new Set(['marketing.css', 'marketing.js', 'auth.js']);
 const publicAssetFiles = new Set([
@@ -34,7 +34,13 @@ const publicAssetFiles = new Set([
   'assets/favicon/favicon-16.png',
   'assets/favicon/favicon-32.png',
   'assets/favicon/favicon-192.png',
-  'assets/favicon/apple-touch-icon.png'
+  'assets/favicon/apple-touch-icon.png',
+  'assets/providers/google-sheets.svg',
+  'assets/providers/shopify.svg',
+  'assets/providers/wix.svg',
+  'assets/providers/microsoft-excel.svg',
+  'assets/providers/hubspot.svg',
+  'assets/providers/salesforce.svg'
 ]);
 const productFiles = new Map([
   ['/app', 'index.html'],
@@ -173,6 +179,9 @@ async function currentSession(req) {
 }
 
 async function handleAuth(req, res, pathname) {
+  if (pathname === '/api/auth/session' && req.method === 'GET' && !pool) {
+    return sendJson(res, 200, { authenticated: false, canAccessApp: false, accountStorage: 'not_configured' });
+  }
   if (!pool) return sendJson(res, 503, { error: 'Account storage is not configured yet.' });
   if (!sameOrigin(req)) return sendJson(res, 403, { error: 'Request origin was not accepted.' });
   if (pathname === '/api/auth/session' && req.method === 'GET') {

@@ -12,8 +12,13 @@ async function request(path, expectedStatus) {
 const health = await (await request('/healthz', 200)).json();
 assert.equal(health.ok, true);
 if (expectedSha) assert.ok(String(health.version).startsWith(expectedSha), `deployed ${health.version}, expected ${expectedSha}`);
-assert.match(await (await request('/', 200)).text(), /AxoBoard/i);
+const landing = await (await request('/', 200)).text();
+assert.match(landing, /Your team should <em>feel<\/em> the numbers moving/i);
+assert.doesNotMatch(landing, /See how it works/i);
 assert.match(await (await request('/signup', 200)).text(), /Create your AxoBoard/);
+assert.match(await (await request('/terms', 200)).text(), /Terms of Service/);
+assert.match(await (await request('/privacy', 200)).text(), /Privacy Policy/);
+for (const path of ['/assets/providers/google-sheets.svg', '/assets/providers/shopify.svg', '/assets/providers/wix.svg', '/assets/providers/microsoft-excel.svg', '/assets/providers/hubspot.svg', '/assets/providers/salesforce.svg']) await request(path, 200);
 assert.equal((await request('/app', 302)).headers.get('location'), '/login');
 for (const path of ['/demo', '/index.html', '/app.js', '/styles.css', '/landing.html', '/auth.html', '/api/axoboard/integrations/oauth/start', '/assets/axoboard-logo-low-poly.png', '/assets/integrations/google-sheets.svg', '/assets/integrations/hubspot.svg', '/assets/favicon/favicon-source.png']) await request(path, 404);
 for (const path of ['/.env', '/server.mjs', '/package.json', '/Dockerfile', '/.git/config']) await request(path, 404);

@@ -30,11 +30,24 @@ Launch with one monthly product until the first connector and onboarding flow ar
 
 Add annual, Growth, Scale, coupons, trials, usage billing, and sales-assisted contracts only after the Starter purchase, cancellation, failed-payment, and restore paths pass production tests.
 
+### Private owner workspace
+
+Leroy's AxoBoard workspace is comped without creating a public free tier:
+
+- Product/price: internal `AxoBoard Owner`, $0 recurring, hidden from Checkout and public plan APIs.
+- Assignment: manual admin-only action to Leroy's exact workspace ID; never selected from a browser-supplied price ID, email match, or generic owner role.
+- Entitlement: uses the same signed Stripe webhook and local subscription projection as paid workspaces so production billing behavior is exercised continuously.
+- Audit: record who assigned or removed the comped price and when.
+
+Stripe Standard itself has no setup or monthly platform fee. AxoBoard pays the applicable payment-processing and Billing usage fees only when customer transactions occur. Do not enable optional paid Stripe products unless the launch requires them.
+
 ## Required server work
 
 1. Install the official `stripe` Node SDK and pin a tested API version.
 2. Add authenticated, same-origin `POST /api/billing/checkout-session`.
 3. Accept a server-side plan key, never an arbitrary browser-supplied price ID.
+   - Public allowlist: `starter_monthly` only at launch.
+   - Internal allowlist: `owner_comped` only through an authenticated AxoBoard admin action scoped to Leroy's exact workspace ID.
 4. Create or reuse the workspace Stripe customer and attach `workspace_id` as metadata.
 5. Create a Checkout Session in `subscription` mode with an idempotency key tied to workspace + request.
 6. Redirect to the Stripe-hosted URL. A success page may show progress, but it must never grant access by itself.
@@ -57,6 +70,7 @@ Store these only as Railway service variables, separately for staging/sandbox an
     STRIPE_SECRET_KEY
     STRIPE_WEBHOOK_SECRET
     STRIPE_PRICE_STARTER_MONTHLY
+    STRIPE_PRICE_OWNER_COMPED
     STRIPE_PORTAL_CONFIGURATION_ID
     APP_BASE_URL=https://axoboard.io
 

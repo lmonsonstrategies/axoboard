@@ -73,6 +73,15 @@ if (integrationMarquee && 'IntersectionObserver' in window) {
   tickerObserver.observe(integrationMarquee);
 }
 
+const mobileConversionCta = document.querySelector('.mobile-conversion-cta');
+const heroConversionCta = document.querySelector('.hero-actions');
+if (mobileConversionCta && heroConversionCta && 'IntersectionObserver' in window) {
+  const conversionObserver = new IntersectionObserver(([entry]) => {
+    mobileConversionCta.classList.toggle('is-visible', !entry.isIntersecting);
+  }, { threshold: 0.1 });
+  conversionObserver.observe(heroConversionCta);
+}
+
 fetch('/api/auth/session', { credentials: 'same-origin' }).then((response) => response.ok ? response.json() : null).then((session) => {
   if (!session?.authenticated) return;
   document.querySelectorAll('a[href="/login"]').forEach((link) => {

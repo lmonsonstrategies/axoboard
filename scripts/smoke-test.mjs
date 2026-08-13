@@ -78,16 +78,20 @@ function rawStatus(path) {
 try {
   const health = await waitForHealth();
   assert.equal(health.database, process.env.DATABASE_URL ? 'healthy' : 'not_configured', 'database health state');
-  const landing = await assertRoute('/', 200, /AxoBoard/i);
+  const landing = await assertRoute('/', 200, /Your team should <em>feel<\/em> the numbers moving/i);
   assert.match(landing.headers.get('content-security-policy') || '', /default-src 'self'/);
-  assert.doesNotMatch(await (await fetch(`${baseUrl}/`)).text(), /murphy/i);
+  const landingHtml = await (await fetch(`${baseUrl}/`)).text();
+  assert.doesNotMatch(landingHtml, /murphy/i);
+  assert.doesNotMatch(landingHtml, /See how it works/i);
   await assertRoute('/features', 200, /AxoBoard/i);
   await assertRoute('/integrations', 200, /AxoBoard/i);
   await assertRoute('/pricing', 200, /AxoBoard/i);
   await assertRoute('/faq', 200, /AxoBoard/i);
+  await assertRoute('/terms', 200, /Terms of Service/);
+  await assertRoute('/privacy', 200, /Privacy Policy/);
   await assertRoute('/login', 200, /Log in to AxoBoard/);
   await assertRoute('/signup', 200, /Create your AxoBoard/);
-  for (const path of ['/marketing.css', '/marketing.js', '/auth.js', '/assets/favicon/favicon-32.png', '/assets/favicon/favicon-192.png']) await assertRoute(path, 200);
+  for (const path of ['/marketing.css', '/marketing.js', '/auth.js', '/assets/favicon/favicon-32.png', '/assets/favicon/favicon-192.png', '/assets/providers/google-sheets.svg', '/assets/providers/shopify.svg', '/assets/providers/wix.svg', '/assets/providers/microsoft-excel.svg', '/assets/providers/hubspot.svg', '/assets/providers/salesforce.svg']) await assertRoute(path, 200);
   for (const path of ['/demo', '/index.html', '/app.js', '/styles.css', '/api/axoboard/integrations/oauth/start']) await assertRoute(path, 404);
   const protectedApp = await assertRoute('/app', 302);
   assert.equal(protectedApp.headers.get('location'), '/login');
@@ -159,6 +163,9 @@ try {
     assert.deepEqual(auditStatuses, ['pending_payment', 'active', 'past_due', 'canceled'], 'subscription status history');
     const badLogin = await fetch(`${baseUrl}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: baseUrl }, body: JSON.stringify({ email, password: 'wrong-password' }) });
     assert.equal(badLogin.status, 401);
+  } else {
+    const anonymousSession = await (await fetch(`${baseUrl}/api/auth/session`)).json();
+    assert.deepEqual(anonymousSession, { authenticated: false, canAccessApp: false, accountStorage: 'not_configured' });
   }
   console.log(`AxoBoard smoke test passed${process.env.DATABASE_URL ? ' with PostgreSQL auth' : ' (public routes; PostgreSQL not configured)'}.`);
 } finally {
