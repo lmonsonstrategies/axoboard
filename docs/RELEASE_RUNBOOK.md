@@ -21,6 +21,8 @@ Railway production follows only `main`. Feature branches never deploy to `axoboa
 7. Confirm Railway reports the same full Git SHA with deployment status `SUCCESS`.
 8. Run `EXPECTED_SHA=<short-sha> npm run verify:production`.
 
+Database migrations run automatically before the HTTP listener starts. Each migration is transactional, serialized with an advisory lock, and checksum-verified against `schema_migrations`. A migration failure prevents the new container from becoming healthy; Railway retains the prior healthy deployment for rollback. Never modify an applied migration file.
+
 ## Production success signal
 
 - `/healthz` returns `200`, `ok: true`, the expected commit SHA, and a healthy database when persistence is enabled.

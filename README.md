@@ -11,6 +11,8 @@ npm start
 
 Open `http://localhost:3000`. Health is available at `GET /healthz`. PostgreSQL is required for account creation and paid-workspace access; without `DATABASE_URL`, the public site runs but auth fails closed.
 
+Database changes live in `migrations/` and run automatically at startup under a PostgreSQL advisory lock. Applied filenames and SHA-256 checksums are recorded in `schema_migrations`; never edit an applied migration—add the next numbered file.
+
 ## Release model
 
 The repository deploys to Railway from `main` using the root `Dockerfile` and `railway.json`. The production health check is `/healthz`.

@@ -1,4 +1,4 @@
-import { createReadStream, existsSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
 import { extname, normalize, resolve, sep } from 'node:path';
@@ -8,6 +8,7 @@ import pg from 'pg';
 const { Pool } = pg;
 const appRoot = resolve(fileURLToPath(new URL('.', import.meta.url)));
 const publicRoot = resolve(appRoot, 'wireframes');
+const migrationsRoot = resolve(appRoot, 'migrations');
 const port = Math.max(1, Number(process.env.PORT || 3000));
 const sessionCookie = 'axo_session';
 const sessionLifetimeMs = 30 * 24 * 60 * 60 * 1000;
@@ -269,78 +270,42 @@ async function initializeDatabase() {
     }
   }
   if (lastError) throw lastError;
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (id UUID PRIMARY KEY, email TEXT UNIQUE NOT NULL, full_name TEXT NOT NULL, password_hash TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
-    CREATE TABLE IF NOT EXISTS workspaces (id UUID PRIMARY KEY, name TEXT NOT NULL, timezone TEXT NOT NULL DEFAULT 'America/Denver', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
-    CREATE TABLE IF NOT EXISTS memberships (id UUID PRIMARY KEY, workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, role TEXT NOT NULL CHECK (role IN ('owner','admin','editor','viewer')), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE (workspace_id, user_id));
-    CREATE TABLE IF NOT EXISTS sessions (id UUID PRIMARY KEY, user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, token_digest TEXT UNIQUE NOT NULL, expires_at TIMESTAMPTZ NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
-    CREATE TABLE IF NOT EXISTS subscriptions (
-      id UUID PRIMARY KEY,
-      workspace_id UUID NOT NULL UNIQUE REFERENCES workspaces(id) ON DELETE CASCADE,
-      status TEXT NOT NULL DEFAULT 'pending_payment' CHECK (status IN ('pending_payment','active','past_due','canceled')),
-      stripe_customer_id TEXT UNIQUE,
-      stripe_subscription_id TEXT UNIQUE,
-      current_period_start TIMESTAMPTZ,
-      current_period_end TIMESTAMPTZ,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS subscription_status_events (
-      id BIGSERIAL PRIMARY KEY,
-      subscription_id UUID NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
-      workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-      previous_status TEXT,
-      status TEXT NOT NULL CHECK (status IN ('pending_payment','active','past_due','canceled')),
-      source TEXT NOT NULL DEFAULT 'database',
-      actor TEXT NOT NULL DEFAULT CURRENT_USER,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions(user_id);
-    CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions(expires_at);
-    CREATE INDEX IF NOT EXISTS subscriptions_status_idx ON subscriptions(status);
-    CREATE INDEX IF NOT EXISTS subscription_status_events_workspace_id_idx ON subscription_status_events(workspace_id, created_at DESC);
-    CREATE OR REPLACE FUNCTION audit_subscription_status_change() RETURNS TRIGGER AS $$
-    BEGIN
-      IF TG_OP = 'INSERT' THEN
-        INSERT INTO subscription_status_events (subscription_id, workspace_id, previous_status, status, source, actor)
-        VALUES (NEW.id, NEW.workspace_id, NULL, NEW.status, COALESCE(NULLIF(current_setting('axoboard.audit_source', true), ''), 'database'), COALESCE(NULLIF(current_setting('axoboard.audit_actor', true), ''), CURRENT_USER));
-      ELSIF OLD.status IS DISTINCT FROM NEW.status THEN
-        INSERT INTO subscription_status_events (subscription_id, workspace_id, previous_status, status, source, actor)
-        VALUES (NEW.id, NEW.workspace_id, OLD.status, NEW.status, COALESCE(NULLIF(current_setting('axoboard.audit_source', true), ''), 'database'), COALESCE(NULLIF(current_setting('axoboard.audit_actor', true), ''), CURRENT_USER));
-      END IF;
-      RETURN NEW;
-    END;
-    $$ LANGUAGE plpgsql;
-    DROP TRIGGER IF EXISTS subscription_status_audit ON subscriptions;
-    CREATE TRIGGER subscription_status_audit
-      AFTER INSERT OR UPDATE OF status ON subscriptions
-      FOR EACH ROW EXECUTE FUNCTION audit_subscription_status_change();
-  `);
-  await pool.query(`
-    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE;
-    UPDATE sessions s SET workspace_id = selected.workspace_id
-    FROM (
-      SELECT DISTINCT ON (user_id) user_id, workspace_id
-      FROM memberships
-      ORDER BY user_id, created_at ASC
-    ) selected
-    WHERE s.workspace_id IS NULL AND selected.user_id = s.user_id;
-    DELETE FROM sessions WHERE workspace_id IS NULL;
-    ALTER TABLE sessions ALTER COLUMN workspace_id SET NOT NULL;
-    CREATE INDEX IF NOT EXISTS sessions_workspace_id_idx ON sessions(workspace_id);
-  `);
-  await pool.query(`
-    INSERT INTO subscriptions (id, workspace_id, status)
-    SELECT md5('axoboard-subscription:' || w.id::text)::uuid, w.id, 'pending_payment'
-    FROM workspaces w
-    ON CONFLICT (workspace_id) DO NOTHING
-  `);
-  await pool.query(`
-    INSERT INTO subscription_status_events (subscription_id, workspace_id, previous_status, status, source, actor)
-    SELECT s.id, s.workspace_id, NULL, s.status, 'migration', CURRENT_USER
-    FROM subscriptions s
-    WHERE NOT EXISTS (SELECT 1 FROM subscription_status_events e WHERE e.subscription_id = s.id)
-  `);
+  const client = await pool.connect();
+  try {
+    await client.query("SELECT pg_advisory_lock(hashtext('axoboard:schema-migrations'))");
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        name TEXT PRIMARY KEY,
+        checksum TEXT NOT NULL,
+        applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    const appliedRows = await client.query('SELECT name, checksum FROM schema_migrations');
+    const applied = new Map(appliedRows.rows.map((row) => [row.name, row.checksum]));
+    const migrationFiles = readdirSync(migrationsRoot).filter((name) => /^\d{3}_[a-z0-9_]+\.sql$/.test(name)).sort();
+    if (!migrationFiles.length) throw new Error('No database migrations were found.');
+    for (const name of migrationFiles) {
+      const sql = readFileSync(resolve(migrationsRoot, name), 'utf8');
+      const checksum = createHash('sha256').update(sql).digest('hex');
+      if (applied.has(name)) {
+        if (applied.get(name) !== checksum) throw new Error(`Applied migration checksum mismatch: ${name}`);
+        continue;
+      }
+      await client.query('BEGIN');
+      try {
+        await client.query(sql);
+        await client.query('INSERT INTO schema_migrations (name, checksum) VALUES ($1, $2)', [name, checksum]);
+        await client.query('COMMIT');
+        console.log(`[axoboard-web] applied database migration ${name}`);
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      }
+    }
+  } finally {
+    await client.query("SELECT pg_advisory_unlock(hashtext('axoboard:schema-migrations'))").catch(() => {});
+    client.release();
+  }
   await pool.query('DELETE FROM sessions WHERE expires_at <= NOW()');
   console.log('[axoboard-web] database ready');
 }
