@@ -20,7 +20,8 @@ const pool = databaseUrl
 const contentTypes = new Map([
   ['.css', 'text/css; charset=utf-8'], ['.html', 'text/html; charset=utf-8'],
   ['.js', 'text/javascript; charset=utf-8'], ['.json', 'application/json; charset=utf-8'],
-  ['.png', 'image/png'], ['.svg', 'image/svg+xml; charset=utf-8'], ['.webp', 'image/webp']
+  ['.png', 'image/png'], ['.svg', 'image/svg+xml; charset=utf-8'], ['.txt', 'text/plain; charset=utf-8'],
+  ['.webp', 'image/webp'], ['.xml', 'application/xml; charset=utf-8']
 ]);
 
 const pageRoutes = new Map([
@@ -28,7 +29,7 @@ const pageRoutes = new Map([
   ['/pricing', 'landing.html'], ['/faq', 'landing.html'], ['/login', 'auth.html'],
   ['/signup', 'auth.html'], ['/terms', 'terms.html'], ['/privacy', 'privacy.html']
 ]);
-const publicStaticFiles = new Set(['marketing.css', 'marketing.js', 'auth.js']);
+const publicStaticFiles = new Set(['marketing.css', 'marketing.js', 'auth.js', 'robots.txt', 'sitemap.xml', 'llms.txt']);
 const publicAssetFiles = new Set([
   'assets/axoboard-wordmark-signature.svg',
   'assets/favicon/favicon-16.png',

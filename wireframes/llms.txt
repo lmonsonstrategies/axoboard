@@ -1,0 +1,41 @@
+# AxoBoard
+
+> AxoBoard is an operational KPI dashboard and team-performance platform for teams that need trusted metrics, timely notifications, visible recognition, and healthy competition.
+
+## Canonical website
+
+- https://axoboard.io/
+
+## What AxoBoard is
+
+- A customizable, responsive KPI dashboard service for web, mobile, and planned TV displays.
+- Designed around visible metric definitions, source context, freshness, goals, comparisons, and governed publishing.
+- Differentiated by its roadmap for KPI notifications, branded celebrations and sounds, and configurable Team Competitions.
+- Intended for sales, operations, leadership, and multi-location teams that need a shared operating score.
+
+## Product status
+
+- AxoBoard is currently in pre-launch development.
+- Google Sheets is the first direct integration in development.
+- Shopify, Wix, Microsoft Excel, HubSpot, and Salesforce are on the integration roadmap.
+- Public checkout and self-service dashboard activation are not yet available.
+- Roadmap features are not represented as generally available until they pass production testing.
+
+## Public pricing hypothesis
+
+- Starter: $99/month or $79/month billed annually.
+- Growth: $249/month or $199/month billed annually.
+- Scale: $599/month or $499/month billed annually.
+- Enterprise: from $1,500/month on an annual contract.
+- Every paid plan is designed to include unlimited dashboards and viewers; capacity varies by connections, editors, screens, refresh speed, history, automation, and governance.
+
+## Public pages
+
+- Product, integrations, pricing, and FAQ: https://axoboard.io/
+- Terms: https://axoboard.io/terms
+- Privacy: https://axoboard.io/privacy
+
+## Contact
+
+- General: hello@axoboard.io
+- Support: support@axoboard.io

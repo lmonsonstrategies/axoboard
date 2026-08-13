@@ -87,6 +87,8 @@ try {
   assert.match(landingHtml, /GAMIFICATION (?:&|&amp;) RECOGNITION/i);
   assert.match(landingHtml, /TEAM COMPETITIONS/i);
   for (const price of ['$99', '$249', '$599', 'From $1,500']) assert.ok(landingHtml.includes(price), `landing includes ${price} plan`);
+  assert.match(landingHtml, /"@type": "WebApplication"/i);
+  assert.match(landingHtml, /rel="canonical" href="https:\/\/axoboard\.io\/"/i);
   await assertRoute('/features', 200, /AxoBoard/i);
   await assertRoute('/integrations', 200, /AxoBoard/i);
   await assertRoute('/pricing', 200, /AxoBoard/i);
@@ -95,7 +97,10 @@ try {
   await assertRoute('/privacy', 200, /Privacy Policy/);
   await assertRoute('/login', 200, /Log in to AxoBoard/);
   await assertRoute('/signup', 200, /Create your AxoBoard/);
-  for (const path of ['/marketing.css', '/marketing.js', '/auth.js', '/assets/favicon/favicon-32.png', '/assets/favicon/favicon-192.png', '/assets/providers/google-sheets.svg', '/assets/providers/shopify.svg', '/assets/providers/wix.svg', '/assets/providers/microsoft-excel.svg', '/assets/providers/hubspot.svg', '/assets/providers/salesforce.svg']) await assertRoute(path, 200);
+  for (const path of ['/marketing.css', '/marketing.js', '/auth.js', '/robots.txt', '/sitemap.xml', '/llms.txt', '/assets/favicon/favicon-32.png', '/assets/favicon/favicon-192.png', '/assets/providers/google-sheets.svg', '/assets/providers/shopify.svg', '/assets/providers/wix.svg', '/assets/providers/microsoft-excel.svg', '/assets/providers/hubspot.svg', '/assets/providers/salesforce.svg']) await assertRoute(path, 200);
+  assert.match(await (await fetch(`${baseUrl}/robots.txt`)).text(), /User-agent: OAI-SearchBot[\s\S]*Sitemap: https:\/\/axoboard\.io\/sitemap\.xml/i);
+  assert.match(await (await fetch(`${baseUrl}/sitemap.xml`)).text(), /<loc>https:\/\/axoboard\.io\/<\/loc>/i);
+  assert.match(await (await fetch(`${baseUrl}/llms.txt`)).text(), /AxoBoard is currently in pre-launch development/i);
   for (const path of ['/demo', '/index.html', '/app.js', '/styles.css', '/api/axoboard/integrations/oauth/start']) await assertRoute(path, 404);
   const protectedApp = await assertRoute('/app', 302);
   assert.equal(protectedApp.headers.get('location'), '/login');

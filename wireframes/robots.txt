@@ -1,0 +1,29 @@
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /app
+Disallow: /api/
+Disallow: /login
+Disallow: /signup
+
+User-agent: OAI-AdsBot
+Allow: /
+Disallow: /app
+Disallow: /api/
+Disallow: /login
+Disallow: /signup
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /app
+Disallow: /api/
+Disallow: /login
+Disallow: /signup
+
+User-agent: *
+Allow: /
+Disallow: /app
+Disallow: /api/
+Disallow: /login
+Disallow: /signup
+
+Sitemap: https://axoboard.io/sitemap.xml
