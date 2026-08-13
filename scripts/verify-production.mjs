@@ -13,7 +13,7 @@ const health = await (await request('/healthz', 200)).json();
 assert.equal(health.ok, true);
 if (expectedSha) assert.ok(String(health.version).startsWith(expectedSha), `deployed ${health.version}, expected ${expectedSha}`);
 const landing = await (await request('/', 200)).text();
-assert.match(landing, /Your team should <em>feel<\/em> the numbers moving/i);
+assert.match(landing, /Your team should[\s\S]*<em>feel<\/em>[\s\S]*the numbers[\s\S]*moving/i);
 assert.doesNotMatch(landing, /See how it works/i);
 assert.match(landing, /Don’t just show the score/i);
 assert.match(landing, /GAMIFICATION (?:&|&amp;) RECOGNITION/i);

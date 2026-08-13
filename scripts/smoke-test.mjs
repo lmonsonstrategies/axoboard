@@ -78,7 +78,7 @@ function rawStatus(path) {
 try {
   const health = await waitForHealth();
   assert.equal(health.database, process.env.DATABASE_URL ? 'healthy' : 'not_configured', 'database health state');
-  const landing = await assertRoute('/', 200, /Your team should <em>feel<\/em> the numbers moving/i);
+  const landing = await assertRoute('/', 200, /Your team should[\s\S]*<em>feel<\/em>[\s\S]*the numbers[\s\S]*moving/i);
   assert.match(landing.headers.get('content-security-policy') || '', /default-src 'self'/);
   const landingHtml = await (await fetch(`${baseUrl}/`)).text();
   assert.doesNotMatch(landingHtml, /murphy/i);
@@ -90,6 +90,8 @@ try {
   assert.equal((landingHtml.match(/Built for the tools running your business/g) || []).length, 1, 'landing has one integrations presentation');
   assert.match(landingHtml, /class="hero-celebration"/i);
   assert.match(landingHtml, /Quarter target hit!/i);
+  assert.match(landingHtml, /Turn live performance into action, recognition, and momentum/i);
+  assert.match(landingHtml, /Live preview/i);
   for (const price of ['$99', '$249', '$599', 'From $1,500']) assert.ok(landingHtml.includes(price), `landing includes ${price} plan`);
   assert.match(landingHtml, /"@type": "WebApplication"/i);
   assert.match(landingHtml, /rel="canonical" href="https:\/\/axoboard\.io\/"/i);
