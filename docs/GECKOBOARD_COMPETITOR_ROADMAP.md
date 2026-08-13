@@ -14,7 +14,7 @@ AxoBoard differentiators:
 
 - one theme system across dashboards, celebrations, sounds, games, and TV;
 - customizable celebration rules and user-owned sound libraries;
-- fully rebrandable competitive experiences through Kombat presets;
+- fully rebrandable competitive experiences through Team Competitions presets;
 - plain-language KPI lineage and freshness built into every card;
 - reusable team templates that configure data, goals, celebrations, and displays together;
 - customer-controlled terminology, sprites, arenas, colors, and domains.
@@ -47,7 +47,7 @@ AxoBoard differentiators:
 ### P2 — Win the category
 
 - **Outcome recipes:** install a complete Sales Sprint, Support Pulse, or Launch Room with KPIs, goals, alerts, celebration rules, and a TV loop.
-- **Behavior engine:** connect KPI thresholds to celebrations, sounds, shoutouts, Kombat scoring, and manager follow-up—not only notifications.
+- **Behavior engine:** connect KPI thresholds to celebrations, sounds, shoutouts, competition scoring, and manager follow-up—not only notifications.
 - **Trust layer:** certified metrics, owner, definition, freshness SLO, lineage, anomaly note, and change history on every KPI.
 - **Context overlays:** teams can annotate a spike/drop directly on the dashboard so viewers know why it happened.
 - **Metric contracts:** define expected grain, unit, acceptable range, and reconciliation test so silent data errors are caught.
@@ -58,7 +58,7 @@ AxoBoard differentiators:
 ## Highest-leverage next additions
 
 1. **TV screen management and dashboard loops.** It makes AxoBoard part of the physical workplace and is required for real Geckoboard replacement.
-2. **Threshold alerts plus celebration automation.** The same rule should route Slack/Teams alerts, play a celebration, and affect Kombat scoring with idempotent event handling.
+2. **Threshold alerts plus celebration automation.** The same rule should route Slack/Teams alerts, play a celebration, and affect competition scoring with idempotent event handling.
 3. **Drilldown and source lineage.** A KPI must answer “where did this number come from?” and “which records changed it?”
 4. **Template recipes.** Sell outcomes instead of blank canvases: Sales Daily, Pipeline Health, Concierge Pulse, and Executive Weekly.
 5. **Share/snapshot destinations.** View-only links, Slack/Teams/email snapshots, and mobile-friendly views extend visibility beyond the TV.
@@ -68,7 +68,7 @@ AxoBoard differentiators:
 The current interactive beta now demonstrates all five highest-leverage additions:
 
 - remote TV screen management, device heartbeat state, scheduled sleep, and dashboard loops;
-- threshold rules that fan out to Slack/email, celebrations, custom sounds, and Kombat scoring;
+- threshold rules that fan out to Slack/email, celebrations, custom sounds, and competition scoring;
 - KPI drilldowns with freshness, source path, definition, owner, formula, and underlying records;
 - installable outcome recipes for Sales Daily Command, Pipeline Health, and Concierge Pulse;
 - secure live links, Slack/Teams/email snapshot scheduling, and scoped embed code.

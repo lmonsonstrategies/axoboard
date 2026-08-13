@@ -8,6 +8,13 @@ menuToggle?.addEventListener('click', () => {
   siteNav?.classList.toggle('is-open', !expanded);
 });
 
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape' || menuToggle?.getAttribute('aria-expanded') !== 'true') return;
+  menuToggle.setAttribute('aria-expanded', 'false');
+  siteNav?.classList.remove('is-open');
+  menuToggle.focus();
+});
+
 document.querySelectorAll('[data-scroll]').forEach((link) => {
   link.addEventListener('click', (event) => {
     const target = document.getElementById(link.dataset.scroll);
@@ -42,7 +49,34 @@ document.querySelectorAll('details').forEach((details) => {
   });
 });
 
+const integrationMarquee = document.querySelector('[data-integration-marquee]');
+const tickerControl = document.querySelector('.ticker-control');
+let tickerPaused = false;
+
+function setTickerPaused(paused) {
+  tickerPaused = paused;
+  integrationMarquee?.classList.toggle('is-paused', paused);
+  tickerControl?.setAttribute('aria-pressed', String(paused));
+  tickerControl?.setAttribute('aria-label', `${paused ? 'Play' : 'Pause'} integration animation`);
+  const hiddenLabel = tickerControl?.querySelector('.sr-only');
+  const icon = tickerControl?.querySelector('[aria-hidden="true"]');
+  if (hiddenLabel) hiddenLabel.textContent = `${paused ? 'Play' : 'Pause'} integration animation`;
+  if (icon) icon.textContent = paused ? '▶' : 'Ⅱ';
+}
+
+tickerControl?.addEventListener('click', () => setTickerPaused(!tickerPaused));
+
+if (integrationMarquee && 'IntersectionObserver' in window) {
+  const tickerObserver = new IntersectionObserver(([entry]) => {
+    integrationMarquee.classList.toggle('is-offscreen', !entry.isIntersecting);
+  }, { threshold: 0.05 });
+  tickerObserver.observe(integrationMarquee);
+}
+
 fetch('/api/auth/session', { credentials: 'same-origin' }).then((response) => response.ok ? response.json() : null).then((session) => {
   if (!session?.authenticated) return;
-  document.querySelectorAll('a[href="/login"]').forEach((link) => { link.textContent = 'Open workspace'; link.href = '/app'; });
+  document.querySelectorAll('a[href="/login"]').forEach((link) => {
+    link.textContent = session.canAccessApp ? 'Open workspace' : 'Complete purchase';
+    link.href = session.canAccessApp ? '/app' : '/pricing?access=subscription_required';
+  });
 }).catch(() => {});

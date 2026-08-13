@@ -18,7 +18,7 @@ Trusted metric or business event
               │
        ┌──────┴────────┐
        ▼               ▼
- Dashboard/TV      Kombat score
+ Dashboard/TV      Competition score
  celebration       and round state
        │               │
        └──────┬────────┘
@@ -66,7 +66,7 @@ Customer branding is independent of the AxoBoard product theme. A customer can r
 - Tenant-owned library with roles for upload, approval and publish.
 - Malware scan, ownership attestation and audit history.
 
-### Kombat Studio
+### Team Competitions
 
 - Rename the game and all player-facing terminology.
 - Configure point sources, points per action, bonuses, penalties and win condition.
@@ -105,7 +105,7 @@ Murphy Kombat is one preset. Its identity is configuration, not hardcoded produc
 }
 ```
 
-### Kombat preset
+### Competition preset
 
 ```json
 {
@@ -148,8 +148,8 @@ Murphy Kombat is one preset. Its identity is configuration, not hardcoded produc
 2. Celebration trigger, visual, sound and audience contracts.
 3. Celebration HQ viewer with replay and quiet-hour controls.
 4. My Sounds upload, preview and assignment.
-5. Generic Kombat scoring engine with one Murphy-configured preset.
-6. Kombat asset/terminology editor and live preview.
+5. Generic competition scoring engine with one Murphy-configured preset.
+6. Team Competitions asset/terminology editor and live preview.
 7. TV mode, publishing, rollback and event audit.
 
 ## Top failure modes and quick detection

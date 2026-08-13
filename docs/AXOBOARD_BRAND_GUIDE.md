@@ -171,7 +171,7 @@ AxoBoard is a commercial white-label service with two intentionally separate vis
 
 Customer themes may personalize content but must not disguise AxoBoard security warnings, permission boundaries, billing state, accessibility controls, or support diagnostics. System-danger and service-health semantics remain controlled by AxoBoard.
 
-Workspace Admin should feel calm, trustworthy, and easy to operate. It may use fewer playful elements than Celebration HQ or Kombat Studio, while remaining visibly part of the same axolotl-inspired product family.
+Workspace Admin should feel calm, trustworthy, and easy to operate. It may use fewer playful elements than Celebration HQ or Team Competitions, while remaining visibly part of the same axolotl-inspired product family.
 
 ## Brand checklist
 

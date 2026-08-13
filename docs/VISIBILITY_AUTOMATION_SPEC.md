@@ -60,7 +60,7 @@ A KPI is not finished when it renders. It is finished when the right audience ca
 - `id`, `tenant_id`, `name`, `enabled`, `metric_id`, `metric_version`
 - condition operator, threshold, evaluation window, required freshness state
 - cooldown, quiet hours, audience, and escalation policy
-- ordered actions: celebration, sound, Slack, Teams, email, owner task, or Kombat score event
+- ordered actions: celebration, sound, Slack, Teams, email, owner task, or competition score event
 - every evaluation records the input snapshot, decision, action outcomes, retries, and actor
 - rule publishing requires a dry-run preview against recent metric history
 
@@ -148,7 +148,7 @@ Track:
 2. Add screen pairing, one dashboard loop, heartbeat, and last-known-good cache.
 3. Add a threshold rule with Slack plus celebration actions and destination-level idempotency.
 4. Add secure share links and scheduled email snapshots.
-5. Add HubSpot drilldown and Kombat scoring after permission and replay tests pass.
+5. Add HubSpot drilldown and Team Competitions scoring after permission and replay tests pass.
 
 ## Top failure modes and detection
 

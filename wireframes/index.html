@@ -8,8 +8,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet" />
-  <link rel="icon" type="image/png" href="/assets/axoboard-logo-low-poly.png?v=2" />
-  <link rel="apple-touch-icon" href="/assets/axoboard-logo-low-poly.png?v=2" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon/favicon-16.png?v=3" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon/favicon-32.png?v=3" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon/favicon-192.png?v=3" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon/apple-touch-icon.png?v=3" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -17,8 +19,12 @@
   <div class="app-shell">
     <aside class="sidebar" aria-label="Product navigation">
       <button class="brand" type="button" data-screen="dashboard" aria-label="Open Dashboard Builder">
-        <img class="brand-logo" src="assets/axoboard-logo-low-poly.png" alt="" />
+        <img class="brand-logo" src="/assets/favicon/favicon-192.png?v=3" width="42" height="42" alt="" />
         <span><strong>AxoBoard</strong><small>Celebrate the work</small></span>
+      </button>
+
+      <button class="mobile-workspace-switch" type="button" aria-label="Switch workspace">
+        <span class="workspace-avatar">A</span>
       </button>
 
       <div class="workspace-switcher">
@@ -36,7 +42,7 @@
         <button class="nav-item" type="button" data-screen="plans"><span>◇</span><b>Plans & Billing</b></button>
         <button class="nav-item" type="button" data-screen="celebrations"><span>✦</span><b>Celebration HQ</b></button>
         <button class="nav-item" type="button" data-screen="sounds"><span>♫</span><b>My Sounds</b></button>
-        <button class="nav-item" type="button" data-screen="kombat"><span>⚔</span><b>Kombat Studio</b></button>
+        <button class="nav-item" type="button" data-screen="competitions"><span>⚔</span><b>Team Competitions</b></button>
         <button class="nav-item" type="button" data-screen="brand"><span>◉</span><b>Brand Studio</b></button>
       </nav>
 
@@ -56,24 +62,24 @@
       <section class="screen is-active" data-screen-panel="dashboard" aria-labelledby="dashboardTitle">
         <header class="page-header dashboard-header">
           <div><small>LIVE PERFORMANCE</small><h1 id="dashboardTitle">Sales command pond</h1><p>Custom KPIs, trusted sources, and a clear view of what needs attention.</p></div>
-          <div class="header-actions"><button class="button button-ghost" id="templateGalleryButton" type="button">▤ Templates</button><button class="button button-ghost" id="shareDashboardButton" type="button">↗ Share</button><button class="button button-primary" id="addKpiButton" type="button">＋ Add KPI</button></div>
+          <div class="header-actions"><button class="button button-ghost" id="editLayoutButton" type="button">Change layout</button><button class="button button-ghost" id="templateGalleryButton" type="button">▤ Templates</button><button class="button button-ghost" id="shareDashboardButton" type="button">↗ Share</button><button class="button button-primary" id="addKpiButton" type="button">＋ Add KPI</button></div>
         </header>
 
         <div class="dashboard-toolbar surface">
           <div><span class="live-dot"></span><strong>Sales performance</strong><small>4 KPIs · refreshed 2m ago</small></div>
-          <div><button type="button">Today⌄</button><button type="button">Edit layout</button><button id="openTvMode" type="button">TV mode ↗</button></div>
+          <div><button type="button">Today⌄</button><button id="openTvMode" type="button">TV mode ↗</button></div>
         </div>
 
-        <section class="kpi-grid" aria-label="Customizable key performance indicators">
+        <section class="kpi-grid" id="dashboardKpiGrid" aria-label="Customizable key performance indicators">
           <article class="surface kpi-card kpi-card-featured" data-drilldown="net-sales" tabindex="0"><header><span class="source-mark google">G</span><small>Google Sheets · Summary!D8</small><button type="button" aria-label="Edit net sales KPI">•••</button></header><p>Net sales today</p><strong>$55,396</strong><div class="kpi-change positive">↗ 12.4% <span>vs yesterday</span></div><div class="kpi-spark aqua" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><footer><span>Click for source rows</span><b>85% of goal</b></footer></article>
           <article class="surface kpi-card" data-drilldown="pipeline" tabindex="0"><header><span class="source-mark hubspot">H</span><small>HubSpot · deals.amount</small><button type="button" aria-label="Edit pipeline KPI">•••</button></header><p>Open pipeline</p><strong>$1.28M</strong><div class="kpi-change positive">↗ 8.2% <span>this month</span></div><div class="mini-progress"><i style="width:72%"></i></div><footer><span>Click for 48 deals</span><b>On track</b></footer></article>
           <article class="surface kpi-card" data-drilldown="deals-won" tabindex="0"><header><span class="source-mark hubspot">H</span><small>HubSpot · count deals</small><button type="button" aria-label="Edit deals won KPI">•••</button></header><p>Deals won</p><strong>34</strong><div class="kpi-change positive">＋6 <span>vs last week</span></div><div class="kpi-spark pink" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><footer><span>Click for winning deals</span><b>6 to go</b></footer></article>
           <article class="surface kpi-card" data-drilldown="team-track" tabindex="0"><header><span class="source-mark google">G</span><small>Google Sheets · Reps!G4:G18</small><button type="button" aria-label="Edit attainment KPI">•••</button></header><p>Team on track</p><strong>82.9%</strong><div class="kpi-change neutral">13 of 16 <span>reps pacing</span></div><div class="mini-progress gfp"><i style="width:82.9%"></i></div><footer><span>Click for rep rows</span><b>Healthy</b></footer></article>
         </section>
 
-        <div class="dashboard-lower-grid">
-          <article class="surface trend-card"><header><div><small>NET SALES · LAST 7 DAYS</small><h2>Revenue momentum</h2></div><div class="legend"><span class="aqua-dot"></span>This week <span class="pink-dot"></span>Prior week</div></header><div class="trend-chart" aria-label="Revenue trend chart"><div class="chart-y"><span>$80K</span><span>$60K</span><span>$40K</span><span>$20K</span><span>$0</span></div><svg viewBox="0 0 720 220" role="img" aria-label="Net sales increased through the week"><defs><linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#43bde8" stop-opacity=".28"/><stop offset="1" stop-color="#43bde8" stop-opacity="0"/></linearGradient></defs><path class="chart-gridline" d="M0 20H720M0 65H720M0 110H720M0 155H720M0 200H720"/><path class="chart-area" d="M0 176 L120 146 L240 159 L360 100 L480 116 L600 60 L720 42 L720 220 L0 220Z"/><path class="chart-line prior" d="M0 184 L120 165 L240 140 L360 148 L480 105 L600 110 L720 82"/><path class="chart-line current" d="M0 176 L120 146 L240 159 L360 100 L480 116 L600 60 L720 42"/><circle cx="720" cy="42" r="6" fill="#43bde8"/></svg><div class="chart-x"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div></div></article>
-          <aside class="surface attention-card"><header><span class="round-icon">◎</span><div><small>ACTION CENTER</small><h2>Needs attention</h2></div><span class="attention-count">3</span></header><ul><li><span class="status-orb warning"></span><div><strong>Pipeline coverage dipped</strong><small>2.7× against a 3× target</small></div><button type="button">View</button></li><li><span class="status-orb good"></span><div><strong>Team crossed 80%</strong><small>Celebration ready to publish</small></div><button type="button">Celebrate</button></li><li><span class="status-orb info"></span><div><strong>Sheet mapping changed</strong><small>Reps!G4:G18 has 1 new row</small></div><button type="button">Review</button></li></ul><button class="button button-soft full" type="button">Configure alerts</button></aside>
+        <div class="dashboard-lower-grid" id="dashboardLowerGrid">
+          <article class="surface trend-card" id="dashboardTrendPanel"><header><div><small>NET SALES · LAST 7 DAYS</small><h2>Revenue momentum</h2></div><div class="legend"><span class="aqua-dot"></span>This week <span class="pink-dot"></span>Prior week</div></header><div class="trend-chart" aria-label="Revenue trend chart"><div class="chart-y"><span>$80K</span><span>$60K</span><span>$40K</span><span>$20K</span><span>$0</span></div><svg viewBox="0 0 720 220" role="img" aria-label="Net sales increased through the week"><defs><linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#43bde8" stop-opacity=".28"/><stop offset="1" stop-color="#43bde8" stop-opacity="0"/></linearGradient></defs><path class="chart-gridline" d="M0 20H720M0 65H720M0 110H720M0 155H720M0 200H720"/><path class="chart-area" d="M0 176 L120 146 L240 159 L360 100 L480 116 L600 60 L720 42 L720 220 L0 220Z"/><path class="chart-line prior" d="M0 184 L120 165 L240 140 L360 148 L480 105 L600 110 L720 82"/><path class="chart-line current" d="M0 176 L120 146 L240 159 L360 100 L480 116 L600 60 L720 42"/><circle cx="720" cy="42" r="6" fill="#43bde8"/></svg><div class="chart-x"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div></div></article>
+          <aside class="surface attention-card" id="dashboardActionCenter"><header><span class="round-icon">◎</span><div><small>ACTION CENTER</small><h2>Needs attention</h2></div><span class="attention-count">3</span></header><ul><li><span class="status-orb warning"></span><div><strong>Pipeline coverage dipped</strong><small>2.7× against a 3× target</small></div><button type="button">View</button></li><li><span class="status-orb good"></span><div><strong>Team crossed 80%</strong><small>Celebration ready to publish</small></div><button type="button">Celebrate</button></li><li><span class="status-orb info"></span><div><strong>Sheet mapping changed</strong><small>Reps!G4:G18 has 1 new row</small></div><button type="button">Review</button></li></ul><button class="button button-soft full" type="button">Configure alerts</button></aside>
         </div>
       </section>
 
@@ -126,9 +132,9 @@
             <div class="automation-summary surface"><div><strong>5</strong><span>Active rules</span></div><div><strong>128</strong><span>Runs this month</span></div><div><strong>100%</strong><span>Successful today</span></div><div><strong>0</strong><span>Duplicate events</span></div></div>
             <h2 class="section-title">Active rules</h2>
             <div class="rule-list">
-              <article class="surface rule-card" data-rule="sales-goal"><header><span class="rule-icon goal">◎</span><div><h3>Sales goal crossed</h3><p>When Net sales today reaches 100% of goal</p></div><label class="toggle"><input type="checkbox" checked /><span></span></label></header><div class="rule-flow"><div><small>WHEN</small><strong>Net sales today ≥ $65,000</strong></div><i>→</i><div><small>THEN</small><span class="action-chip celebration">✦ Celebrate</span><span class="action-chip slack"># Slack</span><span class="action-chip kombat">⚔ +100 pts</span></div></div><footer><span>Last ran Aug 11 · 4:42 PM</span><button type="button">Edit rule</button></footer></article>
+              <article class="surface rule-card" data-rule="sales-goal"><header><span class="rule-icon goal">◎</span><div><h3>Sales goal crossed</h3><p>When Net sales today reaches 100% of goal</p></div><label class="toggle"><input type="checkbox" checked /><span></span></label></header><div class="rule-flow"><div><small>WHEN</small><strong>Net sales today ≥ $65,000</strong></div><i>→</i><div><small>THEN</small><span class="action-chip celebration">✦ Celebrate</span><span class="action-chip slack"># Slack</span><span class="action-chip competition">⚔ +100 competition pts</span></div></div><footer><span>Last ran Aug 11 · 4:42 PM</span><button type="button">Edit rule</button></footer></article>
               <article class="surface rule-card" data-rule="coverage"><header><span class="rule-icon warning">!</span><div><h3>Pipeline coverage needs attention</h3><p>When coverage stays below 3× for 30 minutes</p></div><label class="toggle"><input type="checkbox" checked /><span></span></label></header><div class="rule-flow"><div><small>WHEN</small><strong>Pipeline coverage &lt; 3× for 30m</strong></div><i>→</i><div><small>THEN</small><span class="action-chip slack"># Slack</span><span class="action-chip email">✉ Email</span><span class="action-chip owner">◎ Owner</span></div></div><footer><span>Last ran today · 10:18 AM</span><button type="button">Edit rule</button></footer></article>
-              <article class="surface rule-card" data-rule="deal"><header><span class="rule-icon deal">$</span><div><h3>Big deal landed</h3><p>When a HubSpot deal closes over $15,000</p></div><label class="toggle"><input type="checkbox" checked /><span></span></label></header><div class="rule-flow"><div><small>WHEN</small><strong>Closed won amount ≥ $15,000</strong></div><i>→</i><div><small>THEN</small><span class="action-chip celebration">✦ Celebrate</span><span class="action-chip sound">♫ Sound</span><span class="action-chip kombat">⚔ +50 pts</span></div></div><footer><span>Last ran today · 1:06 PM</span><button type="button">Edit rule</button></footer></article>
+              <article class="surface rule-card" data-rule="deal"><header><span class="rule-icon deal">$</span><div><h3>Big deal landed</h3><p>When a HubSpot deal closes over $15,000</p></div><label class="toggle"><input type="checkbox" checked /><span></span></label></header><div class="rule-flow"><div><small>WHEN</small><strong>Closed won amount ≥ $15,000</strong></div><i>→</i><div><small>THEN</small><span class="action-chip celebration">✦ Celebrate</span><span class="action-chip sound">♫ Sound</span><span class="action-chip competition">⚔ +50 competition pts</span></div></div><footer><span>Last ran today · 1:06 PM</span><button type="button">Edit rule</button></footer></article>
             </div>
           </section>
           <aside class="surface automation-guardrails"><div class="panel-heading"><div><small>TRUST & CONTROL</small><h2>Built not to spam</h2></div><span class="autosave">✓ Safe</span></div><ul><li><span>↻</span><div><strong>Event deduplication</strong><p>Stable event IDs prevent repeat alerts, points, and celebrations.</p></div></li><li><span>◷</span><div><strong>Cooldowns & quiet hours</strong><p>Limit frequency by rule, person, channel, or screen.</p></div></li><li><span>⌁</span><div><strong>Source lineage</strong><p>Every run links back to the KPI snapshot and provider record.</p></div></li><li><span>↶</span><div><strong>Replay and rollback</strong><p>Retry failed destinations without replaying successful ones.</p></div></li></ul><button class="button button-soft full" id="viewRunLogButton" type="button">View run log</button></aside>
@@ -162,33 +168,33 @@
           <div class="billing-cycle" role="group" aria-label="Billing cycle"><button class="is-active" type="button" data-plan-cycle="monthly">Monthly</button><button type="button" data-plan-cycle="annual">Annual <span>Save up to 20%</span></button></div>
         </header>
 
-        <aside class="surface pricing-principle"><span>✓</span><div><strong>No viewer tax. No surprise overages.</strong><p>We warn before a limit, preserve access during billing recovery, and never charge extra usage without an explicit choice.</p></div><button class="button button-ghost" type="button" data-plan-action="compare">Compare every feature</button></aside>
+        <aside class="surface pricing-principle"><span>✓</span><div><strong>Capacity-based plans, not viewer-seat pricing.</strong><p>Plan limits and billing terms are shown before checkout. AxoBoard will not add usage charges without an explicit choice.</p></div><button class="button button-ghost" type="button" data-plan-action="compare">Compare every feature</button></aside>
 
         <section class="pricing-grid" aria-label="AxoBoard subscription plans">
           <article class="surface pricing-card" data-plan="starter">
             <header><span class="plan-icon">◌</span><div><small>GET VISIBLE</small><h2>Starter</h2></div></header>
             <p>One team replacing spreadsheet screenshots with a trusted live scoreboard.</p>
-            <div class="plan-price"><strong data-monthly="$99" data-annual="$79">$99</strong><span>/month</span><small data-price-note>Cancel anytime</small></div>
-            <button class="button button-ghost full" type="button" data-plan-action="starter">Start 14-day trial</button>
+            <div class="plan-price"><strong data-monthly="$99" data-annual="$79">$99</strong><span>/month</span><small data-price-note>Billing terms at checkout</small></div>
+            <button class="button button-ghost full" type="button" data-plan-action="starter">Review Starter</button>
             <div class="plan-capacity"><span><b>3</b> connected accounts</span><span><b>2</b> editors</span><span><b>1</b> TV screen</span><span><b>15m</b> refresh</span></div>
             <ul><li>Unlimited dashboards and viewers</li><li>Responsive web, mobile, and TV layouts</li><li>KPI goals, comparisons, drilldowns, and freshness</li><li>Secure share links and scheduled snapshots</li><li>Basic alerts and 1,000 automation runs</li><li>Starter celebration templates and stock sounds</li><li>90-day metric history</li><li>Community and email support</li></ul>
-            <div class="not-included"><small>UPGRADE FOR</small><p>Custom sound uploads, Kombat Studio, advanced branding, and multi-channel actions.</p></div>
+            <div class="not-included"><small>UPGRADE FOR</small><p>Custom sound uploads, Team Competitions, advanced branding, and multi-channel actions.</p></div>
           </article>
 
           <article class="surface pricing-card pricing-card-featured" data-plan="growth">
             <span class="popular-ribbon">MOST POPULAR</span>
             <header><span class="plan-icon">✦</span><div><small>CREATE MOMENTUM</small><h2>Growth</h2></div></header>
             <p>The full AxoBoard experience for teams that want visibility to drive behavior.</p>
-            <div class="plan-price"><strong data-monthly="$249" data-annual="$199">$249</strong><span>/month</span><small data-price-note>Cancel anytime</small></div>
-            <button class="button button-primary full" type="button" data-plan-action="growth">Start 14-day trial</button>
+            <div class="plan-price"><strong data-monthly="$249" data-annual="$199">$249</strong><span>/month</span><small data-price-note>Billing terms at checkout</small></div>
+            <button class="button button-primary full" type="button" data-plan-action="growth">Review Growth</button>
             <div class="plan-capacity"><span><b>10</b> connected accounts</span><span><b>5</b> editors</span><span><b>5</b> TV screens</span><span><b>5m</b> refresh</span></div>
-            <ul><li>Everything in Starter</li><li>Celebration HQ with custom templates</li><li>My Sounds uploads, playlists, and quiet hours</li><li>Kombat Studio teams, scoring, arenas, and win rules</li><li>Custom logo, colors, language, and display branding</li><li>Email, Slack, and webhook actions</li><li>10,000 automation runs with retry history</li><li>Two-year metric history and standard support</li></ul>
+            <ul><li>Everything in Starter</li><li>Celebration HQ with custom templates</li><li>My Sounds uploads, playlists, and quiet hours</li><li>Team Competitions with teams, scoring, arenas, and win rules</li><li>Custom logo, colors, language, and display branding</li><li>Email, Slack, and webhook actions</li><li>10,000 automation runs with retry history</li><li>Two-year metric history and standard support</li></ul>
           </article>
 
           <article class="surface pricing-card" data-plan="scale">
             <header><span class="plan-icon">◇</span><div><small>RUN THE OPERATION</small><h2>Scale</h2></div></header>
             <p>Multiple teams or locations with stronger controls, faster signals, and more capacity.</p>
-            <div class="plan-price"><strong data-monthly="$599" data-annual="$499">$599</strong><span>/month</span><small data-price-note>Cancel anytime</small></div>
+            <div class="plan-price"><strong data-monthly="$599" data-annual="$499">$599</strong><span>/month</span><small data-price-note>Billing terms at checkout</small></div>
             <button class="button button-ghost full" type="button" data-plan-action="scale">Talk through your rollout</button>
             <div class="plan-capacity"><span><b>30</b> connected accounts</span><span><b>15</b> editors</span><span><b>20</b> TV screens</span><span><b>1m</b> refresh*</span></div>
             <ul><li>Everything in Growth</li><li>Three isolated workspaces</li><li>Full white-label dashboards, shares, and displays</li><li>Advanced roles, publishing approvals, and audit history</li><li>50,000 automation runs and operational actions</li><li>Five-year metric history</li><li>Priority support and guided rollout</li><li>Usage export and workspace-level governance</li></ul>
@@ -212,7 +218,7 @@
               <div class="comparison-row" role="row"><span>Dashboards & viewers</span><b>Unlimited</b><b>Unlimited</b><b>Unlimited</b><b>Unlimited</b></div>
               <div class="comparison-row" role="row"><span>Refresh</span><b>15 min</b><b>5 min</b><b>1 min*</b><b>Contracted</b></div>
               <div class="comparison-row" role="row"><span>Celebrations & sounds</span><b>Starter set</b><b>Custom</b><b>Custom</b><b>Custom</b></div>
-              <div class="comparison-row" role="row"><span>Kombat Studio</span><b>—</b><b>Included</b><b>Included</b><b>Included</b></div>
+              <div class="comparison-row" role="row"><span>Team Competitions</span><b>—</b><b>Included</b><b>Included</b><b>Included</b></div>
               <div class="comparison-row" role="row"><span>Customer branding</span><b>AxoBoard visible</b><b>Custom brand</b><b>Full white-label</b><b>Full white-label</b></div>
               <div class="comparison-row" role="row"><span>Governance</span><b>Core roles</b><b>Core roles</b><b>Advanced + audit</b><b>SSO + SLA</b></div>
               <div class="comparison-row" role="row"><span>Support</span><b>Email</b><b>Standard</b><b>Priority</b><b>Dedicated</b></div>
@@ -320,23 +326,23 @@
         </div>
       </section>
 
-      <section class="screen" data-screen-panel="kombat" aria-labelledby="kombatTitle">
+      <section class="screen" data-screen-panel="competitions" aria-labelledby="competitionsTitle">
         <header class="page-header compact-header">
-          <div><small>FULLY REBRANDABLE TEAM GAME</small><h1 id="kombatTitle">Kombat Studio <span>✦</span></h1><p>Name it, score it, skin it, and make the win unmistakably yours.</p></div>
-          <div class="header-actions"><label class="preset-picker">Preset<select><option>Team Challenge</option><option>Blank team battle</option></select></label><span class="autosave">● All changes saved</span></div>
+          <div><small>BUILD HEALTHY TEAM COMPETITIONS</small><h1 id="competitionsTitle">Team Competitions <span>✦</span></h1><p>Create a competition, define the score, customize the experience, and make every win visible.</p></div>
+          <div class="header-actions"><label class="preset-picker">Preset<select><option>Team Challenge</option><option>Blank competition</option></select></label><span class="autosave">● All changes saved</span></div>
         </header>
 
-        <div class="kombat-layout">
+        <div class="competition-layout">
           <aside class="surface studio-steps">
-            <div class="step complete"><b>1</b><span><strong>Game identity</strong><small>Names, teams, terms</small></span><i>✓</i></div>
+            <div class="step complete"><b>1</b><span><strong>Competition identity</strong><small>Names, teams, terms</small></span><i>✓</i></div>
             <div class="step active"><b>2</b><span><strong>Customize</strong><small>Make it your own</small></span></div>
-            <nav aria-label="Game customization sections"><button class="is-active" type="button">👾 Fighter sprites</button><button type="button">▧ Arena</button><button type="button">◉ Colors</button><button type="button">♫ Sounds</button><button type="button">▣ Scoring rules</button><button type="button">♛ Win condition</button></nav>
+            <nav aria-label="Competition customization sections"><button class="is-active" type="button">👾 Team avatars</button><button type="button">▧ Arena</button><button type="button">◉ Colors</button><button type="button">♫ Sounds</button><button type="button">▣ Scoring rules</button><button type="button">♛ Win condition</button></nav>
             <div class="step"><b>3</b><span><strong>Preview & publish</strong><small>Test and go live</small></span></div>
             <p class="studio-tip"><span>💡</span><strong>Everything is rebrandable.</strong> Change any name, color, image, rule, or sound.</p>
           </aside>
 
-          <section class="game-stage" aria-label="Live game preview">
-            <div class="preview-heading"><div><span class="live-dot"></span><strong>Live preview</strong><small>This is how your game looks to players.</small></div><div><button type="button" aria-label="Desktop preview">▣</button><button type="button" aria-label="Mobile preview">▯</button><button type="button" aria-label="Open fullscreen preview">↗</button></div></div>
+          <section class="game-stage" aria-label="Live competition preview">
+            <div class="preview-heading"><div><span class="live-dot"></span><strong>Live preview</strong><small>This is how your competition looks to participants.</small></div><div><button type="button" aria-label="Desktop preview">▣</button><button type="button" aria-label="Mobile preview">▯</button><button type="button" aria-label="Open fullscreen preview">↗</button></div></div>
             <div class="arena" id="arenaPreview">
               <div class="scoreboard"><div><strong id="teamOnePreview">Bluefin</strong><span><i id="teamOneBar" style="width:72%"></i></span><b id="teamOneScore">72</b></div><p>ROUND <b>2</b></p><div><strong id="teamTwoPreview">Coral Crew</strong><span><i id="teamTwoBar" style="width:85%"></i></span><b id="teamTwoScore">85</b></div></div>
               <div class="arena-lights"><i></i><i></i><i></i><i></i><i></i></div>
@@ -347,16 +353,16 @@
             <div class="editable-labels"><span>In-game UI—click any label to rename it</span><button type="button">Aa <b id="renameChipOne">Bluefin</b> ✎</button><button type="button">Aa <b id="renameChipTwo">Coral Crew</b> ✎</button><button type="button">♛ First to <b id="targetChip">100</b> ✎</button></div>
           </section>
 
-          <aside class="surface game-inspector" aria-label="Game configuration">
+          <aside class="surface game-inspector" aria-label="Competition configuration">
             <div class="inspector-scroll">
-              <fieldset><legend>✎ Game identity</legend><label>Game name<input id="gameNameInput" type="text" value="Team Challenge" maxlength="40" /></label><div class="field-row"><label>Team 1 name<input id="teamOneInput" type="text" value="Bluefin" maxlength="20" /></label><label>Team 2 name<input id="teamTwoInput" type="text" value="Coral Crew" maxlength="20" /></label></div></fieldset>
+              <fieldset><legend>✎ Competition identity</legend><label>Competition name<input id="gameNameInput" type="text" value="Team Challenge" maxlength="40" /></label><div class="field-row"><label>Team 1 name<input id="teamOneInput" type="text" value="Bluefin" maxlength="20" /></label><label>Team 2 name<input id="teamTwoInput" type="text" value="Coral Crew" maxlength="20" /></label></div></fieldset>
               <fieldset><legend>▣ Scoring rules</legend><div class="field-row"><label>Scoring type<select><option>Points</option><option>Revenue</option><option>Wins</option><option>Custom metric</option></select></label><label>Points per action<input id="pointsInput" type="number" min="1" value="10" /></label></div><label>Win condition<select id="winCondition"><option value="100">First to 100</option><option value="250">First to 250</option><option value="500">First to 500</option><option value="time">Highest score by deadline</option></select></label></fieldset>
-              <fieldset><legend>👾 Fighter sprites</legend><div class="sprite-pickers"><button type="button"><span class="sprite blue">•ᴗ•</span><small>Team 1 sprite</small><b>Change</b></button><button type="button"><span class="sprite coral">•ᴗ•</span><small>Team 2 sprite</small><b>Change</b></button></div></fieldset>
+              <fieldset><legend>👾 Team avatars</legend><div class="sprite-pickers"><button type="button"><span class="sprite blue">•ᴗ•</span><small>Team 1 avatar</small><b>Change</b></button><button type="button"><span class="sprite coral">•ᴗ•</span><small>Team 2 avatar</small><b>Change</b></button></div></fieldset>
               <fieldset><legend>▧ Arena</legend><div class="arena-options"><button type="button">🌊</button><button type="button">🏟</button><button class="is-active" type="button">🌌</button><button type="button">🏢</button><button type="button">＋</button></div></fieldset>
               <fieldset><legend>◉ Team colors</legend><div class="color-pickers"><label>Team 1<input id="teamOneColor" type="color" value="#38A8EA" /></label><label>Team 2<input id="teamTwoColor" type="color" value="#F55286" /></label></div></fieldset>
               <fieldset><legend>♫ Sounds</legend><label>Victory fanfare<select><option>Victory Splash</option><option>Cheerful Win</option><option>Level Up</option><option>Silent</option></select></label></fieldset>
             </div>
-            <footer><button class="button button-ghost" id="previewGame" type="button">▷ Preview</button><button class="button button-primary" id="publishGame" type="button">↗ Publish preset</button></footer>
+            <footer><button class="button button-ghost" id="previewGame" type="button">▷ Preview</button><button class="button button-primary" id="publishGame" type="button">↗ Publish competition</button></footer>
           </aside>
         </div>
       </section>
@@ -370,7 +376,7 @@
           <section class="surface brand-form">
             <div class="panel-heading"><div><small>BRAND BASICS</small><h2>Your workspace identity</h2></div><span class="step-pill">Step 1 of 3</span></div>
             <label class="field-label">Workspace name<input id="workspaceName" type="text" value="Acme Sales" /></label>
-            <label class="field-label">Logo<div class="logo-drop"><img class="brand-logo large" src="assets/axoboard-logo-low-poly.png" alt="AxoBoard low-poly leucistic axolotl logo" /><span><strong>axoboard-logo-low-poly.png</strong><small>Transparent PNG · 1254×1254</small></span><button type="button">Replace</button></div></label>
+            <label class="field-label">Logo<div class="logo-drop"><img class="brand-logo large" src="/assets/favicon/favicon-192.png?v=3" width="62" height="62" alt="AxoBoard low-poly leucistic axolotl logo" /><span><strong>axoboard-logo-low-poly.png</strong><small>Transparent PNG master</small></span><button type="button">Replace</button></div></label>
             <div class="field-row"><label class="field-label">Primary color<input id="brandColor" type="color" value="#E96F98" /></label><label class="field-label">Personality<select><option>Playful & polished</option><option>Bold & competitive</option><option>Calm & professional</option></select></label></div>
             <label class="field-label">Celebration language<input id="celebrationLanguage" type="text" value="Big win!" /></label>
             <div class="accessibility-check"><span>✓</span><div><strong>Contrast check passed</strong><small>Your text and controls meet WCAG AA.</small></div></div>
@@ -378,7 +384,7 @@
           </section>
           <aside class="brand-preview" id="brandPreview">
             <div class="preview-browser"><span></span><span></span><span></span><small>Live preview</small></div>
-            <div class="preview-app"><aside><img class="brand-logo large" src="assets/axoboard-logo-low-poly.png" alt="" /><strong id="workspacePreview">Acme Sales</strong><i></i><i></i><i></i></aside><main><small>CELEBRATION HQ</small><h2 id="languagePreview">Big win!</h2><div class="preview-win"><span class="mini-axo large">•ᴗ•</span><strong>Maya closed<br /><b>$18,420!</b></strong><span class="preview-button">Replay win</span></div><div class="preview-cards"><i></i><i></i><i></i></div></main></div>
+            <div class="preview-app"><aside><img class="brand-logo large" src="/assets/favicon/favicon-192.png?v=3" width="62" height="62" alt="" /><strong id="workspacePreview">Acme Sales</strong><i></i><i></i><i></i></aside><main><small>CELEBRATION HQ</small><h2 id="languagePreview">Big win!</h2><div class="preview-win"><span class="mini-axo large">•ᴗ•</span><strong>Maya closed<br /><b>$18,420!</b></strong><span class="preview-button">Replay win</span></div><div class="preview-cards"><i></i><i></i><i></i></div></main></div>
             <p>Preview updates instantly across the entire product.</p>
           </aside>
         </div>
@@ -394,7 +400,7 @@
         <section class="workflow-canvas" id="workflowCanvas"></section>
         <aside class="workflow-context" id="workflowContext"></aside>
       </div>
-      <footer class="workflow-footer"><button class="button button-ghost" id="workflowCancel" type="button">Cancel</button><span id="workflowStatus">Prototype draft · no live changes</span><button class="button button-primary" id="workflowPrimary" type="button">Save draft</button></footer>
+      <footer class="workflow-footer"><button class="button button-ghost" id="workflowCancel" type="button">Cancel</button><span id="workflowStatus" role="status" aria-live="polite">Prototype draft · no live changes</span><button class="button button-primary" id="workflowPrimary" type="button">Save draft</button></footer>
     </div>
   </div>
 
@@ -430,7 +436,7 @@
   </div>
 
   <div class="feature-overlay tv-preview-overlay" id="tvPreviewModal" role="dialog" aria-modal="true" aria-labelledby="tvPreviewTitle" aria-hidden="true">
-    <div class="tv-preview-stage"><header><div><img src="assets/axoboard-logo-low-poly.png" alt="" /><span><small>REVENUE PULSE · VIEW 1 OF 3</small><h2 id="tvPreviewTitle">Sales performance</h2></span></div><button data-close-feature="tvPreviewModal" type="button" aria-label="Close TV preview">×</button></header><div class="tv-kpis"><article><small>NET SALES TODAY</small><strong>$55,396</strong><span>↗ 12.4%</span></article><article><small>OPEN PIPELINE</small><strong>$1.28M</strong><span>72% of goal</span></article><article><small>TEAM ON TRACK</small><strong>82.9%</strong><span>13 of 16 reps</span></article></div><div class="tv-chart"><div><small>REVENUE MOMENTUM</small><strong>Finishing stronger than last week</strong></div><svg viewBox="0 0 800 180"><path d="M0 150 L130 126 L260 139 L390 82 L520 98 L650 43 L800 24" fill="none" stroke="#43bde8" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><footer><span class="live-dot"></span> Live · refreshed 2m ago <i></i> Next: Pipeline health in <b id="loopCountdown">45</b>s</footer></div>
+    <div class="tv-preview-stage"><header><div><img src="/assets/favicon/favicon-192.png?v=3" width="48" height="48" alt="" /><span><small>REVENUE PULSE · VIEW 1 OF 3</small><h2 id="tvPreviewTitle">Sales performance</h2></span></div><button data-close-feature="tvPreviewModal" type="button" aria-label="Close TV preview">×</button></header><div class="tv-kpis"><article><small>NET SALES TODAY</small><strong>$55,396</strong><span>↗ 12.4%</span></article><article><small>OPEN PIPELINE</small><strong>$1.28M</strong><span>72% of goal</span></article><article><small>TEAM ON TRACK</small><strong>82.9%</strong><span>13 of 16 reps</span></article></div><div class="tv-chart"><div><small>REVENUE MOMENTUM</small><strong>Finishing stronger than last week</strong></div><svg viewBox="0 0 800 180"><path d="M0 150 L130 126 L260 139 L390 82 L520 98 L650 43 L800 24" fill="none" stroke="#43bde8" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><footer><span class="live-dot"></span> Live · refreshed 2m ago <i></i> Next: Pipeline health in <b id="loopCountdown">45</b>s</footer></div>
   </div>
 
   <div class="builder-overlay" id="kpiBuilderModal" role="dialog" aria-modal="true" aria-labelledby="kpiBuilderTitle" aria-hidden="true">

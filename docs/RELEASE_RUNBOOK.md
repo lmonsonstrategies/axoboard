@@ -24,10 +24,18 @@ Railway production follows only `main`. Feature branches never deploy to `axoboa
 ## Production success signal
 
 - `/healthz` returns `200`, `ok: true`, the expected commit SHA, and a healthy database when persistence is enabled.
-- `/`, `/signup`, `/login`, and `/demo` return the intended pages.
+- `/`, `/signup`, and `/login` return the intended public pages.
 - Anonymous `/app` redirects to `/login`.
+- Authenticated workspaces with `pending_payment`, `past_due`, or `canceled` status redirect from `/app` to `/pricing?access=subscription_required`.
+- Only a workspace with explicit `active` subscription status can load `/app`, `/app.js`, and `/styles.css`; roles never grant paid access.
+- `/demo`, `/index.html`, and anonymous requests for `/app.js` and `/styles.css` return `404`.
 - sensitive probes such as `/.env`, `/server.mjs`, `/package.json`, `/Dockerfile`, and `/.git/config` return `404`.
 - the public browser bundle contains no Murphy Door references or high-risk secret patterns.
+
+Until Stripe webhooks are implemented, new workspaces start in `pending_payment` and fail closed. Manual entitlement changes must be explicit, auditable, and limited to approved test accounts; do not activate a workspace merely because its member is an owner or administrator.
+Every subscription insert and status transition is appended to `subscription_status_events` with its previous/new state, source, actor, workspace, and timestamp.
+
+The PostgreSQL-backed CI smoke suite proves `pending_payment`, `active`, `past_due`, `canceled`, mixed-workspace session binding, private product caching, and entitlement-history behavior. Production verification intentionally stays read-only: it proves anonymous denial and direct-file/API bypass protection but does not mutate live subscriptions or create test customers. Add Stripe test-mode checkout/webhook verification before enabling self-service billing.
 
 ## Rollback
 

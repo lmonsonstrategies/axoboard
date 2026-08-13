@@ -4,16 +4,37 @@ const toast = document.querySelector('#toast');
 const overlay = document.querySelector('#celebrationOverlay');
 let toastTimer;
 const betaStateKey = 'axoboard.beta.service.v2';
-const defaultBetaState = { activeWorkspace: 'sample-empty', workspaceName: 'New workspace', brandColor: '#E96F98', celebrationLanguage: 'Big win!', teamOne: 'Team One', teamTwo: 'Team Two', sampleDemoData: false, completedWorkflows: [], draftCount: 0, lastSavedAt: null };
+const dashboardKpiKeys = ['net-sales', 'pipeline', 'deals-won', 'team-track'];
+const defaultDashboardLayout = { preset: 'balanced', showTrend: true, showActionCenter: true, kpiOrder: [...dashboardKpiKeys] };
+const defaultBetaState = { activeWorkspace: 'sample-empty', workspaceName: 'New workspace', brandColor: '#E96F98', celebrationLanguage: 'Big win!', teamOne: 'Team One', teamTwo: 'Team Two', sampleDemoData: false, completedWorkflows: [], draftCount: 0, dashboardLayout: defaultDashboardLayout, lastSavedAt: null };
 let betaState = { ...defaultBetaState };
 let oauthAttempt = 0;
 let activeOauthProvider = null;
+let layoutEditSnapshot = null;
+let layoutDraft = null;
+
+function normalizeDashboardLayout(layout = {}) {
+  const suppliedOrder = Array.isArray(layout.kpiOrder) ? layout.kpiOrder : [];
+  const kpiOrder = [...new Set([...suppliedOrder.filter((key) => dashboardKpiKeys.includes(key)), ...dashboardKpiKeys])];
+  return {
+    preset: ['balanced', 'kpi-focus', 'compact'].includes(layout.preset) ? layout.preset : defaultDashboardLayout.preset,
+    showTrend: layout.showTrend !== false,
+    showActionCenter: layout.showActionCenter !== false,
+    kpiOrder
+  };
+}
+
+function cloneDashboardLayout(layout) {
+  const normalized = normalizeDashboardLayout(layout);
+  return { ...normalized, kpiOrder: [...normalized.kpiOrder] };
+}
 
 try {
   betaState = { ...defaultBetaState, ...JSON.parse(localStorage.getItem(betaStateKey) || '{}') };
 } catch {
   betaState = { ...defaultBetaState };
 }
+betaState.dashboardLayout = normalizeDashboardLayout(betaState.dashboardLayout);
 
 function persistBetaState(patch = {}) {
   betaState = { ...betaState, ...patch, lastSavedAt: new Date().toISOString() };
@@ -21,13 +42,13 @@ function persistBetaState(patch = {}) {
 }
 
 const workspaceProfiles = {
-  'sample-empty': { name: 'New workspace', avatar: 'N', game: 'Blank team battle', teamOne: 'Team One', teamTwo: 'Team Two' },
+  'sample-empty': { name: 'New workspace', avatar: 'N', game: 'Blank competition', teamOne: 'Team One', teamTwo: 'Team Two' },
   acme: { name: 'Acme Sales', avatar: 'A', game: 'Team Challenge', teamOne: 'Bluefin', teamTwo: 'Coral Crew' }
 };
 
 function insertWorkspaceSandboxStates() {
   const states = {
-    dashboard: '<span class="empty-axo">•ᴗ•</span><small>BLANK CUSTOMER WORKSPACE</small><h2>No KPIs yet</h2><p>Connect a source through a fresh OAuth consent flow, or load clearly labeled synthetic KPIs to test the product safely.</p><div><button class="button button-primary" type="button" data-screen="integrations">Connect a source</button><button class="button button-soft" type="button" data-load-demo>Load synthetic demo KPIs</button></div>',
+    dashboard: '<span class="empty-axo">•ᴗ•</span><small>BLANK CUSTOMER WORKSPACE</small><h2>No KPIs yet</h2><p>Choose a responsive layout above, connect a source through a fresh OAuth consent flow, or load clearly labeled synthetic KPIs to test the product safely.</p><div><button class="button button-primary" type="button" data-screen="integrations">Connect a source</button><button class="button button-soft" type="button" data-load-demo>Load synthetic demo KPIs</button></div>',
     integrations: '<span class="empty-axo">⌁</span><small>0 CONNECTIONS · FRESH OAUTH ONLY</small><h2>Connect your first source</h2><p>No accounts, tokens, service accounts, portals, or credentials are included in this sample workspace. Every connection begins with a new provider consent request.</p><div class="blank-connector-grid"><article><span class="integration-logo google">G</span><strong>Google Sheets</strong><small>Pick files, worksheets, cells, and ranges after authorization.</small><button class="button button-primary" type="button" data-fresh-oauth="google">Start fresh Google OAuth</button></article><article><span class="integration-logo hubspot">H</span><strong>HubSpot</strong><small>Pick CRM objects and specific standard or custom properties.</small><button class="button button-primary" type="button" data-fresh-oauth="hubspot">Start fresh HubSpot OAuth</button></article></div><aside class="credential-boundary"><b>Credential boundary</b><span>Credentials must be newly authorized and tenant-scoped. Live redirects remain disabled until AxoBoard-owned OAuth apps and callbacks are configured.</span></aside>',
     displays: '<span class="empty-axo">▣</span><small>BLANK CUSTOMER WORKSPACE</small><h2>No screens paired</h2><p>Pair a test display after a dashboard exists. Device tokens will be scoped to this workspace.</p><div><button class="button button-primary" type="button" data-empty-workflow="screen">Pair first screen</button></div>',
     automations: '<span class="empty-axo">ϟ</span><small>BLANK CUSTOMER WORKSPACE</small><h2>No automation rules</h2><p>Create a rule only after a trusted or synthetic KPI exists. Dry runs stay separated from production events.</p><div><button class="button button-primary" type="button" data-empty-workflow="automation">Create first rule</button></div>',
@@ -40,7 +61,7 @@ function insertWorkspaceSandboxStates() {
     if (!panel || panel.querySelector('.workspace-empty-state')) return;
     panel.querySelector('.page-header').insertAdjacentHTML('afterend', `<section class="surface workspace-empty-state" data-empty-route="${route}">${html}</section>`);
   });
-  ['kombat', 'brand'].forEach((route) => {
+  ['competitions', 'brand'].forEach((route) => {
     const panel = document.querySelector(`[data-screen-panel="${route}"]`);
     panel.querySelector('.page-header').insertAdjacentHTML('afterend', '<aside class="surface blank-tenant-note"><b>Safe sample workspace</b><span>This starts as an unpublished, tenant-local draft with no inherited assets or settings.</span><button type="button" data-reset-sample>Reset workspace</button></aside>');
   });
@@ -53,8 +74,9 @@ function applyWorkspaceMode() {
   const isSample = id === 'sample-empty';
   document.body.dataset.activeWorkspace = id;
   document.body.dataset.demoData = isSample && betaState.sampleDemoData ? 'true' : 'false';
-  document.querySelector('.workspace-switcher .workspace-avatar').textContent = profile.avatar;
+  document.querySelectorAll('.workspace-switcher .workspace-avatar, .mobile-workspace-switch .workspace-avatar').forEach((avatar) => { avatar.textContent = profile.avatar; });
   document.querySelector('.workspace-switcher strong').textContent = profile.name;
+  document.querySelector('.mobile-workspace-switch')?.setAttribute('aria-label', `Switch workspace. Current workspace: ${profile.name}`);
   workspaceName.value = profile.name;
   document.querySelector('#serviceWorkspaceName').textContent = profile.name;
   document.querySelector('#gameNameInput').value = profile.game;
@@ -82,6 +104,7 @@ function showToast(title, detail) {
 }
 
 function showScreen(name) {
+  name = name === 'kombat' ? 'competitions' : name;
   screens.forEach((screen) => screen.classList.toggle('is-active', screen.dataset.screenPanel === name));
   navButtons.forEach((button) => button.classList.toggle('is-active', button.dataset.screen === name));
   const activeNav = navButtons.find((button) => button.dataset.screen === name && button.classList.contains('nav-item'));
@@ -93,6 +116,95 @@ function showScreen(name) {
 }
 
 navButtons.forEach((button) => button.addEventListener('click', () => showScreen(button.dataset.screen)));
+
+const dashboardPanel = document.querySelector('[data-screen-panel="dashboard"]');
+const dashboardKpiGrid = document.querySelector('#dashboardKpiGrid');
+const dashboardTrendPanel = document.querySelector('#dashboardTrendPanel');
+const dashboardActionCenter = document.querySelector('#dashboardActionCenter');
+const dashboardLowerGrid = document.querySelector('#dashboardLowerGrid');
+
+function kpiLabel(key) {
+  return dashboardKpiGrid.querySelector(`[data-drilldown="${key}"] > p`)?.textContent.trim() || key;
+}
+
+function applyDashboardLayout(layout = betaState.dashboardLayout) {
+  const normalized = normalizeDashboardLayout(layout);
+  dashboardPanel.dataset.layoutPreset = normalized.preset;
+  normalized.kpiOrder.forEach((key) => {
+    const card = dashboardKpiGrid.querySelector(`[data-drilldown="${key}"]`);
+    if (card) dashboardKpiGrid.append(card);
+  });
+  dashboardTrendPanel.hidden = !normalized.showTrend;
+  dashboardActionCenter.hidden = !normalized.showActionCenter;
+  const visiblePanels = Number(normalized.showTrend) + Number(normalized.showActionCenter);
+  dashboardLowerGrid.hidden = visiblePanels === 0;
+  dashboardLowerGrid.dataset.visiblePanels = visiblePanels === 1 ? 'one' : 'two';
+  const presetName = { balanced: 'Balanced', 'kpi-focus': 'KPI focus', compact: 'Compact' }[normalized.preset];
+  document.querySelector('#editLayoutButton').setAttribute('aria-label', `Change layout. Current preset: ${presetName}`);
+}
+
+function renderLayoutOrder(focusKey = '', focusDirection = '') {
+  const list = document.querySelector('#layoutKpiOrder');
+  if (!list || !layoutDraft) return;
+  list.replaceChildren(...layoutDraft.kpiOrder.map((key, index) => {
+    const item = document.createElement('li');
+    item.dataset.layoutKpi = key;
+    item.innerHTML = `<span class="layout-order-position" aria-hidden="true">${index + 1}</span><div><strong>${kpiLabel(key)}</strong><small>Dashboard KPI ${index + 1}</small></div><div class="layout-order-actions"><button type="button" data-layout-move="up" data-interaction-status="working" aria-label="Move ${kpiLabel(key)} up" ${index === 0 ? 'disabled' : ''}>↑ Move up</button><button type="button" data-layout-move="down" data-interaction-status="working" aria-label="Move ${kpiLabel(key)} down" ${index === layoutDraft.kpiOrder.length - 1 ? 'disabled' : ''}>↓ Move down</button></div>`;
+    return item;
+  }));
+  if (focusKey && focusDirection) list.querySelector(`[data-layout-kpi="${focusKey}"] [data-layout-move="${focusDirection}"]`)?.focus();
+}
+
+function syncLayoutWorkflowPreview() {
+  if (!layoutDraft) return;
+  const preview = document.querySelector('[data-layout-preview]');
+  if (!preview) return;
+  preview.dataset.previewPreset = layoutDraft.preset;
+  preview.querySelector('[data-layout-preview-kpis]').replaceChildren(...layoutDraft.kpiOrder.map((key) => {
+    const item = document.createElement('span');
+    item.textContent = kpiLabel(key);
+    return item;
+  }));
+  const trend = preview.querySelector('[data-layout-preview-trend]');
+  const actions = preview.querySelector('[data-layout-preview-actions]');
+  trend.hidden = !layoutDraft.showTrend;
+  actions.hidden = !layoutDraft.showActionCenter;
+  preview.querySelector('[data-layout-preview-empty]').hidden = layoutDraft.showTrend || layoutDraft.showActionCenter;
+}
+
+function previewLayoutDraft() {
+  if (!layoutDraft) return;
+  applyDashboardLayout(layoutDraft);
+  syncLayoutWorkflowPreview();
+  document.querySelector('#workflowStatus').textContent = 'Previewing locally · save to keep after refresh';
+}
+
+function wireLayoutWorkflow() {
+  if (!layoutDraft) return;
+  document.querySelectorAll('[name="layoutPreset"]').forEach((input) => { input.checked = input.value === layoutDraft.preset; });
+  document.querySelector('#layoutShowTrend').checked = layoutDraft.showTrend;
+  document.querySelector('#layoutShowActionCenter').checked = layoutDraft.showActionCenter;
+  renderLayoutOrder();
+  syncLayoutWorkflowPreview();
+  document.querySelector('#workflowCanvas').onchange = (event) => {
+    if (event.target.matches('[name="layoutPreset"]')) layoutDraft.preset = event.target.value;
+    if (event.target.id === 'layoutShowTrend') layoutDraft.showTrend = event.target.checked;
+    if (event.target.id === 'layoutShowActionCenter') layoutDraft.showActionCenter = event.target.checked;
+    previewLayoutDraft();
+  };
+  document.querySelector('#layoutKpiOrder').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-layout-move]');
+    if (!button || button.disabled) return;
+    const item = button.closest('[data-layout-kpi]');
+    const key = item.dataset.layoutKpi;
+    const currentIndex = layoutDraft.kpiOrder.indexOf(key);
+    const nextIndex = currentIndex + (button.dataset.layoutMove === 'up' ? -1 : 1);
+    if (nextIndex < 0 || nextIndex >= layoutDraft.kpiOrder.length) return;
+    [layoutDraft.kpiOrder[currentIndex], layoutDraft.kpiOrder[nextIndex]] = [layoutDraft.kpiOrder[nextIndex], layoutDraft.kpiOrder[currentIndex]];
+    renderLayoutOrder(key, button.dataset.layoutMove);
+    previewLayoutDraft();
+  });
+}
 
 const styleButtons = [...document.querySelectorAll('[data-celebration-style]')];
 const activeStyle = document.querySelector('#activeStyle');
@@ -212,9 +324,9 @@ document.querySelectorAll('.arena-options button').forEach((button) => button.ad
 }));
 document.querySelector('#previewGame').addEventListener('click', () => {
   arena.animate([{ transform: 'scale(.985)' }, { transform: 'scale(1)' }], { duration: 420, easing: 'ease-out' });
-  showToast('Game preview started', 'Scores, winner copy, sprites, colors, and sounds are testable.');
+  showToast('Competition preview started', 'Scores, winner copy, avatars, colors, and sounds are testable.');
 });
-document.querySelector('#publishGame').addEventListener('click', () => showToast('Preset published', `${document.querySelector('#gameNameInput').value || 'Your game'} is ready to play.`));
+document.querySelector('#publishGame').addEventListener('click', () => showToast('Competition published', `${document.querySelector('#gameNameInput').value || 'Your competition'} is ready to run.`));
 
 const brandColor = document.querySelector('#brandColor');
 const workspaceName = document.querySelector('#workspaceName');
@@ -233,7 +345,7 @@ function syncBrandPreview() {
   persistBetaState({ workspaceName: workspaceName.value, brandColor: brandColor.value, celebrationLanguage: celebrationLanguage.value });
   document.querySelector('#serviceWorkspaceName').textContent = workspaceName.value || 'Your workspace';
 }));
-document.querySelector('#publishBrand').addEventListener('click', () => showToast('Brand published', 'Dashboards, celebrations, sounds, and games now share this theme.'));
+document.querySelector('#publishBrand').addEventListener('click', () => showToast('Brand published', 'Dashboards, celebrations, sounds, and competitions now share this theme.'));
 
 const kpiBuilderModal = document.querySelector('#kpiBuilderModal');
 const builderSteps = [...document.querySelectorAll('[data-builder-step]')];
@@ -377,6 +489,11 @@ function openFeatureModal(id, trigger = document.activeElement) {
 
 function closeFeatureModal(modal = activeFeatureModal) {
   if (!modal) return;
+  if (modal.id === 'workflowModal' && activeWorkflow === 'layout' && layoutEditSnapshot) {
+    applyDashboardLayout(layoutEditSnapshot);
+    layoutEditSnapshot = null;
+    layoutDraft = null;
+  }
   modal.classList.remove('is-visible');
   modal.setAttribute('aria-hidden', 'true');
   if (modal.id === 'tvPreviewModal') {
@@ -471,7 +588,7 @@ document.querySelector('#openSourceButton').addEventListener('click', () => show
 
 document.querySelector('#pairScreenButton').addEventListener('click', () => showToast('Pairing code: AXO-482', 'Enter this one-time code on the new display within 10 minutes.'));
 document.querySelector('#saveLoopButton').addEventListener('click', () => showToast('Revenue pulse saved', 'Three views will rotate during active hours.'));
-document.querySelector('.add-loop-view').addEventListener('click', () => showToast('Content picker ready', 'Add any dashboard, celebration reel, or game preset to this loop.'));
+document.querySelector('.add-loop-view').addEventListener('click', () => showToast('Content picker ready', 'Add any dashboard, celebration reel, or competition to this loop.'));
 document.querySelectorAll('[data-move-loop]').forEach((button) => button.addEventListener('click', () => {
   const item = button.closest('li');
   const list = document.querySelector('#loopSequence');
@@ -515,21 +632,22 @@ const workflowDefinitions = {
   workspace: { eyebrow: 'WORKSPACE ACCESS', title: 'Switch workspace', description: 'Move between tenants without mixing data, brands, permissions, or credentials.', steps: ['Choose workspace','Confirm context'], primary: 'Switch workspace', canvas: '<h3>Your workspaces</h3><p>New workspace is an empty onboarding sample; Acme Sales contains populated synthetic fixtures.</p><div class="workflow-grid"><button class="workflow-card" data-workspace-id="sample-empty" type="button"><span>N</span><strong>New workspace</strong><small>Owner · blank OAuth test workspace</small><i>Choose</i></button><button class="workflow-card" data-workspace-id="acme" type="button"><span>A</span><strong>Acme Sales</strong><small>Owner · populated sample tenant</small><i>Choose</i></button></div>', context: '<h3>Tenant boundary</h3><p>Dashboards, integrations, assets, rules, tokens, and games remain isolated by workspace.</p><div class="workflow-summary"><div><small>NEW WORKSPACE</small><strong>No inherited credentials</strong></div><div><small>SESSION</small><strong>Revalidated on switch</strong></div></div>' },
   profile: { eyebrow: 'ACCOUNT & PREFERENCES', title: 'Your AxoBoard profile', description: 'Manage personal display, notification, sound, and accessibility defaults.', steps: ['Profile','Preferences','Security'], primary: 'Save preferences', canvas: '<h3>Personal preferences</h3><p>These follow you across workspaces unless an admin policy overrides them.</p><div class="workflow-form"><div class="field-row"><label>Display name<input value="Jordan Lee" /></label><label>Timezone<select><option>America/Denver</option><option>America/New_York</option></select></label></div><div class="workflow-checks"><label><input type="checkbox" checked /> Email me when an automation needs attention</label><label><input type="checkbox" checked /> Respect reduced-motion system preference</label><label><input type="checkbox" /> Mute celebration sounds on this device</label></div></div>', context: '<h3>Account security</h3><p>Last sign-in today at 8:14 AM. MFA is enabled.</p><div class="workflow-summary"><div><small>ROLE</small><strong>Workspace owner</strong></div><div><small>ACTIVE SESSIONS</small><strong>2 devices</strong></div></div>' },
   dashboard: { eyebrow: 'DASHBOARD CONFIGURATION', title: 'Edit dashboard', description: 'Change the time window, layout, refresh behavior, and card settings.', steps: ['Configure','Preview','Publish'], primary: 'Preview changes', canvas: '<h3>Dashboard settings</h3><p>Changes stay in a draft until you publish them.</p><div class="workflow-form"><div class="field-row"><label>Time window<select><option>Today</option><option>This week</option><option>This month</option><option>Rolling 30 days</option></select></label><label>Refresh interval<select><option>Every 5 minutes</option><option>Every minute</option><option>Every 15 minutes</option></select></label></div><label>Layout density<select><option>Comfortable</option><option>Compact</option><option>TV optimized</option></select></label><div class="workflow-checks"><label><input type="checkbox" checked /> Show source and freshness on every card</label><label><input type="checkbox" checked /> Preserve mobile card order</label></div></div>', context: '<h3>Draft impact</h3><p>4 KPI cards, 1 trend chart, and 3 attention rules use this dashboard.</p><div class="workflow-preview"><span>▦</span><strong>Sales performance</strong><small>Responsive preview · no live changes</small></div>' },
+  layout: { eyebrow: 'DASHBOARD LAYOUT', title: 'Change layout', description: 'Choose a responsive preset, show the sections you need, and put KPIs in the right order.', steps: ['Arrange','Review'], primary: 'Review layout', canvas: '<h3>Shape the dashboard around the decision</h3><p>Every change previews immediately. Cancel restores the layout you started with.</p><fieldset class="layout-preset-fieldset"><legend>Layout preset</legend><div class="layout-preset-options"><label><input type="radio" name="layoutPreset" value="balanced" /><span class="layout-preset-icon balanced" aria-hidden="true"><i></i><i></i><i></i><i></i></span><strong>Balanced</strong><small>Equal KPI cards with trend and actions below.</small></label><label><input type="radio" name="layoutPreset" value="kpi-focus" /><span class="layout-preset-icon kpi-focus" aria-hidden="true"><i></i><i></i><i></i></span><strong>KPI focus</strong><small>Lead with the first KPI and give the score more room.</small></label><label><input type="radio" name="layoutPreset" value="compact" /><span class="layout-preset-icon compact" aria-hidden="true"><i></i><i></i><i></i><i></i></span><strong>Compact</strong><small>Reduce card height to scan more at once.</small></label></div></fieldset><fieldset class="layout-section-fieldset"><legend>Dashboard sections</legend><div class="workflow-checks layout-visibility-options"><label><input id="layoutShowTrend" type="checkbox" /><span><strong>Trend chart</strong><small>Revenue momentum and period comparison</small></span></label><label><input id="layoutShowActionCenter" type="checkbox" /><span><strong>Action Center</strong><small>Alerts and next-best actions</small></span></label></div></fieldset><div class="layout-order-heading"><div><strong>KPI order</strong><small>Use Move up and Move down for a keyboard-safe order.</small></div></div><ol class="layout-order-list" id="layoutKpiOrder"></ol>', context: '<h3>Live layout preview</h3><p>This preview and the dashboard behind it update together. Nothing is sent to a server.</p><div class="layout-mini-preview" data-layout-preview><div class="layout-mini-kpis" data-layout-preview-kpis></div><span class="layout-mini-section trend" data-layout-preview-trend>Trend chart</span><span class="layout-mini-section actions" data-layout-preview-actions>Action Center</span><span class="layout-mini-empty" data-layout-preview-empty hidden>KPI cards only</span></div><div class="workflow-summary"><div><small>PERSISTENCE</small><strong>This browser only</strong></div><div><small>MOBILE</small><strong>Order becomes a single column</strong></div><div><small>SERVER STATUS</small><strong>Not published</strong></div></div>' },
   kpi: { eyebrow: 'KPI SETTINGS', title: 'Edit KPI card', description: 'Update source mapping, calculation, appearance, goal, and alert behavior.', steps: ['Source','Calculation','Display','Publish'], primary: 'Review KPI', canvas: '<h3>Metric and display</h3><p>The source contract stays visible while you customize the card.</p><div class="workflow-form"><label>KPI name<input value="Net sales today" /></label><div class="field-row"><label>Format<select><option>Currency · no decimals</option><option>Number</option><option>Percentage</option></select></label><label>Goal<input value="$65,000" /></label></div><label>Comparison<select><option>Versus yesterday</option><option>Versus prior week</option><option>Versus goal only</option></select></label><div class="workflow-checks"><label><input type="checkbox" checked /> Enable source drilldown</label><label><input type="checkbox" checked /> Show stale warning after 15 minutes</label></div></div>', context: '<h3>Trusted source</h3><p>Google Sheets → 2026 Sales Performance → Summary!D8</p><div class="workflow-summary"><div><small>CURRENT VALUE</small><strong>$55,396</strong></div><div><small>FRESHNESS</small><strong>2 minutes ago · healthy</strong></div><div><small>OWNER</small><strong>Sales Ops</strong></div></div>' },
   alert: { eyebrow: 'ALERT & ACTION BUILDER', title: 'Configure an alert', description: 'Turn a trusted KPI condition into controlled notifications and team actions.', steps: ['Trigger','Actions','Guardrails','Test'], primary: 'Test rule', canvas: '<h3>When should this run?</h3><p>Rules evaluate normalized KPI snapshots—not raw browser values.</p><div class="workflow-form"><div class="field-row"><label>KPI<select><option>Pipeline coverage</option><option>Net sales today</option><option>Team on track</option></select></label><label>Condition<select><option>Falls below</option><option>Reaches</option><option>Changes by more than</option></select></label></div><div class="field-row"><label>Threshold<input value="3×" /></label><label>For at least<select><option>30 minutes</option><option>Immediately</option><option>1 hour</option></select></label></div><div class="workflow-checks"><label><input type="checkbox" checked /> Slack #sales-leadership</label><label><input type="checkbox" /> Email the metric owner</label><label><input type="checkbox" /> Start a quiet celebration</label></div></div>', context: '<h3>Guardrail preview</h3><p>This would have run twice in the last 30 days.</p><div class="workflow-summary"><div><small>COOLDOWN</small><strong>4 hours</strong></div><div><small>QUIET HOURS</small><strong>8 PM–7 AM</strong></div><div><small>STALE DATA</small><strong>Block rule</strong></div></div>' },
-  connector: { eyebrow: 'INTEGRATION SETUP', title: 'Connect a data source', description: 'Authorize the smallest useful scope, validate it, and create the first mapping.', steps: ['Choose source','Authorize','Validate','Map data'], primary: 'Continue to OAuth', canvas: '<h3>Available connectors</h3><p>Deep, observable connections beat a huge brittle catalog.</p><div class="workflow-grid"><button class="workflow-card is-selected" type="button"><span class="integration-logo google" aria-label="Google Sheets">Google Sheets</span><strong>Google Sheets</strong><small>Files, worksheets, cells, and named ranges</small><i>OAuth ready</i></button><button class="workflow-card" type="button"><span class="integration-logo hubspot" aria-label="HubSpot">HubSpot</span><strong>HubSpot</strong><small>Objects, standard/custom properties, filters</small><i>OAuth ready</i></button><button class="workflow-card" type="button"><span>▤</span><strong>Shopify</strong><small>Orders, refunds, net sales, products</small><i>Wireframe next</i></button><button class="workflow-card" type="button"><span>↯</span><strong>Webhook / API</strong><small>Push signed custom events</small><i>Wireframe next</i></button></div>', context: '<h3>Connection requirements</h3><p>Tokens stay encrypted server-side. Revocation, freshness, rate limits, and errors remain visible.</p><div class="workflow-summary"><div><small>AUTH</small><strong>OAuth 2.0</strong></div><div><small>SYNC</small><strong>Incremental + retry</strong></div></div>' },
+  connector: { eyebrow: 'INTEGRATION SETUP', title: 'Connect a data source', description: 'Authorize the smallest useful scope, validate it, and create the first mapping.', steps: ['Choose source','Authorize','Validate','Map data'], primary: 'Review setup', canvas: '<h3>Connector roadmap</h3><p>Deep, observable connections beat a huge brittle catalog.</p><div class="workflow-grid"><button class="workflow-card is-selected" type="button"><span class="integration-logo google" aria-label="Google Sheets">Google Sheets</span><strong>Google Sheets</strong><small>Files, worksheets, cells, and named ranges</small><i>App setup required</i></button><button class="workflow-card" type="button"><span class="integration-logo hubspot" aria-label="HubSpot">HubSpot</span><strong>HubSpot</strong><small>Objects, standard/custom properties, filters</small><i>Roadmap</i></button><button class="workflow-card" type="button"><span>▤</span><strong>Shopify</strong><small>Orders, refunds, net sales, products</small><i>Roadmap</i></button><button class="workflow-card" type="button"><span>↯</span><strong>Webhook / API</strong><small>Push signed custom events</small><i>Roadmap</i></button></div>', context: '<h3>Connection requirements</h3><p>Tokens stay encrypted server-side. Revocation, freshness, rate limits, and errors remain visible.</p><div class="workflow-summary"><div><small>AUTH</small><strong>OAuth 2.0</strong></div><div><small>SYNC</small><strong>Incremental + retry</strong></div></div>' },
   connection: { eyebrow: 'CONNECTION MANAGEMENT', title: 'Manage connection', description: 'Inspect health, scopes, mappings, sync history, and revocation.', steps: ['Health','Mappings','Permissions'], primary: 'Save connection', canvas: '<h3>Google Sheets connection</h3><p>Healthy and currently used by two published KPI mappings.</p><div class="workflow-form"><div class="field-row"><label>Account<input value="jordan@acme.co" readonly /></label><label>Refresh<select><option>Every 5 minutes</option><option>Every 15 minutes</option></select></label></div><ul class="workflow-list"><li><span>▦</span><div><strong>Net sales today</strong><small>Summary!D8 · refreshed 2m ago</small></div><button type="button">Edit</button></li><li><span>◎</span><div><strong>Team on track</strong><small>Reps!G4:G18 · refreshed 2m ago</small></div><button type="button">Edit</button></li></ul></div>', context: '<h3>Connection health</h3><p>OAuth token valid. No rate limits or mapping errors.</p><div class="workflow-summary"><div><small>LAST SYNC</small><strong>2 minutes ago</strong></div><div><small>SCOPES</small><strong>Selected files only</strong></div><div><small>NEXT CHECK</small><strong>In 3 minutes</strong></div></div>' },
   screen: { eyebrow: 'DISPLAY CONTROL', title: 'Manage TV screen', description: 'Pair, assign content, set a schedule, and diagnose the player remotely.', steps: ['Screen','Content','Schedule','Confirm'], primary: 'Apply to screen', canvas: '<h3>Screen and content</h3><p>Updates apply on the next player heartbeat.</p><div class="workflow-form"><div class="field-row"><label>Screen name<input value="Sales Floor TV" /></label><label>Location<input value="Front office" /></label></div><label>Content<select><option>Revenue pulse · 3 views</option><option>Sales performance</option><option>Team Challenge</option><option>Concierge Pulse</option></select></label><div class="field-row"><label>Wake<select><option>7:00 AM</option><option>Always on</option></select></label><label>Sleep<select><option>8:00 PM</option><option>Never</option></select></label></div><div class="workflow-checks"><label><input type="checkbox" checked /> Auto-recover last-known-good content</label><label><input type="checkbox" /> Notify admin when offline for 5 minutes</label></div></div>', context: '<h3>Player heartbeat</h3><p>Chrome · 4K · player v0.4.1</p><div class="workflow-summary"><div><small>STATUS</small><strong>Online · 18s ago</strong></div><div><small>LAST RENDER</small><strong>Successful</strong></div><div><small>PAIRING</small><strong>Device-bound token</strong></div></div>' },
-  automation: { eyebrow: 'AUTOMATION WORKFLOW', title: 'Edit automation rule', description: 'Build the trigger, actions, cooldowns, and replay policy as one auditable rule.', steps: ['Trigger','Actions','Guardrails','Dry run'], primary: 'Run dry test', canvas: '<h3>Rule definition</h3><p>Every destination gets its own idempotency key and retry state.</p><div class="workflow-form"><label>Rule name<input value="Sales goal crossed" /></label><div class="field-row"><label>Metric<select><option>Net sales today</option><option>Open pipeline</option></select></label><label>Condition<select><option>Reaches $65,000</option><option>Crosses 100% of goal</option></select></label></div><div class="workflow-checks"><label><input type="checkbox" checked /> ✦ Play celebration</label><label><input type="checkbox" checked /> # Post to Slack</label><label><input type="checkbox" checked /> ⚔ Award 100 Kombat points</label></div><div class="field-row"><label>Cooldown<select><option>Once per day</option><option>4 hours</option></select></label><label>Quiet hours<select><option>8 PM–7 AM</option><option>None</option></select></label></div></div>', context: '<h3>Recent dry-run result</h3><p>1 match across the last 30 days; no duplicate event IDs.</p><div class="workflow-summary"><div><small>RULE STATE</small><strong>Draft version 4</strong></div><div><small>STALE METRIC</small><strong>Do not run</strong></div></div>' },
+  automation: { eyebrow: 'AUTOMATION WORKFLOW', title: 'Edit automation rule', description: 'Build the trigger, actions, cooldowns, and replay policy as one auditable rule.', steps: ['Trigger','Actions','Guardrails','Dry run'], primary: 'Run dry test', canvas: '<h3>Rule definition</h3><p>Every destination gets its own idempotency key and retry state.</p><div class="workflow-form"><label>Rule name<input value="Sales goal crossed" /></label><div class="field-row"><label>Metric<select><option>Net sales today</option><option>Open pipeline</option></select></label><label>Condition<select><option>Reaches $65,000</option><option>Crosses 100% of goal</option></select></label></div><div class="workflow-checks"><label><input type="checkbox" checked /> ✦ Play celebration</label><label><input type="checkbox" checked /> # Post to Slack</label><label><input type="checkbox" checked /> ⚔ Award 100 competition points</label></div><div class="field-row"><label>Cooldown<select><option>Once per day</option><option>4 hours</option></select></label><label>Quiet hours<select><option>8 PM–7 AM</option><option>None</option></select></label></div></div>', context: '<h3>Recent dry-run result</h3><p>1 match across the last 30 days; no duplicate event IDs.</p><div class="workflow-summary"><div><small>RULE STATE</small><strong>Draft version 4</strong></div><div><small>STALE METRIC</small><strong>Do not run</strong></div></div>' },
   runs: { eyebrow: 'AUTOMATION OBSERVABILITY', title: 'Automation run log', description: 'Inspect every evaluation, suppression, destination attempt, and replay.', steps: ['Runs','Details','Replay'], primary: 'Export log', canvas: '<h3>Recent runs</h3><p>Filter by rule, metric, outcome, destination, or event ID.</p><div class="run-ledger"><div class="run-row"><span>Today · 1:06</span><strong>Big deal landed · 3 actions</strong><b class="success">Succeeded</b></div><div class="run-row"><span>Today · 10:18</span><strong>Pipeline coverage · Slack + email</strong><b class="success">Succeeded</b></div><div class="run-row"><span>Yesterday</span><strong>Sales goal crossed · cooldown active</strong><b class="suppressed">Suppressed</b></div><div class="run-row"><span>Aug 10</span><strong>Big deal landed · duplicate event ID</strong><b class="suppressed">Deduped</b></div></div>', context: '<h3>Thirty-day health</h3><p>128 evaluations with no duplicate outcomes.</p><div class="workflow-summary"><div><small>SUCCESS</small><strong>100%</strong></div><div><small>SUPPRESSED</small><strong>14 expected</strong></div><div><small>RETRIES</small><strong>2 recovered</strong></div></div>' },
   celebration: { eyebrow: 'CELEBRATION WORKFLOW', title: 'Celebrate and recognize', description: 'Review wins, create a shoutout, and choose exactly where the moment appears.', steps: ['Choose win','Message','Audience','Preview'], primary: 'Preview shoutout', canvas: '<h3>Create a team shoutout</h3><p>Recognition can be sent without changing KPI or scoring records.</p><div class="workflow-form"><label>Person or team<select><option>Maya Patel · $18,420 deal</option><option>Sales team · crossed 80%</option><option>Custom recognition</option></select></label><label>Message<textarea>You crushed it—great discovery, follow-through, and a huge finish.</textarea></label><div class="workflow-checks"><label><input type="checkbox" checked /> Celebration HQ</label><label><input type="checkbox" checked /> Sales Floor TV</label><label><input type="checkbox" /> Slack #sales-wins</label></div></div>', context: '<h3>Moment preview</h3><p>Respects quiet hours, device volume, and reduced motion.</p><div class="workflow-preview"><span>✦</span><strong>Huge win, Maya!</strong><small>Victory Splash · high hype</small></div>' },
   sound: { eyebrow: 'SOUND WORKFLOW', title: 'Upload and assign sound', description: 'Validate ownership, preview volume, tag the asset, and assign safe triggers.', steps: ['Upload','Review','Assign','Publish'], primary: 'Validate sound', canvas: '<h3>Add a sound asset</h3><p>Supported: MP3, WAV, or M4A up to 25MB.</p><div class="workflow-drop"><span>↑</span><strong>Drop a sound here or browse</strong><small>Virus scan, duration, loudness, and waveform validation run before publishing.</small></div><div class="workflow-form"><div class="field-row"><label>Name<input value="Victory Splash" /></label><label>Tags<input value="Win, Water" /></label></div><div class="workflow-checks"><label><input type="checkbox" checked /> I own or have permission to use this audio</label><label><input type="checkbox" checked /> Normalize loudness for shared displays</label></div></div>', context: '<h3>Assignment preview</h3><p>Choose event, team scope, volume, cooldown, and quiet-hour behavior.</p><div class="workflow-summary"><div><small>TRIGGERS</small><strong>Deal won · Team goal</strong></div><div><small>VOLUME</small><strong>80% · normalized</strong></div></div>' },
-  game: { eyebrow: 'KOMBAT ASSET WORKFLOW', title: 'Customize game asset', description: 'Edit names, sprites, arenas, sounds, scoring, and responsive preview modes.', steps: ['Choose asset','Customize','Test','Publish'], primary: 'Test in game', canvas: '<h3>Asset library</h3><p>Use a preset, upload tenant-owned artwork, or create a reusable game asset.</p><div class="workflow-grid"><button class="workflow-card is-selected" type="button"><span>•ᴗ•</span><strong>Leucistic fighter</strong><small>Team sprite · transparent PNG</small><i>Selected</i></button><button class="workflow-card" type="button"><span>🌊</span><strong>Aquatic arena</strong><small>Responsive background + safe zones</small><i>Choose</i></button><button class="workflow-card" type="button"><span>♫</span><strong>Victory Splash</strong><small>3 seconds · normalized</small><i>Choose</i></button><button class="workflow-card" type="button"><span>↑</span><strong>Upload asset</strong><small>PNG, SVG, WebP, MP3, WAV</small><i>Add new</i></button></div>', context: '<h3>Asset checks</h3><p>Transparent edges, TV/mobile safe zones, licensing, and file scanning are required.</p><div class="workflow-summary"><div><small>MOBILE</small><strong>390px preview passes</strong></div><div><small>TV</small><strong>4K safe zone passes</strong></div></div>' },
+  game: { eyebrow: 'TEAM COMPETITION ASSETS', title: 'Customize competition asset', description: 'Edit names, avatars, arenas, sounds, scoring, and responsive competition previews.', steps: ['Choose asset','Customize','Test','Publish'], primary: 'Test in competition', canvas: '<h3>Competition asset library</h3><p>Use a preset, upload tenant-owned artwork, or create a reusable competition asset.</p><div class="workflow-grid"><button class="workflow-card is-selected" type="button"><span>•ᴗ•</span><strong>Leucistic avatar</strong><small>Team avatar · transparent PNG</small><i>Selected</i></button><button class="workflow-card" type="button"><span>🌊</span><strong>Aquatic arena</strong><small>Responsive background + safe zones</small><i>Choose</i></button><button class="workflow-card" type="button"><span>♫</span><strong>Victory Splash</strong><small>3 seconds · normalized</small><i>Choose</i></button><button class="workflow-card" type="button"><span>↑</span><strong>Upload asset</strong><small>PNG, SVG, WebP, MP3, WAV</small><i>Add new</i></button></div>', context: '<h3>Asset checks</h3><p>Transparent edges, TV/mobile safe zones, licensing, and file scanning are required.</p><div class="workflow-summary"><div><small>MOBILE</small><strong>390px preview passes</strong></div><div><small>TV</small><strong>4K safe zone passes</strong></div></div>' },
   brand: { eyebrow: 'BRAND PUBLISHING', title: 'Complete your brand system', description: 'Finish logo, colors, type, language, domains, and accessibility before publishing.', steps: ['Identity','Theme','Language','Review'], primary: 'Continue to theme', canvas: '<h3>Brand setup</h3><p>One versioned theme powers dashboards, celebrations, sounds, games, shares, and TV.</p><div class="workflow-form"><label>Logo asset<input value="axoboard-logo-low-poly.png" /></label><div class="field-row"><label>Primary color<input type="color" value="#E96F98" /></label><label>Accent color<input type="color" value="#43BDE8" /></label></div><label>Heading font<select><option>Fredoka</option><option>DM Sans</option><option>Customer font upload</option></select></label><div class="workflow-checks"><label><input type="checkbox" checked /> Apply to dashboards</label><label><input type="checkbox" checked /> Apply to TV, celebrations, and games</label></div></div>', context: '<h3>Publish checklist</h3><p>Theme changes produce a previewable version with rollback.</p><div class="workflow-summary"><div><small>CONTRAST</small><strong>WCAG AA passes</strong></div><div><small>MOBILE</small><strong>All routes pass</strong></div><div><small>ROLLBACK</small><strong>Previous version retained</strong></div></div>' },
   data: { eyebrow: 'DATA DETAIL', title: 'Export and metric history', description: 'Inspect definition changes, refresh history, annotations, and permitted exports.', steps: ['History','Compare','Export'], primary: 'Prepare export', canvas: '<h3>Metric history</h3><p>Value and definition changes remain independently auditable.</p><div class="run-ledger"><div class="run-row"><span>Today · 2m</span><strong>$55,396 · successful refresh</strong><b class="success">Fresh</b></div><div class="run-row"><span>Today · 9:00</span><strong>$42,180 · successful refresh</strong><b class="success">Fresh</b></div><div class="run-row"><span>Aug 8</span><strong>Definition changed by Sales Ops</strong><b class="suppressed">Version 3</b></div></div><div class="workflow-form"><label>Export format<select><option>CSV · visible permitted rows</option><option>CSV · metric snapshots</option><option>PDF · audit summary</option></select></label></div>', context: '<h3>Export policy</h3><p>Exports respect tenant, share-grant, field allowlist, and provider permissions.</p><div class="workflow-summary"><div><small>ROWS</small><strong>48 permitted</strong></div><div><small>REDACTION</small><strong>2 fields hidden</strong></div></div>' },
   customer: { eyebrow: 'CUSTOMER ONBOARDING', title: 'Launch your AxoBoard workspace', description: 'Get from sign-up to a trusted, branded dashboard and first team moment.', steps: ['Workspace','Brand','Data','Team','Launch'], primary: 'Continue setup', canvas: '<h3>Workspace foundation</h3><p>This creates a separate tenant boundary for the customer.</p><div class="workflow-form"><div class="field-row"><label>Workspace name<input data-customer-workspace value="Acme Sales" /></label><label>Timezone<select><option>America/Denver</option><option>America/New_York</option><option>America/Los_Angeles</option></select></label></div><label>Primary use case<select><option>Sales performance & celebrations</option><option>Customer support operations</option><option>Executive scorecards</option><option>Custom team performance</option></select></label><div class="workflow-checks"><label><input type="checkbox" checked /> Start with the Sales Daily Command recipe</label><label><input type="checkbox" checked /> Include mobile and TV layouts</label></div></div>', context: '<h3>Customer outcome</h3><p>A branded workspace, first trusted KPI, invited team, and tested celebration—not an empty canvas.</p><div class="workflow-summary"><div><small>TARGET TIME</small><strong>Under 10 minutes</strong></div><div><small>DATA BOUNDARY</small><strong>Tenant isolated</strong></div></div>' },
   members: { eyebrow: 'PEOPLE & PERMISSIONS', title: 'Invite and manage members', description: 'Give each person the minimum role needed and keep customer access auditable.', steps: ['People','Roles','Invite','Review'], primary: 'Review invitations', canvas: '<h3>Invite teammates</h3><p>Invitations are scoped to this workspace and expire automatically.</p><div class="workflow-form"><label>Email addresses<textarea placeholder="maya@acme.co\nethan@acme.co"></textarea></label><div class="field-row"><label>Role<select><option>Viewer</option><option>Editor</option><option>Automation manager</option><option>Workspace admin</option></select></label><label>Invitation expires<select><option>In 7 days</option><option>In 24 hours</option><option>In 30 days</option></select></label></div><div class="workflow-checks"><label><input type="checkbox" checked /> Send onboarding checklist</label><label><input type="checkbox" /> Require MFA before editor access</label></div></div>', context: '<h3>Role boundaries</h3><p>Viewers cannot edit, connect sources, publish, export, or manage billing.</p><div class="workflow-summary"><div><small>OWNER</small><strong>Full control</strong></div><div><small>EDITOR</small><strong>Draft + publish content</strong></div><div><small>VIEWER</small><strong>Published views only</strong></div></div>' },
-  billing: { eyebrow: 'PLAN & BILLING', title: 'Manage plan and usage', description: 'Understand limits, billing ownership, invoices, and what grows with the customer.', steps: ['Plan','Usage','Billing','Confirm'], primary: 'Review plan', canvas: '<h3>Commercial plan</h3><p>Choose capacity without charging every person who needs visibility.</p><div class="workflow-grid"><button class="workflow-card" type="button"><span>◌</span><strong>Starter · $99/mo</strong><small>3 sources · 1 screen · core dashboards</small><i>Available</i></button><button class="workflow-card is-selected" type="button"><span>✦</span><strong>Growth · $249/mo</strong><small>10 sources · 5 screens · sounds and games</small><i>Current beta</i></button><button class="workflow-card" type="button"><span>◇</span><strong>Scale · $599/mo</strong><small>30 sources · governance · priority support</small><i>Available</i></button><button class="workflow-card" type="button"><span>＋</span><strong>Enterprise</strong><small>SSO, SLA, custom capacity and retention</small><i>Contact sales</i></button></div>', context: '<h3>Metered dimensions</h3><p>Usage warnings arrive before limits. Additional charges always require an explicit choice.</p><div class="workflow-summary"><div><small>VIEWERS</small><strong>Unlimited</strong></div><div><small>CAPACITY</small><strong>Sources · screens · automation</strong></div><div><small>OVERAGE POLICY</small><strong>Warn before charge</strong></div></div>' },
+  billing: { eyebrow: 'PLAN & BILLING', title: 'Manage plan and usage', description: 'Understand limits, billing ownership, invoices, and what grows with the customer.', steps: ['Plan','Usage','Billing','Confirm'], primary: 'Review plan', canvas: '<h3>Commercial plan roadmap</h3><p>Choose capacity without charging every person who needs visibility.</p><div class="workflow-grid"><button class="workflow-card is-selected" type="button"><span>◌</span><strong>Starter · $99/mo</strong><small>3 sources · 1 screen · core dashboards</small><i>Launch target</i></button><button class="workflow-card" type="button"><span>✦</span><strong>Growth · $249/mo</strong><small>10 sources · 5 screens · sounds and competitions</small><i>Roadmap</i></button><button class="workflow-card" type="button"><span>◇</span><strong>Scale · $599/mo</strong><small>30 sources · governance · priority support</small><i>Roadmap</i></button><button class="workflow-card" type="button"><span>＋</span><strong>Enterprise</strong><small>SSO, SLA, custom capacity and retention</small><i>Contact sales</i></button></div>', context: '<h3>Metered dimensions</h3><p>Usage warnings arrive before limits. Additional charges always require an explicit choice.</p><div class="workflow-summary"><div><small>VIEWERS</small><strong>Unlimited</strong></div><div><small>CAPACITY</small><strong>Sources · screens · automation</strong></div><div><small>OVERAGE POLICY</small><strong>Warn before charge</strong></div></div>' },
   support: { eyebrow: 'CUSTOMER SUCCESS', title: 'Get AxoBoard support', description: 'Ask for help without exposing secrets, tokens, or unrelated customer data.', steps: ['Issue','Diagnostics','Contact'], primary: 'Prepare support request', canvas: '<h3>How can we help?</h3><p>A support bundle includes only approved workspace diagnostics.</p><div class="workflow-form"><label>Topic<select><option>Setup and onboarding</option><option>Data source or freshness</option><option>Dashboard or display</option><option>Automation or celebration</option><option>Billing and account</option></select></label><label>What happened?<textarea placeholder="Tell us what you expected and what you saw."></textarea></label><div class="workflow-checks"><label><input type="checkbox" checked /> Include connection health and recent error codes</label><label><input type="checkbox" checked /> Include browser and AxoBoard version</label><label><input type="checkbox" /> Include redacted automation run IDs</label></div></div>', context: '<h3>Privacy boundary</h3><p>Support bundles exclude OAuth tokens, raw credentials, private sound assets, and unrelated tenant records.</p><div class="workflow-summary"><div><small>RESPONSE TARGET</small><strong>Defined by plan</strong></div><div><small>STATUS PAGE</small><strong>All systems healthy</strong></div></div>' },
   guide: { eyebrow: 'SETUP GUIDE', title: 'Customer setup guide', description: 'A short, outcome-led path from workspace creation to launch.', steps: ['Brand','Connect','Build','Invite','Launch'], primary: 'Start guided setup', canvas: '<h3>Recommended launch path</h3><p>Each step has a success signal and a recovery path.</p><ul class="workflow-list"><li><span>1</span><div><strong>Make it recognizable</strong><small>Logo, colors, language, and mobile preview</small></div><button type="button">Open</button></li><li><span>2</span><div><strong>Connect one trusted source</strong><small>OAuth, mapping, freshness, and owner</small></div><button type="button">Open</button></li><li><span>3</span><div><strong>Publish the first outcome recipe</strong><small>Dashboard, goal, alert, celebration, and loop</small></div><button type="button">Open</button></li><li><span>4</span><div><strong>Invite the right people</strong><small>Viewer, editor, manager, and admin roles</small></div><button type="button">Open</button></li></ul>', context: '<h3>Launch definition</h3><p>The customer can explain AxoBoard in 60 seconds and operate it without babysitting.</p><div class="workflow-summary"><div><small>FIRST VALUE</small><strong>Published KPI</strong></div><div><small>TEAM MOMENT</small><strong>Tested celebration</strong></div></div>' },
   oauth: { eyebrow: 'FRESH OAUTH TEST', title: 'Authorize a new connection', description: 'Start from provider consent without importing or reusing any existing credential.', steps: ['Preflight','Consent','Callback','Verify'], primary: 'Review fresh consent', canvas: '<h3 data-oauth-heading>Fresh OAuth preflight</h3><p data-oauth-copy>No cached account or connection will be used.</p><div class="oauth-contract"><div><small>ATTEMPT</small><strong data-oauth-attempt>New session</strong></div><div><small>TENANT</small><strong>Current workspace only</strong></div><div><small>CREDENTIAL REUSE</small><strong>Blocked</strong></div><div><small>LIVE TOKEN</small><strong>Not stored in this prototype</strong></div></div><div class="workflow-checks"><label><input type="checkbox" checked disabled /> Generate a unique state value for callback validation</label><label><input type="checkbox" checked disabled /> Use AxoBoard-owned client credentials only</label><label><input type="checkbox" checked disabled /> Encrypt tenant-scoped tokens server-side in production</label><label><input type="checkbox" checked disabled /> Expose disconnect, revocation, expiry, and retry status</label></div>', context: '<h3>Prototype boundary</h3><p data-oauth-boundary>This validates the onboarding contract, not a real provider token exchange.</p><div class="credential-boundary compact"><b>No credential import</b><span>Existing service accounts, portal tokens, browser sessions, and prior OAuth grants are never read or copied into a new workspace.</span></div><div class="workflow-summary"><div><small>CALLBACK</small><strong>/api/oauth/{provider}/callback</strong></div><div><small>STATUS</small><strong>Provider app registration required</strong></div></div>' },
@@ -545,6 +663,7 @@ function renderWorkflow() {
   document.querySelector('#workflowTitle').textContent = definition.title;
   document.querySelector('#workflowDescription').textContent = definition.description;
   document.querySelector('#workflowCanvas').innerHTML = definition.canvas;
+  document.querySelector('#workflowCanvas').onchange = null;
   document.querySelector('#workflowContext').innerHTML = definition.context;
   if (activeWorkflow === 'customer') document.querySelector('[data-customer-workspace]').value = betaState.workspaceName;
   if (activeWorkflow === 'workspace') {
@@ -560,6 +679,7 @@ function renderWorkflow() {
     document.querySelector('[data-oauth-boundary]').textContent = `Live ${providerName} redirect is intentionally unavailable until an AxoBoard-owned OAuth app, approved scopes, and exact callback URI are configured.`;
   }
   updateWorkflowProgress();
+  if (activeWorkflow === 'layout') wireLayoutWorkflow();
   document.querySelectorAll('#workflowCanvas .workflow-card').forEach((card) => {
     card.dataset.interactionStatus = 'working';
     card.addEventListener('click', () => card.parentElement.querySelectorAll('.workflow-card').forEach((item) => item.classList.toggle('is-selected', item === card)));
@@ -573,8 +693,9 @@ function renderWorkflow() {
 function updateWorkflowProgress() {
   const definition = workflowDefinitions[activeWorkflow] || workflowDefinitions.generic;
   document.querySelector('#workflowProgress').innerHTML = definition.steps.map((step, index) => `${index ? '<i></i>' : ''}<span data-step="${index + 1}" class="${index === workflowStep ? 'is-active' : ''}">${step}</span>`).join('');
-  document.querySelector('#workflowPrimary').textContent = workflowStep === definition.steps.length - 1 ? 'Save draft' : definition.primary;
-  document.querySelector('#workflowStatus').textContent = `Step ${workflowStep + 1} of ${definition.steps.length} · prototype draft`;
+  const isFinalStep = workflowStep === definition.steps.length - 1;
+  document.querySelector('#workflowPrimary').textContent = activeWorkflow === 'layout' && isFinalStep ? 'Save layout' : isFinalStep ? 'Save draft' : definition.primary;
+  document.querySelector('#workflowStatus').textContent = `Step ${workflowStep + 1} of ${definition.steps.length} · ${activeWorkflow === 'layout' ? 'browser draft' : 'prototype draft'}`;
 }
 
 function openWorkflow(type, trigger = document.activeElement, titleOverride = '') {
@@ -584,6 +705,10 @@ function openWorkflow(type, trigger = document.activeElement, titleOverride = ''
     activeFeatureModal = null;
   }
   activeWorkflow = workflowDefinitions[type] ? type : 'generic';
+  if (activeWorkflow === 'layout') {
+    layoutEditSnapshot = cloneDashboardLayout(betaState.dashboardLayout);
+    layoutDraft = cloneDashboardLayout(betaState.dashboardLayout);
+  }
   workflowStep = 0;
   renderWorkflow();
   if (titleOverride) document.querySelector('#workflowTitle').textContent = titleOverride;
@@ -636,6 +761,16 @@ document.querySelector('#workflowPrimary').addEventListener('click', () => {
     return;
   }
   const completedWorkflows = [...new Set([...betaState.completedWorkflows, activeWorkflow])];
+  if (activeWorkflow === 'layout') {
+    const savedLayout = cloneDashboardLayout(layoutDraft);
+    persistBetaState({ dashboardLayout: savedLayout, completedWorkflows, draftCount: betaState.draftCount + 1 });
+    applyDashboardLayout(savedLayout);
+    layoutEditSnapshot = null;
+    layoutDraft = null;
+    closeFeatureModal(document.querySelector('#workflowModal'));
+    showToast('Dashboard layout saved', 'Saved in this browser for this prototype workspace. Nothing was published to a server.');
+    return;
+  }
   const workspaceValue = document.querySelector('[data-customer-workspace]')?.value.trim();
   const selectedWorkspace = activeWorkflow === 'workspace' ? document.querySelector('#workflowCanvas [data-workspace-id].is-selected')?.dataset.workspaceId : null;
   persistBetaState({ completedWorkflows, draftCount: betaState.draftCount + 1, ...(workspaceValue ? { workspaceName: workspaceValue } : {}) });
@@ -669,8 +804,8 @@ document.querySelectorAll('[data-empty-workflow]').forEach((button) => button.ad
 document.querySelectorAll('.workspace-empty-state [data-screen]').forEach((button) => button.addEventListener('click', () => showScreen(button.dataset.screen)));
 
 const workflowBindings = [
-  ['.workspace-switcher button', 'workspace'], ['.sidebar-user button', 'profile'],
-  ['.dashboard-toolbar button:not(#openTvMode)', 'dashboard'], ['.kpi-card header button', 'kpi'], ['.attention-card li button', 'alert'], ['.attention-card > button', 'alert'],
+  ['.workspace-switcher button, .mobile-workspace-switch', 'workspace'], ['.sidebar-user button', 'profile'],
+  ['.dashboard-toolbar button:not(#openTvMode):not(#editLayoutButton)', 'dashboard'], ['#editLayoutButton', 'layout'], ['.kpi-card header button', 'kpi'], ['.attention-card li button', 'alert'], ['.attention-card > button', 'alert'],
   ['#browseIntegrations', 'connector'], ['.integration-catalog button', 'connector'], ['.connect-source', 'connection'],
   ['#pairScreenButton, .display-summary button, .screen-device footer button, .add-loop-view', 'screen'],
   ['.rule-card footer button, #newAutomationButton', 'automation'], ['#viewRunLogButton', 'runs'],
@@ -704,7 +839,7 @@ document.querySelectorAll('[data-plan-cycle]').forEach((button) => button.addEve
   const cycle = button.dataset.planCycle;
   document.querySelectorAll('[data-plan-cycle]').forEach((choice) => choice.classList.toggle('is-active', choice === button));
   document.querySelectorAll('[data-monthly][data-annual]').forEach((price) => { price.textContent = price.dataset[cycle]; });
-  document.querySelectorAll('[data-price-note]').forEach((note) => { note.textContent = cycle === 'annual' ? 'Billed annually' : 'Cancel anytime'; });
+  document.querySelectorAll('[data-price-note]').forEach((note) => { note.textContent = cycle === 'annual' ? 'Billed annually' : 'Billing terms at checkout'; });
   showToast(cycle === 'annual' ? 'Annual pricing applied' : 'Monthly pricing applied', cycle === 'annual' ? 'The displayed monthly rate is billed as one annual commitment.' : 'Flexible monthly billing is shown.');
 }));
 
@@ -740,9 +875,10 @@ new MutationObserver((mutations) => {
   }));
 }).observe(document.body, { childList: true, subtree: true });
 
-const initialScreen = location.hash.slice(1);
+const initialScreen = location.hash.slice(1) === 'kombat' ? 'competitions' : location.hash.slice(1);
 brandColor.value = betaState.brandColor;
 celebrationLanguage.value = betaState.celebrationLanguage;
 applyWorkspaceMode();
+applyDashboardLayout(betaState.dashboardLayout);
 if (screens.some((screen) => screen.dataset.screenPanel === initialScreen)) showScreen(initialScreen);
 syncCelebrationPreview();

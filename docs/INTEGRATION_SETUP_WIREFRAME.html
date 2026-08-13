@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AxoBoard direct integration setup wireframe</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #fffafb;
+      --fg: #2b1f30;
+      --muted: #655868;
+      --line: #8d7b88;
+      --neutral: #f5edf1;
+      --input: #d9f5fe;
+      --process: #fbe3ec;
+      --storage: #e8f7e8;
+      --external: #fff0c7;
+      --risk: #ffe0dc;
+      --zone: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 1140px;
+      margin: 32px auto;
+      padding: 0 20px 32px;
+    }
+    svg { width: 100%; height: auto; display: block; }
+    .title { font-size: 26px; font-weight: 750; fill: var(--fg); }
+    .subtitle { font-size: 14px; fill: var(--muted); }
+    .lane-title { font-size: 14px; font-weight: 750; fill: var(--fg); letter-spacing: .04em; }
+    .label { font-size: 14px; font-weight: 700; fill: var(--fg); }
+    .small { font-size: 12px; fill: var(--muted); }
+    .tiny { font-size: 11px; fill: var(--muted); }
+    .step { font-size: 11px; font-weight: 800; fill: #a92c5a; }
+    .node { stroke: var(--line); stroke-width: 1; }
+    .neutral { fill: var(--neutral); }
+    .input { fill: var(--input); }
+    .process { fill: var(--process); }
+    .storage { fill: var(--storage); }
+    .external { fill: var(--external); }
+    .risk { fill: var(--risk); }
+    .edge { stroke: var(--line); stroke-width: 1.75; fill: none; }
+    .edge-dashed { stroke: #a92c5a; stroke-width: 1.5; fill: none; stroke-dasharray: 6 5; }
+    .zone { fill: var(--zone); stroke: #d7c8d2; stroke-width: 1; stroke-dasharray: 7 6; }
+    .badge { fill: #a92c5a; }
+    .badge-text { font-size: 11px; font-weight: 750; fill: white; }
+    @media (max-width: 640px) {
+      main { margin-top: 16px; padding-inline: 10px; overflow-x: auto; }
+      svg { min-width: 980px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <svg viewBox="0 0 1100 930" role="img" aria-labelledby="diagramTitle diagramDescription">
+    <title id="diagramTitle">AxoBoard direct integration setup</title>
+    <desc id="diagramDescription">A three-lane flow separating one-time AxoBoard owner configuration, per-customer connection and KPI setup, and continuous production safeguards.</desc>
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0L10 5L0 10Z" fill="#8d7b88"></path>
+      </marker>
+      <marker id="arrowPink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0L10 5L0 10Z" fill="#a92c5a"></path>
+      </marker>
+    </defs>
+
+    <text x="30" y="42" class="title">AxoBoard direct-integration setup</text>
+    <text x="30" y="68" class="subtitle">Build each provider once; let every customer authorize only their own account and data.</text>
+
+    <rect x="20" y="92" width="1060" height="248" rx="18" class="zone"></rect>
+    <rect x="20" y="366" width="1060" height="292" rx="18" class="zone"></rect>
+    <rect x="20" y="684" width="1060" height="216" rx="18" class="zone"></rect>
+
+    <!-- Connectors are drawn first so arrows remain behind nodes. -->
+    <path d="M270 216H305" class="edge" marker-end="url(#arrow)"></path>
+    <path d="M515 216H550" class="edge" marker-end="url(#arrow)"></path>
+    <path d="M760 216H795" class="edge" marker-end="url(#arrow)"></path>
+    <path d="M910 276V388H220V420" class="edge-dashed" marker-end="url(#arrowPink)"></path>
+    <path d="M270 502H305" class="edge" marker-end="url(#arrow)"></path>
+    <path d="M515 502H550" class="edge" marker-end="url(#arrow)"></path>
+    <path d="M760 502H795" class="edge" marker-end="url(#arrow)"></path>
+    <path d="M910 584V712" class="edge" marker-end="url(#arrow)"></path>
+    <path d="M795 796H665" class="edge" marker-end="url(#arrow)"></path>
+    <path d="M435 796H305" class="edge" marker-end="url(#arrow)"></path>
+
+    <text x="44" y="121" class="lane-title">ONCE PER PROVIDER · AXOBOARD OWNER</text>
+    <text x="44" y="142" class="tiny">You configure this once for Google Sheets, then repeat the same contract for Shopify, HubSpot, Wix, Microsoft, and Salesforce.</text>
+
+    <g>
+      <rect x="60" y="166" width="210" height="110" rx="14" class="node external"></rect>
+      <text x="80" y="188" class="step">1 · PROVIDER APP</text>
+      <text x="80" y="215" class="label">Create developer app</text>
+      <text x="80" y="238" class="small">AxoBoard-owned client</text>
+      <text x="80" y="256" class="small">Separate dev + production</text>
+    </g>
+    <g>
+      <rect x="305" y="166" width="210" height="110" rx="14" class="node input"></rect>
+      <text x="325" y="188" class="step">2 · CONSENT CONTRACT</text>
+      <text x="325" y="215" class="label">Set callback + scopes</text>
+      <text x="325" y="238" class="small">Exact axoboard.io URL</text>
+      <text x="325" y="256" class="small">Minimum provider access</text>
+    </g>
+    <g>
+      <rect x="550" y="166" width="210" height="110" rx="14" class="node risk"></rect>
+      <text x="570" y="188" class="step">3 · RAILWAY</text>
+      <text x="570" y="215" class="label">Store secrets</text>
+      <text x="570" y="238" class="small">Client ID + secret</text>
+      <text x="570" y="256" class="small">Token encryption key</text>
+    </g>
+    <g>
+      <rect x="795" y="166" width="245" height="110" rx="14" class="node process"></rect>
+      <text x="815" y="188" class="step">4 · CONNECTOR SERVICE</text>
+      <text x="815" y="215" class="label">Build provider adapter</text>
+      <text x="815" y="238" class="small">OAuth · discovery · refresh</text>
+      <text x="815" y="256" class="small">Disconnect · audit · retries</text>
+    </g>
+
+    <text x="44" y="395" class="lane-title">EACH CUSTOMER · GUIDED AXOBOARD FLOW</text>
+    <text x="44" y="416" class="tiny">The customer never sees AxoBoard’s client secret and never gives you a password.</text>
+
+    <g>
+      <rect x="60" y="442" width="210" height="142" rx="14" class="node neutral"></rect>
+      <text x="80" y="466" class="step">1 · CHOOSE</text>
+      <text x="80" y="493" class="label">Add integration</text>
+      <text x="80" y="516" class="small">Pick a provider</text>
+      <text x="80" y="534" class="small">See requested access</text>
+      <text x="80" y="552" class="small">Name the connection</text>
+    </g>
+    <g>
+      <rect x="305" y="442" width="210" height="142" rx="14" class="node external"></rect>
+      <text x="325" y="466" class="step">2 · AUTHORIZE</text>
+      <text x="325" y="493" class="label">Provider consent</text>
+      <text x="325" y="516" class="small">State + PKCE verified</text>
+      <text x="325" y="534" class="small">Customer chooses account</text>
+      <text x="325" y="552" class="small">Callback belongs to tenant</text>
+    </g>
+    <g>
+      <rect x="550" y="442" width="210" height="142" rx="14" class="node input"></rect>
+      <text x="570" y="466" class="step">3 · MAP</text>
+      <text x="570" y="493" class="label">Select data + KPI</text>
+      <text x="570" y="516" class="small">File/object → field/range</text>
+      <text x="570" y="534" class="small">Filter → aggregate → goal</text>
+      <text x="570" y="552" class="small">Preview sample + freshness</text>
+    </g>
+    <g>
+      <rect x="795" y="442" width="245" height="142" rx="14" class="node process"></rect>
+      <text x="815" y="466" class="step">4 · VERIFY + PUBLISH</text>
+      <text x="815" y="493" class="label">Approve trusted score</text>
+      <text x="815" y="516" class="small">Definition + lineage visible</text>
+      <text x="815" y="534" class="small">Publish version + rollback</text>
+      <text x="815" y="552" class="small">Grant audience permissions</text>
+    </g>
+
+    <text x="44" y="713" class="lane-title">CONTINUOUSLY · PRODUCTION TRUST LOOP</text>
+    <text x="44" y="734" class="tiny">A KPI that cannot prove freshness or tenant ownership is blocked from downstream alerts and competitions.</text>
+
+    <g>
+      <rect x="795" y="752" width="245" height="96" rx="14" class="node process"></rect>
+      <text x="815" y="776" class="step">SYNC WORKER</text>
+      <text x="815" y="803" class="label">Fetch + normalize</text>
+      <text x="815" y="826" class="small">Rate limits · retries · backoff</text>
+    </g>
+    <g>
+      <rect x="435" y="752" width="230" height="96" rx="14" class="node storage"></rect>
+      <text x="455" y="776" class="step">TENANT DATA PLANE</text>
+      <text x="455" y="803" class="label">Encrypted tokens + cache</text>
+      <text x="455" y="826" class="small">No credentials in browser/logs</text>
+    </g>
+    <g>
+      <rect x="60" y="752" width="245" height="96" rx="14" class="node risk"></rect>
+      <text x="80" y="776" class="step">HEALTH + RECOVERY</text>
+      <text x="80" y="803" class="label">Freshness before action</text>
+      <text x="80" y="826" class="small">Reconnect · alert · last good value</text>
+    </g>
+
+    <rect x="60" y="860" width="980" height="24" rx="12" class="badge"></rect>
+    <text x="550" y="877" text-anchor="middle" class="badge-text">NON-NEGOTIABLE: tenant ownership on every provider call · encrypted tokens · idempotent sync · observable failures</text>
+  </svg>
+</main>
+</body>
+</html>

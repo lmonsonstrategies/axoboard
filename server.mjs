@@ -26,8 +26,24 @@ const contentTypes = new Map([
 const pageRoutes = new Map([
   ['/', 'landing.html'], ['/features', 'landing.html'], ['/integrations', 'landing.html'],
   ['/pricing', 'landing.html'], ['/faq', 'landing.html'], ['/login', 'auth.html'],
-  ['/signup', 'auth.html'], ['/demo', 'index.html'], ['/app', 'index.html']
+  ['/signup', 'auth.html']
 ]);
+const publicStaticFiles = new Set(['marketing.css', 'marketing.js', 'auth.js']);
+const publicAssetFiles = new Set([
+  'assets/axoboard-wordmark-signature.svg',
+  'assets/favicon/favicon-16.png',
+  'assets/favicon/favicon-32.png',
+  'assets/favicon/favicon-192.png',
+  'assets/favicon/apple-touch-icon.png'
+]);
+const productFiles = new Map([
+  ['/app', 'index.html'],
+  ['/app.js', 'app.js'],
+  ['/styles.css', 'styles.css'],
+  ['/assets/integrations/google-sheets.svg', 'assets/integrations/google-sheets.svg'],
+  ['/assets/integrations/hubspot.svg', 'assets/integrations/hubspot.svg']
+]);
+const paidAccessRedirect = '/pricing?access=subscription_required';
 
 const rateBuckets = new Map();
 
@@ -117,10 +133,24 @@ function validateSignup(body) {
   return null;
 }
 
-async function createSession(client, userId) {
+async function createSession(client, userId, workspaceId) {
   const token = randomBytes(32).toString('base64url');
-  await client.query('INSERT INTO sessions (id, user_id, token_digest, expires_at) VALUES ($1, $2, $3, $4)', [randomUUID(), userId, tokenDigest(token), new Date(Date.now() + sessionLifetimeMs)]);
+  await client.query('INSERT INTO sessions (id, user_id, workspace_id, token_digest, expires_at) VALUES ($1, $2, $3, $4, $5)', [randomUUID(), userId, workspaceId, tokenDigest(token), new Date(Date.now() + sessionLifetimeMs)]);
   return token;
+}
+
+function canAccessApp(status) { return status === 'active'; }
+
+async function workspaceAccessForUser(client, userId) {
+  const result = await client.query(`
+    SELECT m.workspace_id, COALESCE(s.status, 'pending_payment') AS billing_status
+    FROM memberships m
+    LEFT JOIN subscriptions s ON s.workspace_id = m.workspace_id
+    WHERE m.user_id = $1
+    ORDER BY m.created_at ASC
+    LIMIT 1
+  `, [userId]);
+  return result.rows[0] || null;
 }
 
 async function currentSession(req) {
@@ -128,11 +158,18 @@ async function currentSession(req) {
   const token = parseCookies(req)[sessionCookie];
   if (!token) return null;
   const result = await pool.query(`
-    SELECT u.id, u.email, u.full_name, w.id AS workspace_id, w.name AS workspace_name, m.role
-    FROM sessions s JOIN users u ON u.id = s.user_id JOIN memberships m ON m.user_id = u.id JOIN workspaces w ON w.id = m.workspace_id
-    WHERE s.token_digest = $1 AND s.expires_at > NOW() ORDER BY m.created_at ASC LIMIT 1
+    SELECT u.id, u.email, u.full_name, w.id AS workspace_id, w.name AS workspace_name, m.role,
+      COALESCE(b.status, 'pending_payment') AS billing_status
+    FROM sessions s
+    JOIN users u ON u.id = s.user_id
+    JOIN memberships m ON m.user_id = u.id AND m.workspace_id = s.workspace_id
+    JOIN workspaces w ON w.id = s.workspace_id
+    LEFT JOIN subscriptions b ON b.workspace_id = w.id
+    WHERE s.token_digest = $1 AND s.expires_at > NOW()
+    LIMIT 1
   `, [tokenDigest(token)]);
-  return result.rows[0] || null;
+  const session = result.rows[0] || null;
+  return session ? { ...session, can_access_app: canAccessApp(session.billing_status) } : null;
 }
 
 async function handleAuth(req, res, pathname) {
@@ -140,7 +177,9 @@ async function handleAuth(req, res, pathname) {
   if (!sameOrigin(req)) return sendJson(res, 403, { error: 'Request origin was not accepted.' });
   if (pathname === '/api/auth/session' && req.method === 'GET') {
     const session = await currentSession(req);
-    return sendJson(res, 200, { authenticated: Boolean(session), user: session || undefined });
+    if (!session) return sendJson(res, 200, { authenticated: false, canAccessApp: false });
+    const { billing_status: billingStatus, can_access_app: canAccess, ...user } = session;
+    return sendJson(res, 200, { authenticated: true, canAccessApp: canAccess, billing: { status: billingStatus }, user });
   }
   if (pathname === '/api/auth/signup' && req.method === 'POST') {
     if (isRateLimited(req, 'signup', 8)) return sendJson(res, 429, { error: 'Too many attempts. Try again in 15 minutes.' });
@@ -155,9 +194,10 @@ async function handleAuth(req, res, pathname) {
       await client.query('INSERT INTO users (id, email, full_name, password_hash) VALUES ($1, $2, $3, $4)', [userId, normalizeEmail(body.email), String(body.name).trim(), hashPassword(String(body.password))]);
       await client.query('INSERT INTO workspaces (id, name, timezone) VALUES ($1, $2, $3)', [workspaceId, String(body.workspaceName).trim(), String(body.timezone || 'America/Denver')]);
       await client.query('INSERT INTO memberships (id, workspace_id, user_id, role) VALUES ($1, $2, $3, $4)', [randomUUID(), workspaceId, userId, 'owner']);
-      const token = await createSession(client, userId);
+      await client.query('INSERT INTO subscriptions (id, workspace_id, status) VALUES ($1, $2, $3)', [randomUUID(), workspaceId, 'pending_payment']);
+      const token = await createSession(client, userId, workspaceId);
       await client.query('COMMIT');
-      return sendJson(res, 201, { ok: true, redirect: '/app' }, { 'Set-Cookie': sessionHeader(req, token) });
+      return sendJson(res, 201, { ok: true, redirect: paidAccessRedirect }, { 'Set-Cookie': sessionHeader(req, token) });
     } catch (error) {
       await client.query('ROLLBACK');
       if (error?.code === '23505') return sendJson(res, 409, { error: 'An account already exists for that email.' });
@@ -173,8 +213,10 @@ async function handleAuth(req, res, pathname) {
     if (!user || !verifyPassword(String(body.password || ''), user.password_hash)) return sendJson(res, 401, { error: 'Email or password is incorrect.' });
     const client = await pool.connect();
     try {
-      const token = await createSession(client, user.id);
-      return sendJson(res, 200, { ok: true, redirect: '/app' }, { 'Set-Cookie': sessionHeader(req, token) });
+      const workspaceAccess = await workspaceAccessForUser(client, user.id);
+      if (!workspaceAccess) return sendJson(res, 403, { error: 'This account is not assigned to a workspace.' });
+      const token = await createSession(client, user.id, workspaceAccess.workspace_id);
+      return sendJson(res, 200, { ok: true, redirect: canAccessApp(workspaceAccess.billing_status) ? '/app' : paidAccessRedirect }, { 'Set-Cookie': sessionHeader(req, token) });
     } finally { client.release(); }
   }
   if (pathname === '/api/auth/logout' && req.method === 'POST') {
@@ -189,8 +231,11 @@ function resolvePublicFile(pathname) {
   let decoded;
   try { decoded = decodeURIComponent(pathname); } catch { return null; }
   if (decoded.split(/[\\/]+/).includes('..')) return { error: 'invalid_path' };
-  const relative = pageRoutes.get(decoded) || normalize(decoded).replace(/^[/\\]+/, '');
-  const candidate = resolve(publicRoot, relative || 'landing.html');
+  const routeFile = pageRoutes.get(decoded);
+  const normalizedRelative = normalize(decoded).replace(/^[/\\]+/, '');
+  const relative = routeFile || (publicStaticFiles.has(normalizedRelative) || publicAssetFiles.has(normalizedRelative) ? normalizedRelative : '');
+  if (!relative) return { error: 'not_found' };
+  const candidate = resolve(publicRoot, relative);
   if (candidate !== publicRoot && !candidate.startsWith(`${publicRoot}${sep}`)) return { error: 'invalid_path' };
   if (existsSync(candidate) && statSync(candidate).isFile()) return { filePath: candidate };
   return { error: 'not_found' };
@@ -218,9 +263,73 @@ async function initializeDatabase() {
     CREATE TABLE IF NOT EXISTS users (id UUID PRIMARY KEY, email TEXT UNIQUE NOT NULL, full_name TEXT NOT NULL, password_hash TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
     CREATE TABLE IF NOT EXISTS workspaces (id UUID PRIMARY KEY, name TEXT NOT NULL, timezone TEXT NOT NULL DEFAULT 'America/Denver', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
     CREATE TABLE IF NOT EXISTS memberships (id UUID PRIMARY KEY, workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, role TEXT NOT NULL CHECK (role IN ('owner','admin','editor','viewer')), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE (workspace_id, user_id));
-    CREATE TABLE IF NOT EXISTS sessions (id UUID PRIMARY KEY, user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, token_digest TEXT UNIQUE NOT NULL, expires_at TIMESTAMPTZ NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+    CREATE TABLE IF NOT EXISTS sessions (id UUID PRIMARY KEY, user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, token_digest TEXT UNIQUE NOT NULL, expires_at TIMESTAMPTZ NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id UUID PRIMARY KEY,
+      workspace_id UUID NOT NULL UNIQUE REFERENCES workspaces(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'pending_payment' CHECK (status IN ('pending_payment','active','past_due','canceled')),
+      stripe_customer_id TEXT UNIQUE,
+      stripe_subscription_id TEXT UNIQUE,
+      current_period_start TIMESTAMPTZ,
+      current_period_end TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS subscription_status_events (
+      id BIGSERIAL PRIMARY KEY,
+      subscription_id UUID NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+      workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+      previous_status TEXT,
+      status TEXT NOT NULL CHECK (status IN ('pending_payment','active','past_due','canceled')),
+      source TEXT NOT NULL DEFAULT 'database',
+      actor TEXT NOT NULL DEFAULT CURRENT_USER,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
     CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions(expires_at);
+    CREATE INDEX IF NOT EXISTS subscriptions_status_idx ON subscriptions(status);
+    CREATE INDEX IF NOT EXISTS subscription_status_events_workspace_id_idx ON subscription_status_events(workspace_id, created_at DESC);
+    CREATE OR REPLACE FUNCTION audit_subscription_status_change() RETURNS TRIGGER AS $$
+    BEGIN
+      IF TG_OP = 'INSERT' THEN
+        INSERT INTO subscription_status_events (subscription_id, workspace_id, previous_status, status, source, actor)
+        VALUES (NEW.id, NEW.workspace_id, NULL, NEW.status, COALESCE(NULLIF(current_setting('axoboard.audit_source', true), ''), 'database'), COALESCE(NULLIF(current_setting('axoboard.audit_actor', true), ''), CURRENT_USER));
+      ELSIF OLD.status IS DISTINCT FROM NEW.status THEN
+        INSERT INTO subscription_status_events (subscription_id, workspace_id, previous_status, status, source, actor)
+        VALUES (NEW.id, NEW.workspace_id, OLD.status, NEW.status, COALESCE(NULLIF(current_setting('axoboard.audit_source', true), ''), 'database'), COALESCE(NULLIF(current_setting('axoboard.audit_actor', true), ''), CURRENT_USER));
+      END IF;
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+    DROP TRIGGER IF EXISTS subscription_status_audit ON subscriptions;
+    CREATE TRIGGER subscription_status_audit
+      AFTER INSERT OR UPDATE OF status ON subscriptions
+      FOR EACH ROW EXECUTE FUNCTION audit_subscription_status_change();
+  `);
+  await pool.query(`
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE;
+    UPDATE sessions s SET workspace_id = selected.workspace_id
+    FROM (
+      SELECT DISTINCT ON (user_id) user_id, workspace_id
+      FROM memberships
+      ORDER BY user_id, created_at ASC
+    ) selected
+    WHERE s.workspace_id IS NULL AND selected.user_id = s.user_id;
+    DELETE FROM sessions WHERE workspace_id IS NULL;
+    ALTER TABLE sessions ALTER COLUMN workspace_id SET NOT NULL;
+    CREATE INDEX IF NOT EXISTS sessions_workspace_id_idx ON sessions(workspace_id);
+  `);
+  await pool.query(`
+    INSERT INTO subscriptions (id, workspace_id, status)
+    SELECT md5('axoboard-subscription:' || w.id::text)::uuid, w.id, 'pending_payment'
+    FROM workspaces w
+    ON CONFLICT (workspace_id) DO NOTHING
+  `);
+  await pool.query(`
+    INSERT INTO subscription_status_events (subscription_id, workspace_id, previous_status, status, source, actor)
+    SELECT s.id, s.workspace_id, NULL, s.status, 'migration', CURRENT_USER
+    FROM subscriptions s
+    WHERE NOT EXISTS (SELECT 1 FROM subscription_status_events e WHERE e.subscription_id = s.id)
   `);
   await pool.query('DELETE FROM sessions WHERE expires_at <= NOW()');
   console.log('[axoboard-web] database ready');
@@ -239,24 +348,48 @@ const server = createServer(async (req, res) => {
       return sendJson(res, database === 'unhealthy' ? 503 : 200, { ok: database !== 'unhealthy', service: 'axoboard-web', version: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.APP_VERSION || 'development', database });
     }
     if (url.pathname.startsWith('/api/auth/')) return await handleAuth(req, res, url.pathname);
-    if (url.pathname === '/app' && !(await currentSession(req))) {
-      res.writeHead(302, { Location: '/login', 'Cache-Control': 'no-store' });
-      return res.end();
+    if (url.pathname === '/demo' || url.pathname === '/index.html') return sendJson(res, 404, { error: 'Not found' });
+
+    let productSession = null;
+    if (productFiles.has(url.pathname) || url.pathname.startsWith('/api/axoboard/')) {
+      productSession = await currentSession(req);
+      if (url.pathname === '/app' && !productSession && (req.method === 'GET' || req.method === 'HEAD')) {
+        res.writeHead(302, { Location: '/login', 'Cache-Control': 'no-store' });
+        return res.end();
+      }
+      if (!productSession?.can_access_app) {
+        if (url.pathname === '/app' && (req.method === 'GET' || req.method === 'HEAD')) {
+          res.writeHead(302, { Location: paidAccessRedirect, 'Cache-Control': 'no-store' });
+          return res.end();
+        }
+        return sendJson(res, 404, { error: 'Not found' });
+      }
+      // No product API is implemented yet. Keep this fail-closed branch above future handlers.
+      if (url.pathname.startsWith('/api/axoboard/')) return sendJson(res, 404, { error: 'Not found' });
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.setHeader('Allow', 'GET, HEAD');
       return sendJson(res, 405, { error: 'Method not allowed' });
     }
-    const resolved = resolvePublicFile(rawPathname);
+
+    let resolved;
+    if (productFiles.has(url.pathname)) {
+      resolved = { filePath: resolve(publicRoot, productFiles.get(url.pathname)) };
+    } else {
+      resolved = resolvePublicFile(rawPathname);
+    }
     if (resolved?.error === 'invalid_path') return sendJson(res, 400, { error: 'Invalid path' });
     if (!resolved || resolved?.error === 'not_found') return sendJson(res, 404, { error: 'Not found' });
     const filePath = resolved.filePath;
     const stat = statSync(filePath);
     const isHtml = extname(filePath).toLowerCase() === '.html';
+    const isProductFile = productFiles.has(url.pathname);
     const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0];
     res.writeHead(200, {
       'Content-Type': contentTypes.get(extname(filePath).toLowerCase()) || 'application/octet-stream', 'Content-Length': stat.size,
-      'Cache-Control': isHtml ? 'no-store' : 'public, max-age=300', 'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': isProductFile ? 'private, no-store' : (isHtml ? 'no-store' : 'public, max-age=300'),
+      ...(isProductFile ? { Vary: 'Cookie' } : {}),
+      'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'SAMEORIGIN', 'Referrer-Policy': 'strict-origin-when-cross-origin',
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
       'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'",

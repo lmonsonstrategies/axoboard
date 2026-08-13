@@ -8,4 +8,6 @@ artifacts
 assets
 docs
 node_modules
+wireframes/assets/axoboard-logo-low-poly.png
+wireframes/assets/favicon/favicon-source.png
 *.log

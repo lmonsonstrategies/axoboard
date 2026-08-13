@@ -35,7 +35,7 @@ Sync worker
   -> provider-specific extractor
   -> normalized metric observations
   -> KPI calculator + snapshot store
-  -> dashboard cache / alerts / celebrations / Kombat scoring
+  -> dashboard cache / alerts / celebrations / competition scoring
 ```
 
 The browser receives only an opaque `connection_id`. AxoBoard maps it to `tenant_id + provider + external_account_id + credential_reference`. Nango's connection ID must never be accepted directly from an untrusted request without that tenant ownership check.

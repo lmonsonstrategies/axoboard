@@ -65,7 +65,7 @@ Complete each row with `Pass`, `Fail`, or `N/A`, plus a screenshot or test refer
 | Automations | Pause a rule and inspect its outcomes | Rule flow stacks vertically; guardrails follow rule list | Toggle, create draft, open run log | Pass at 390px |
 | Celebration HQ | Check goal and replay/preview a win | Metrics and wins stack; controls are non-sticky | Preview and close celebration with reduced motion | Pass at 390px |
 | My Sounds | Select, preview, and assign sound | Library and inspector stack; rows hide decorative waveform first | Select sound, preview, save | Pass at 390px |
-| Kombat Studio | Check match and make a critical change | Stage first; steps hidden; inspector stacks below | Rename teams, change score/arena, preview | Pass at 390px |
+| Team Competitions | Check a competition and make a critical change | Stage first; steps hidden; inspector stacks below | Rename teams, change score/arena, preview | Pass at 390px |
 | Brand Studio | Preview and publish theme | Preview precedes form; controls stack | Change workspace/color/language and publish | Pass at 390px |
 | Workspace Admin | Onboard, invite, inspect usage, and request support | Checklist, usage, members, health, and support stack into one column | Complete onboarding draft, open roles/billing/support | Pass at 390px |
 

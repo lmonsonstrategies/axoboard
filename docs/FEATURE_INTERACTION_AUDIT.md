@@ -24,7 +24,7 @@ These classifications describe prototype behavior, not production backend comple
 | Automations | New/edit rule and run-log controls | Trigger/action/guardrail/dry-run builder; observable run ledger and export |
 | Celebrations | History, performers, wins list, and shoutout | Recognition composer with audience, destination, sound, and preview |
 | My Sounds | Help, upload, favorites, event assignment, assignment removal | Upload/scan/ownership/loudness review plus trigger and audience assignment |
-| Kombat Studio | Section navigation, preview modes, label editing, sprites, arenas, assets | Asset library, upload, mobile/TV safe zones, licensing, testing, and publish workflow |
+| Team Competitions | Section navigation, preview modes, label editing, sprites, arenas, assets | Asset library, upload, mobile/TV safe zones, licensing, testing, and publish workflow |
 | Brand Studio | Logo replacement and multi-step continuation | Identity, theme, language, accessibility, versioning, and rollback workflow |
 | KPI drilldowns | CSV export and metric history | Version history, snapshot comparison, permitted export, and redaction policy |
 | Workspace Admin | Customer onboarding, roles, plan usage, billing, service health, and support | Commercial-service workflows with tenant, entitlement, privacy, and support boundaries |
@@ -67,7 +67,7 @@ The shell includes:
 10. Automation run history
 11. Celebration and recognition
 12. Sound upload and assignment
-13. Kombat asset customization
+13. Team Competitions asset customization
 14. Brand publishing
 15. Data export and metric history
 16. Customer onboarding
@@ -98,7 +98,7 @@ A generic governed workflow remains as a fallback for future prototype controls.
 
 ### P2 — Category differentiation
 
-- Kombat asset library and customer uploads
+- Team Competitions asset library and customer uploads
 - Outcome-recipe dependency resolution
 - Cross-workspace personal preferences
 - Certified metric definition/version comparison

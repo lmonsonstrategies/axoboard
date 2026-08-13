@@ -1,5 +1,5 @@
 const currentView = location.pathname === '/signup' ? 'signup' : 'login';
-document.title = currentView === 'signup' ? 'Start your free trial — AxoBoard' : 'Log in — AxoBoard';
+document.title = currentView === 'signup' ? 'Create your account — AxoBoard' : 'Log in — AxoBoard';
 document.body.dataset.auth = currentView;
 document.querySelectorAll('[data-year]').forEach((element) => { element.textContent = String(new Date().getFullYear()); });
 
@@ -102,5 +102,6 @@ loginForm?.addEventListener('submit', async (event) => {
 document.querySelector('[data-forgot]')?.addEventListener('click', () => showAlert(loginForm, 'Password reset is not available in this release. Contact support@axoboard.io for account recovery.'));
 
 fetch('/api/auth/session', { credentials: 'same-origin' }).then((response) => response.ok ? response.json() : null).then((session) => {
-  if (session?.authenticated) location.replace('/app');
+  if (!session?.authenticated) return;
+  location.replace(session.canAccessApp ? '/app' : '/pricing?access=subscription_required');
 }).catch(() => {});

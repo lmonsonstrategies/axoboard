@@ -30,7 +30,7 @@ Target: first published, trusted KPI in under ten minutes.
 - **Displays:** short-lived pairing, device-bound access, schedules, heartbeat, and recovery.
 - **Automations:** deterministic rule evaluation, dry runs, guardrails, destination retries, and audit history.
 - **Celebrations and Sounds:** controlled recognition with quiet hours, licensing, scanning, and accessible motion/audio defaults.
-- **Kombat Studio:** customer-owned game presets, terminology, scoring, art, audio, and brand assets.
+- **Team Competitions:** customer-owned competition presets, terminology, scoring, art, audio, and brand assets.
 - **Brand Studio:** one versioned customer theme across web, mobile, shares, TV, celebrations, and games.
 
 ## Tenant architecture
@@ -83,7 +83,7 @@ The launch pricing hypothesis is now defined in `docs/PRICING_AND_REVENUE_MODEL.
 Plan families and launch prices:
 
 - **Starter — $99 monthly / $79 annual equivalent:** core dashboards, one display, basic alerts, starter celebrations;
-- **Growth — $249 monthly / $199 annual equivalent:** displays, automations, custom celebrations, sounds, branding, and Kombat;
+- **Growth — $249 monthly / $199 annual equivalent:** displays, automations, custom celebrations, sounds, branding, and Team Competitions;
 - **Scale — $599 monthly / $499 annual equivalent:** multiple workspaces, advanced governance, audit retention, larger limits, and priority support;
 - **Enterprise — from $1,500 monthly:** SSO, SLA, contracted onboarding, limits, integrations, and service terms.
 

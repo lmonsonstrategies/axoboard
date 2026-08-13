@@ -33,7 +33,7 @@ Pricing is based on operational capacity rather than audience size. Every paid p
 - Starter celebration templates and stock sounds
 - Email/community support
 
-Starter deliberately excludes custom sound uploads, Kombat Studio, advanced branding, and multi-channel actions. It proves value without satisfying the full behavioral-engagement use case.
+Starter deliberately excludes custom sound uploads, Team Competitions, advanced branding, and multi-channel actions. It proves value without satisfying the full behavioral-engagement use case.
 
 ### Growth — create momentum
 
@@ -45,7 +45,7 @@ Starter deliberately excludes custom sound uploads, Kombat Studio, advanced bran
 - Two-year metric history
 - Celebration HQ with customer templates
 - My Sounds uploads, playlists, and quiet hours
-- Kombat Studio with configurable teams, scoring, arenas, and win rules
+- Team Competitions with configurable teams, scoring, arenas, and win rules
 - Customer logo, colors, language, and display branding
 - Email, Slack, and webhook actions
 - 10,000 automation runs per month with retry history

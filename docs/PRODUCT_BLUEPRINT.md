@@ -125,7 +125,7 @@ Customization must feel safe to nontechnical users:
 5. Save a draft without affecting viewers.
 6. Publish a version and retain one-click rollback.
 
-The same BrandTheme should power dashboards, celebrations, My Sounds and Kombat Studio. Component defaults inherit from the theme, while an individual celebration or game preset may override approved tokens.
+The same BrandTheme should power dashboards, celebrations, My Sounds, and Team Competitions. Component defaults inherit from the theme, while an individual celebration or competition preset may override approved tokens.
 
 Murphy Kombat becomes a customer preset built on generic contracts. A preset can fully replace:
 
@@ -209,7 +209,7 @@ Exit: one Murphy card can be represented entirely by generic configuration.
 - responsive viewer and TV mode;
 - celebration triggers, templates, replay controls and motion-safe viewer behavior;
 - My Sounds upload, preview, assignment and volume controls;
-- configurable Kombat preset with generic scoring and tenant-owned assets;
+- configurable competition preset with generic scoring and tenant-owned assets;
 - integration health and freshness UI.
 
 Exit: Murphy plus one external partner can operate in isolated tenants.
