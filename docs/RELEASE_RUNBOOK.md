@@ -3,7 +3,7 @@
 ## Publishing flow
 
 ```text
-feature branch → npm run verify → secret scan → pull request / review
+feature/fix branch → local verify + secret scan → push → remote CI → pull request/review or fast-forward promotion
               → merge to main → Railway builds exact main SHA
               → health + route + security verification → release complete
 ```

@@ -3,7 +3,10 @@ name: AxoBoard release gate
 on:
   pull_request:
   push:
-    branches: [main]
+    branches:
+      - main
+      - 'feat/**'
+      - 'fix/**'
 
 permissions:
   contents: read
