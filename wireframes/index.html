@@ -32,6 +32,7 @@
         <button class="nav-item" type="button" data-screen="displays"><span>▣</span><b>TV & Displays</b></button>
         <button class="nav-item" type="button" data-screen="automations"><span>ϟ</span><b>Automations</b></button>
         <button class="nav-item" type="button" data-screen="workspace"><span>⌂</span><b>Workspace Admin</b></button>
+        <button class="nav-item" type="button" data-screen="plans"><span>◇</span><b>Plans & Billing</b></button>
         <button class="nav-item" type="button" data-screen="celebrations"><span>✦</span><b>Celebration HQ</b></button>
         <button class="nav-item" type="button" data-screen="sounds"><span>♫</span><b>My Sounds</b></button>
         <button class="nav-item" type="button" data-screen="kombat"><span>⚔</span><b>Kombat Studio</b></button>
@@ -143,7 +144,7 @@
             <article class="surface customer-hero"><div><span class="workspace-avatar large">A</span><div><small>DESIGN-PARTNER WORKSPACE</small><h2 id="serviceWorkspaceName">Acme Sales</h2><p>Customer-facing beta · tenant isolated · mobile ready</p></div></div><span class="readiness-ring"><b id="readinessPercent">72%</b><small>launch ready</small></span></article>
             <div class="service-grid">
               <article class="surface launch-card"><header><div><small>GET TO VALUE FAST</small><h2>Launch checklist</h2></div><b id="launchStepCount">5 of 7</b></header><ul id="launchChecklist"><li class="complete"><span>✓</span><div><strong>Create your workspace</strong><small>Identity, timezone, and owner</small></div><button type="button" data-service-action="workspace">Review</button></li><li class="complete"><span>✓</span><div><strong>Apply your brand</strong><small>Logo, color, and language</small></div><button type="button" data-screen="brand">Review</button></li><li class="complete"><span>✓</span><div><strong>Connect Google Sheets</strong><small>Two healthy KPI mappings</small></div><button type="button" data-screen="integrations">Review</button></li><li class="complete"><span>✓</span><div><strong>Invite your team</strong><small>4 active members</small></div><button type="button" data-service-action="members">Manage</button></li><li class="complete"><span>✓</span><div><strong>Publish a dashboard</strong><small>Sales performance is live</small></div><button type="button" data-screen="dashboard">Review</button></li><li><span>6</span><div><strong>Pair a team display</strong><small>Put AxoBoard where the team works</small></div><button type="button" data-screen="displays">Set up</button></li><li><span>7</span><div><strong>Test a celebration rule</strong><small>Confirm sound, audience, and quiet hours</small></div><button type="button" data-screen="automations">Set up</button></li></ul></article>
-              <article class="surface plan-card"><header><div><small>PLAN & USAGE</small><h2>Growth beta</h2></div><span class="connection-pill">● Active</span></header><p>Design-partner access. Final commercial pricing is configured before public launch.</p><div class="usage-meter"><span><b>Members</b><small>4 of 10</small></span><i><b style="width:40%"></b></i></div><div class="usage-meter"><span><b>TV screens</b><small>3 of 5</small></span><i><b style="width:60%"></b></i></div><div class="usage-meter"><span><b>Data sources</b><small>2 of 5</small></span><i><b style="width:40%"></b></i></div><div class="usage-meter"><span><b>Automation runs</b><small>128 of 2,500</small></span><i><b style="width:8%"></b></i></div><button class="button button-soft full" id="managePlanButton" type="button">Manage plan & billing</button></article>
+              <article class="surface plan-card"><header><div><small>PLAN & USAGE</small><h2>Growth beta</h2></div><span class="connection-pill">● Active</span></header><p>Design-partner access to the complete Growth package.</p><div class="usage-meter"><span><b>Editors</b><small>2 of 5</small></span><i><b style="width:40%"></b></i></div><div class="usage-meter"><span><b>TV screens</b><small>3 of 5</small></span><i><b style="width:60%"></b></i></div><div class="usage-meter"><span><b>Connected accounts</b><small>2 of 10</small></span><i><b style="width:20%"></b></i></div><div class="usage-meter"><span><b>Automation runs</b><small>128 of 10,000</small></span><i><b style="width:2%"></b></i></div><button class="button button-soft full" id="managePlanButton" type="button" data-screen="plans">Manage plan & billing</button></article>
             </div>
             <article class="surface members-card"><header><div><small>PEOPLE & PERMISSIONS</small><h2>Workspace members</h2></div><button type="button" id="manageRolesButton">Manage roles</button></header><div class="member-row member-head"><span>Person</span><span>Role</span><span>Last active</span><span>Status</span></div><div class="member-row"><span><b>JL</b><strong>Jordan Lee<small>jordan@acme.co</small></strong></span><span>Owner</span><span>Now</span><span class="healthy-text">Active</span></div><div class="member-row"><span><b>MP</b><strong>Maya Patel<small>maya@acme.co</small></strong></span><span>Editor</span><span>12m ago</span><span class="healthy-text">Active</span></div><div class="member-row"><span><b>EB</b><strong>Ethan Brooks<small>ethan@acme.co</small></strong></span><span>Viewer</span><span>1h ago</span><span class="healthy-text">Active</span></div><div class="member-row"><span><b>SM</b><strong>Sofia Martinez<small>sofia@acme.co</small></strong></span><span>Viewer</span><span>Yesterday</span><span class="healthy-text">Active</span></div></article>
           </section>
@@ -152,6 +153,71 @@
             <article class="surface support-card"><span class="mini-axo large">•ᴗ•</span><small>CUSTOMER SUCCESS</small><h2>Need a hand?</h2><p>Open setup guidance, report a problem, or prepare a support request with diagnostic context.</p><button class="button button-primary full" id="supportButton" type="button">Contact support</button><button class="button button-ghost full" id="setupGuideButton" type="button">Open setup guide</button></article>
           </aside>
         </div>
+      </section>
+
+      <section class="screen" data-screen-panel="plans" aria-labelledby="plansTitle">
+        <header class="page-header pricing-header">
+          <div><small>PLANS THAT GROW WITH THE OPERATION</small><h1 id="plansTitle">Choose your AxoBoard</h1><p>Unlimited dashboards and viewers on every paid plan. Capacity grows with sources, screens, speed, and automation.</p></div>
+          <div class="billing-cycle" role="group" aria-label="Billing cycle"><button class="is-active" type="button" data-plan-cycle="monthly">Monthly</button><button type="button" data-plan-cycle="annual">Annual <span>Save up to 20%</span></button></div>
+        </header>
+
+        <aside class="surface pricing-principle"><span>✓</span><div><strong>No viewer tax. No surprise overages.</strong><p>We warn before a limit, preserve access during billing recovery, and never charge extra usage without an explicit choice.</p></div><button class="button button-ghost" type="button" data-plan-action="compare">Compare every feature</button></aside>
+
+        <section class="pricing-grid" aria-label="AxoBoard subscription plans">
+          <article class="surface pricing-card" data-plan="starter">
+            <header><span class="plan-icon">◌</span><div><small>GET VISIBLE</small><h2>Starter</h2></div></header>
+            <p>One team replacing spreadsheet screenshots with a trusted live scoreboard.</p>
+            <div class="plan-price"><strong data-monthly="$99" data-annual="$79">$99</strong><span>/month</span><small data-price-note>Cancel anytime</small></div>
+            <button class="button button-ghost full" type="button" data-plan-action="starter">Start 14-day trial</button>
+            <div class="plan-capacity"><span><b>3</b> connected accounts</span><span><b>2</b> editors</span><span><b>1</b> TV screen</span><span><b>15m</b> refresh</span></div>
+            <ul><li>Unlimited dashboards and viewers</li><li>Responsive web, mobile, and TV layouts</li><li>KPI goals, comparisons, drilldowns, and freshness</li><li>Secure share links and scheduled snapshots</li><li>Basic alerts and 1,000 automation runs</li><li>Starter celebration templates and stock sounds</li><li>90-day metric history</li><li>Community and email support</li></ul>
+            <div class="not-included"><small>UPGRADE FOR</small><p>Custom sound uploads, Kombat Studio, advanced branding, and multi-channel actions.</p></div>
+          </article>
+
+          <article class="surface pricing-card pricing-card-featured" data-plan="growth">
+            <span class="popular-ribbon">MOST POPULAR</span>
+            <header><span class="plan-icon">✦</span><div><small>CREATE MOMENTUM</small><h2>Growth</h2></div></header>
+            <p>The full AxoBoard experience for teams that want visibility to drive behavior.</p>
+            <div class="plan-price"><strong data-monthly="$249" data-annual="$199">$249</strong><span>/month</span><small data-price-note>Cancel anytime</small></div>
+            <button class="button button-primary full" type="button" data-plan-action="growth">Start 14-day trial</button>
+            <div class="plan-capacity"><span><b>10</b> connected accounts</span><span><b>5</b> editors</span><span><b>5</b> TV screens</span><span><b>5m</b> refresh</span></div>
+            <ul><li>Everything in Starter</li><li>Celebration HQ with custom templates</li><li>My Sounds uploads, playlists, and quiet hours</li><li>Kombat Studio teams, scoring, arenas, and win rules</li><li>Custom logo, colors, language, and display branding</li><li>Email, Slack, and webhook actions</li><li>10,000 automation runs with retry history</li><li>Two-year metric history and standard support</li></ul>
+          </article>
+
+          <article class="surface pricing-card" data-plan="scale">
+            <header><span class="plan-icon">◇</span><div><small>RUN THE OPERATION</small><h2>Scale</h2></div></header>
+            <p>Multiple teams or locations with stronger controls, faster signals, and more capacity.</p>
+            <div class="plan-price"><strong data-monthly="$599" data-annual="$499">$599</strong><span>/month</span><small data-price-note>Cancel anytime</small></div>
+            <button class="button button-ghost full" type="button" data-plan-action="scale">Talk through your rollout</button>
+            <div class="plan-capacity"><span><b>30</b> connected accounts</span><span><b>15</b> editors</span><span><b>20</b> TV screens</span><span><b>1m</b> refresh*</span></div>
+            <ul><li>Everything in Growth</li><li>Three isolated workspaces</li><li>Full white-label dashboards, shares, and displays</li><li>Advanced roles, publishing approvals, and audit history</li><li>50,000 automation runs and operational actions</li><li>Five-year metric history</li><li>Priority support and guided rollout</li><li>Usage export and workspace-level governance</li></ul>
+            <div class="not-included"><small>* PROVIDER DEPENDENT</small><p>Refresh speed respects source API limits and is never presented as fake real-time data.</p></div>
+          </article>
+
+          <article class="surface pricing-card pricing-card-enterprise" data-plan="enterprise">
+            <header><span class="plan-icon">◎</span><div><small>SECURITY & CONTRACT</small><h2>Enterprise</h2></div></header>
+            <p>Contracted security, capacity, and service terms for larger organizations.</p>
+            <div class="plan-price"><strong>Custom</strong><small>From $1,500/month · annual contract</small></div>
+            <button class="button button-ghost full" type="button" data-plan-action="enterprise">Contact AxoBoard</button>
+            <div class="enterprise-features"><span>SSO / SAML</span><span>User provisioning</span><span>Contracted SLA</span><span>Custom retention</span><span>Security review</span><span>Dedicated success</span><span>Optional isolation</span><span>Custom capacity</span></div>
+          </article>
+        </section>
+
+        <section class="surface plan-comparison" id="planComparison">
+          <header><div><small>THE SHORT VERSION</small><h2>What changes as you grow</h2></div><p>Everyone can see the score. You pay when the operation needs more inputs, screens, speed, history, or control.</p></header>
+          <div class="comparison-scroll" tabindex="0" aria-label="Scrollable plan comparison">
+            <div class="comparison-table" role="table" aria-label="Plan feature comparison">
+              <div class="comparison-row comparison-head" role="row"><b role="columnheader">Capability</b><b role="columnheader">Starter</b><b role="columnheader">Growth</b><b role="columnheader">Scale</b><b role="columnheader">Enterprise</b></div>
+              <div class="comparison-row" role="row"><span>Dashboards & viewers</span><b>Unlimited</b><b>Unlimited</b><b>Unlimited</b><b>Unlimited</b></div>
+              <div class="comparison-row" role="row"><span>Refresh</span><b>15 min</b><b>5 min</b><b>1 min*</b><b>Contracted</b></div>
+              <div class="comparison-row" role="row"><span>Celebrations & sounds</span><b>Starter set</b><b>Custom</b><b>Custom</b><b>Custom</b></div>
+              <div class="comparison-row" role="row"><span>Kombat Studio</span><b>—</b><b>Included</b><b>Included</b><b>Included</b></div>
+              <div class="comparison-row" role="row"><span>Customer branding</span><b>AxoBoard visible</b><b>Custom brand</b><b>Full white-label</b><b>Full white-label</b></div>
+              <div class="comparison-row" role="row"><span>Governance</span><b>Core roles</b><b>Core roles</b><b>Advanced + audit</b><b>SSO + SLA</b></div>
+              <div class="comparison-row" role="row"><span>Support</span><b>Email</b><b>Standard</b><b>Priority</b><b>Dedicated</b></div>
+            </div>
+          </div>
+        </section>
       </section>
 
       <section class="screen" data-screen-panel="celebrations" aria-labelledby="celebrationsTitle">

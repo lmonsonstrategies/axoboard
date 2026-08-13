@@ -73,21 +73,21 @@ High-risk permissions remain separate. “Editor” must not silently imply bill
 
 ## Commercial packaging
 
-Final pricing should be validated with design partners before hardcoding amounts. Packaging should stay easy to explain:
+The launch pricing hypothesis is now defined in `docs/PRICING_AND_REVENUE_MODEL.md` and must still be validated with design partners. Packaging stays easy to explain:
 
 - one primary unit: active workspace;
 - capacity entitlements: members, displays, data sources, refresh frequency, automation volume, and retained history;
 - premium governance: SSO, advanced roles, audit retention, custom domains, contracted support, and higher limits;
 - no surprise overages: warn, provide usage detail, and require an explicit policy before charging beyond entitlement.
 
-Recommended plan families:
+Plan families and launch prices:
 
-- **Starter:** core dashboards and sharing for a small team;
-- **Growth:** displays, automations, celebrations, sounds, and Kombat;
-- **Scale:** governance, SSO, audit retention, larger limits, and support commitments;
-- **Custom:** contracted onboarding, limits, integrations, and service terms.
+- **Starter — $99 monthly / $79 annual equivalent:** core dashboards, one display, basic alerts, starter celebrations;
+- **Growth — $249 monthly / $199 annual equivalent:** displays, automations, custom celebrations, sounds, branding, and Kombat;
+- **Scale — $599 monthly / $499 annual equivalent:** multiple workspaces, advanced governance, audit retention, larger limits, and priority support;
+- **Enterprise — from $1,500 monthly:** SSO, SLA, contracted onboarding, limits, integrations, and service terms.
 
-Do not launch public pricing until willingness-to-pay, support load, connector costs, and onboarding effort have been measured with real customers.
+Keep unlimited dashboards and viewers on every paid plan. Do not launch self-serve public checkout until willingness-to-pay, support load, connector costs, and onboarding effort have been measured with paid design partners.
 
 ## Billing boundary
 
