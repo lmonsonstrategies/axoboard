@@ -75,11 +75,28 @@ if (integrationMarquee && 'IntersectionObserver' in window) {
 
 const mobileConversionCta = document.querySelector('.mobile-conversion-cta');
 const heroConversionCta = document.querySelector('.hero-actions');
+const pricingSection = document.querySelector('#pricing');
+let heroConversionVisible = true;
+let pricingVisible = false;
+
+function updateMobileConversionCta() {
+  mobileConversionCta?.classList.toggle('is-visible', !heroConversionVisible && !pricingVisible);
+}
+
 if (mobileConversionCta && heroConversionCta && 'IntersectionObserver' in window) {
   const conversionObserver = new IntersectionObserver(([entry]) => {
-    mobileConversionCta.classList.toggle('is-visible', !entry.isIntersecting);
+    heroConversionVisible = entry.isIntersecting;
+    updateMobileConversionCta();
   }, { threshold: 0.1 });
   conversionObserver.observe(heroConversionCta);
+
+  if (pricingSection) {
+    const pricingObserver = new IntersectionObserver(([entry]) => {
+      pricingVisible = entry.isIntersecting;
+      updateMobileConversionCta();
+    }, { threshold: 0.01 });
+    pricingObserver.observe(pricingSection);
+  }
 }
 
 fetch('/api/auth/session', { credentials: 'same-origin' }).then((response) => response.ok ? response.json() : null).then((session) => {
