@@ -6,7 +6,13 @@
   "description": "AxoBoard standalone SaaS application",
   "scripts": {
     "start": "node server.mjs",
-    "check": "node --check server.mjs && node --check wireframes/app.js"
+    "check": "node --check server.mjs && node --check wireframes/app.js && node --check wireframes/marketing.js && node --check wireframes/auth.js && node --check scripts/smoke-test.mjs && node --check scripts/verify-production.mjs",
+    "test:smoke": "node scripts/smoke-test.mjs",
+    "verify": "npm run check && npm audit --omit=dev && npm run test:smoke",
+    "verify:production": "node scripts/verify-production.mjs"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
   },
   "engines": {
     "node": ">=22"

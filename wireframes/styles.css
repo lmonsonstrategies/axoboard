@@ -270,22 +270,22 @@ button { min-height: 44px; }
 .synthetic-data-banner, .blank-tenant-note { max-width: 1500px; align-items: center; gap: 12px; margin: 0 auto 14px; padding: 11px 14px; border-color: var(--aqua-200); background: linear-gradient(90deg,var(--aqua-050),white,var(--pink-050)); }.synthetic-data-banner b, .blank-tenant-note b { color: #267e9f; font-size: 9px; letter-spacing: .08em; }.synthetic-data-banner span, .blank-tenant-note span { flex: 1; color: var(--plum-500); font-size: 9px; }.synthetic-data-banner button, .blank-tenant-note button { min-height: 38px; border: 0; background: transparent; color: var(--pink-700); font-size: 9px; font-weight: 700; }
 .oauth-contract { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 14px; }.oauth-contract > div { padding: 12px; border: 1px solid var(--aqua-200); border-radius: 11px; background: var(--aqua-050); }.oauth-contract small, .oauth-contract strong { display: block; }.oauth-contract small { color: var(--plum-500); font-size: 8px; }.oauth-contract strong { margin-top: 3px; font-size: 10px; }
 
-body[data-active-workspace="murphy-example"][data-demo-data="false"] [data-screen-panel="dashboard"] .workspace-empty-state,
-body[data-active-workspace="murphy-example"] [data-screen-panel="integrations"] .workspace-empty-state,
-body[data-active-workspace="murphy-example"] [data-screen-panel="displays"] .workspace-empty-state,
-body[data-active-workspace="murphy-example"] [data-screen-panel="automations"] .workspace-empty-state,
-body[data-active-workspace="murphy-example"] [data-screen-panel="workspace"] .workspace-empty-state,
-body[data-active-workspace="murphy-example"] [data-screen-panel="celebrations"] .workspace-empty-state,
-body[data-active-workspace="murphy-example"] [data-screen-panel="sounds"] .workspace-empty-state { display: grid; }
-body[data-active-workspace="murphy-example"][data-demo-data="true"] .synthetic-data-banner,
-body[data-active-workspace="murphy-example"] .blank-tenant-note { display: flex; }
-body[data-active-workspace="murphy-example"][data-demo-data="false"] [data-screen-panel="dashboard"] :is(.dashboard-toolbar,.kpi-grid,.dashboard-lower-grid),
-body[data-active-workspace="murphy-example"] [data-screen-panel="integrations"] .integration-layout,
-body[data-active-workspace="murphy-example"] [data-screen-panel="displays"] .display-layout,
-body[data-active-workspace="murphy-example"] [data-screen-panel="automations"] .automation-layout,
-body[data-active-workspace="murphy-example"] [data-screen-panel="workspace"] .service-layout,
-body[data-active-workspace="murphy-example"] [data-screen-panel="celebrations"] .celebration-layout,
-body[data-active-workspace="murphy-example"] [data-screen-panel="sounds"] .sounds-layout { display: none; }
+body[data-active-workspace="sample-empty"][data-demo-data="false"] [data-screen-panel="dashboard"] .workspace-empty-state,
+body[data-active-workspace="sample-empty"] [data-screen-panel="integrations"] .workspace-empty-state,
+body[data-active-workspace="sample-empty"] [data-screen-panel="displays"] .workspace-empty-state,
+body[data-active-workspace="sample-empty"] [data-screen-panel="automations"] .workspace-empty-state,
+body[data-active-workspace="sample-empty"] [data-screen-panel="workspace"] .workspace-empty-state,
+body[data-active-workspace="sample-empty"] [data-screen-panel="celebrations"] .workspace-empty-state,
+body[data-active-workspace="sample-empty"] [data-screen-panel="sounds"] .workspace-empty-state { display: grid; }
+body[data-active-workspace="sample-empty"][data-demo-data="true"] .synthetic-data-banner,
+body[data-active-workspace="sample-empty"] .blank-tenant-note { display: flex; }
+body[data-active-workspace="sample-empty"][data-demo-data="false"] [data-screen-panel="dashboard"] :is(.dashboard-toolbar,.kpi-grid,.dashboard-lower-grid),
+body[data-active-workspace="sample-empty"] [data-screen-panel="integrations"] .integration-layout,
+body[data-active-workspace="sample-empty"] [data-screen-panel="displays"] .display-layout,
+body[data-active-workspace="sample-empty"] [data-screen-panel="automations"] .automation-layout,
+body[data-active-workspace="sample-empty"] [data-screen-panel="workspace"] .service-layout,
+body[data-active-workspace="sample-empty"] [data-screen-panel="celebrations"] .celebration-layout,
+body[data-active-workspace="sample-empty"] [data-screen-panel="sounds"] .sounds-layout { display: none; }
 
 @media (max-width: 1250px) {
   :root { --sidebar: 86px; }

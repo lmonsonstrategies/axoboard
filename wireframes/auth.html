@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Create or access your AxoBoard workspace." />
+  <meta name="theme-color" content="#fffafb" />
+  <title>AxoBoard — Account</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/png" href="/assets/axoboard-logo-low-poly.png?v=2" />
+  <link rel="apple-touch-icon" href="/assets/axoboard-logo-low-poly.png?v=2" />
+  <link rel="stylesheet" href="marketing.css" />
+</head>
+<body class="auth-page">
+  <a class="skip-link" href="#authMain">Skip to form</a>
+  <main class="auth-layout" id="authMain">
+    <section class="auth-story" aria-label="AxoBoard product preview">
+      <a class="marketing-brand auth-brand" href="/"><img src="assets/axoboard-logo-low-poly.png" alt="" /><span>AxoBoard</span></a>
+      <div class="auth-story-copy"><span class="eyebrow dark"><i class="live-pulse"></i> YOUR TEAM’S LIVE SCORE</span><h1>Clarity creates action.<br /><em>Recognition creates momentum.</em></h1><p>Build a trusted performance system your team will actually look at.</p><ul><li><span>✓</span> Connect the systems you already use</li><li><span>✓</span> Publish to web, mobile, and TV</li><li><span>✓</span> Turn progress into alerts and celebrations</li></ul></div>
+      <div class="auth-preview"><header><span>Sales Command Pond</span><b><i></i> Live</b></header><div><article><small>NET SALES</small><strong>$55.4K</strong><span>↗ 12.4%</span></article><article><small>PIPELINE</small><strong>$1.28M</strong><span>72% covered</span></article><article><small>TEAM PACE</small><strong>108%</strong><span>Goal crossed ✦</span></article></div></div>
+      <small class="auth-copyright">© <span data-year></span> AxoBoard</small>
+    </section>
+
+    <section class="auth-form-shell">
+      <div class="auth-mobile-brand"><a class="marketing-brand" href="/"><img src="assets/axoboard-logo-low-poly.png" alt="" /><span>AxoBoard</span></a></div>
+      <div class="auth-card" data-auth-view="login">
+        <header><span class="section-kicker">WELCOME BACK</span><h2>Log in to AxoBoard</h2><p>Pick up where your team left off.</p></header>
+        <form id="loginForm" novalidate>
+          <div class="form-alert" role="alert" aria-live="polite" hidden></div>
+          <label>Email address<input name="email" type="email" autocomplete="email" placeholder="you@company.com" required /></label>
+          <label>Password<span class="label-row"><span></span><button type="button" class="text-button" data-forgot>Forgot password?</button></span><span class="password-field"><input name="password" type="password" autocomplete="current-password" required /><button type="button" data-toggle-password aria-label="Show password">Show</button></span></label>
+          <button class="button button-primary button-large full-width" type="submit"><span>Log in</span><i class="button-spinner" aria-hidden="true"></i></button>
+        </form>
+        <p class="auth-switch">New to AxoBoard? <a href="/signup">Start your free trial</a></p>
+        <p class="auth-security">Protected by encrypted sessions and rate-limited authentication.</p>
+      </div>
+
+      <div class="auth-card signup-card" data-auth-view="signup">
+        <header><span class="section-kicker">14-DAY FREE TRIAL</span><h2>Create your AxoBoard</h2><p>No credit card. Start with one metric that matters.</p></header>
+        <ol class="signup-progress" aria-label="Signup progress"><li class="is-active" data-progress="1"><span>1</span><b>Account</b></li><li data-progress="2"><span>2</span><b>Workspace</b></li><li data-progress="3"><span>3</span><b>Ready</b></li></ol>
+        <form id="signupForm" novalidate>
+          <div class="form-alert" role="alert" aria-live="polite" hidden></div>
+          <fieldset class="signup-step is-active" data-step="1">
+            <legend class="sr-only">Account details</legend>
+            <label>Full name<input name="name" autocomplete="name" placeholder="Jordan Lee" minlength="2" maxlength="80" required /></label>
+            <label>Work email<input name="email" type="email" autocomplete="email" placeholder="jordan@company.com" required /></label>
+            <label>Create a password<span class="password-field"><input name="password" type="password" autocomplete="new-password" minlength="10" required /><button type="button" data-toggle-password aria-label="Show password">Show</button></span><small>At least 10 characters with a letter and number.</small></label>
+            <button class="button button-primary button-large full-width" type="button" data-next-step="2">Continue <span>→</span></button>
+          </fieldset>
+          <fieldset class="signup-step" data-step="2">
+            <legend class="sr-only">Workspace details</legend>
+            <label>Workspace name<input name="workspaceName" autocomplete="organization" placeholder="Acme Sales" minlength="2" maxlength="80" required /><small>Usually your company, team, or location name.</small></label>
+            <label>Timezone<select name="timezone"><option value="America/Denver">Mountain Time</option><option value="America/Los_Angeles">Pacific Time</option><option value="America/Chicago">Central Time</option><option value="America/New_York">Eastern Time</option><option value="UTC">UTC</option></select></label>
+            <div class="signup-actions"><button class="button button-secondary button-large" type="button" data-previous-step="1">Back</button><button class="button button-primary button-large" type="button" data-next-step="3">Review <span>→</span></button></div>
+          </fieldset>
+          <fieldset class="signup-step" data-step="3">
+            <legend class="sr-only">Confirm account</legend>
+            <div class="ready-card"><img src="assets/axoboard-logo-low-poly.png" alt="" /><span>YOUR WORKSPACE IS READY TO START</span><strong data-workspace-preview>New workspace</strong><p>After account creation, AxoBoard will guide you through branding, your first data connection, and a trusted KPI.</p></div>
+            <label class="check-label"><input name="acceptTerms" type="checkbox" required /><span>I agree to AxoBoard’s service terms and acknowledge the privacy policy.</span></label>
+            <div class="signup-actions"><button class="button button-secondary button-large" type="button" data-previous-step="2">Back</button><button class="button button-primary button-large" type="submit"><span>Create workspace</span><i class="button-spinner" aria-hidden="true"></i></button></div>
+          </fieldset>
+        </form>
+        <p class="auth-switch">Already have an account? <a href="/login">Log in</a></p>
+      </div>
+      <p class="auth-help">Need help? <a href="mailto:support@axoboard.io">support@axoboard.io</a></p>
+    </section>
+  </main>
+  <script src="auth.js" defer></script>
+</body>
+</html>

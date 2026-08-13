@@ -8,7 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2218%22 fill=%22%23FBE7EF%22/><circle cx=%2232%22 cy=%2233%22 r=%2216%22 fill=%22%23FFF9FB%22 stroke=%22%23E96F98%22 stroke-width=%223%22/><circle cx=%2226%22 cy=%2231%22 r=%222%22 fill=%22%2334233A%22/><circle cx=%2238%22 cy=%2231%22 r=%222%22 fill=%22%2334233A%22/><path d=%22M27 38q5 4 10 0%22 fill=%22none%22 stroke=%22%2334233A%22 stroke-width=%222%22 stroke-linecap=%22round%22/></svg>" />
+  <link rel="icon" type="image/png" href="/assets/axoboard-logo-low-poly.png?v=2" />
+  <link rel="apple-touch-icon" href="/assets/axoboard-logo-low-poly.png?v=2" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -111,7 +112,7 @@
               <article class="surface screen-device is-scheduled"><div class="device-preview executive-mini"><span>2.7×</span><i></i><i></i><i></i></div><div class="device-copy"><span class="schedule-pill">◷ Sleeping</span><h3>Executive Display</h3><p>Conference room · 4K · Apple TV</p><dl><div><dt>Next wake</dt><dd>Tomorrow · 7:00 AM</dd></div><div><dt>Loop</dt><dd>Executive daily · 4 views</dd></div><div><dt>Schedule</dt><dd>Mon–Fri · 7 AM–6 PM</dd></div></dl></div><footer><button type="button">Wake screen</button><button type="button">•••</button></footer></article>
             </div>
           </section>
-          <aside class="surface loop-builder"><div class="panel-heading"><div><small>DASHBOARD LOOP</small><h2>Revenue pulse</h2></div><span class="autosave">● Live</span></div><p>Drag views or use the move buttons to change their rotation order.</p><ol id="loopSequence"><li draggable="true"><b>1</b><span><strong>Sales performance</strong><small>45 seconds</small></span><button type="button" data-move-loop aria-label="Move Sales performance down">↓</button></li><li draggable="true"><b>2</b><span><strong>Pipeline health</strong><small>30 seconds</small></span><button type="button" data-move-loop aria-label="Move Pipeline health down">↓</button></li><li draggable="true"><b>3</b><span><strong>Murphy Kombat</strong><small>20 seconds</small></span><button type="button" data-move-loop aria-label="Move Murphy Kombat to top">↑</button></li></ol><button class="add-loop-view" type="button">＋ Add dashboard or game</button><div class="loop-settings"><label>Transition<select><option>Gentle fade</option><option>Aquatic slide</option><option>Instant</option></select></label><label>Active hours<select><option>Mon–Fri · 7 AM–8 PM</option><option>Always on</option><option>Custom schedule</option></select></label></div><button class="button button-primary full" id="saveLoopButton" type="button">Save loop</button></aside>
+          <aside class="surface loop-builder"><div class="panel-heading"><div><small>DASHBOARD LOOP</small><h2>Revenue pulse</h2></div><span class="autosave">● Live</span></div><p>Drag views or use the move buttons to change their rotation order.</p><ol id="loopSequence"><li draggable="true"><b>1</b><span><strong>Sales performance</strong><small>45 seconds</small></span><button type="button" data-move-loop aria-label="Move Sales performance down">↓</button></li><li draggable="true"><b>2</b><span><strong>Pipeline health</strong><small>30 seconds</small></span><button type="button" data-move-loop aria-label="Move Pipeline health down">↓</button></li><li draggable="true"><b>3</b><span><strong>Team Challenge</strong><small>20 seconds</small></span><button type="button" data-move-loop aria-label="Move Team Challenge to top">↑</button></li></ol><button class="add-loop-view" type="button">＋ Add dashboard or game</button><div class="loop-settings"><label>Transition<select><option>Gentle fade</option><option>Aquatic slide</option><option>Instant</option></select></label><label>Active hours<select><option>Mon–Fri · 7 AM–8 PM</option><option>Always on</option><option>Custom schedule</option></select></label></div><button class="button button-primary full" id="saveLoopButton" type="button">Save loop</button></aside>
         </div>
       </section>
 
@@ -322,7 +323,7 @@
       <section class="screen" data-screen-panel="kombat" aria-labelledby="kombatTitle">
         <header class="page-header compact-header">
           <div><small>FULLY REBRANDABLE TEAM GAME</small><h1 id="kombatTitle">Kombat Studio <span>✦</span></h1><p>Name it, score it, skin it, and make the win unmistakably yours.</p></div>
-          <div class="header-actions"><label class="preset-picker">Preset<select><option>Murphy Kombat</option><option>Blank team battle</option></select></label><span class="autosave">● All changes saved</span></div>
+          <div class="header-actions"><label class="preset-picker">Preset<select><option>Team Challenge</option><option>Blank team battle</option></select></label><span class="autosave">● All changes saved</span></div>
         </header>
 
         <div class="kombat-layout">
@@ -348,7 +349,7 @@
 
           <aside class="surface game-inspector" aria-label="Game configuration">
             <div class="inspector-scroll">
-              <fieldset><legend>✎ Game identity</legend><label>Game name<input id="gameNameInput" type="text" value="Murphy Kombat" maxlength="40" /></label><div class="field-row"><label>Team 1 name<input id="teamOneInput" type="text" value="Bluefin" maxlength="20" /></label><label>Team 2 name<input id="teamTwoInput" type="text" value="Coral Crew" maxlength="20" /></label></div></fieldset>
+              <fieldset><legend>✎ Game identity</legend><label>Game name<input id="gameNameInput" type="text" value="Team Challenge" maxlength="40" /></label><div class="field-row"><label>Team 1 name<input id="teamOneInput" type="text" value="Bluefin" maxlength="20" /></label><label>Team 2 name<input id="teamTwoInput" type="text" value="Coral Crew" maxlength="20" /></label></div></fieldset>
               <fieldset><legend>▣ Scoring rules</legend><div class="field-row"><label>Scoring type<select><option>Points</option><option>Revenue</option><option>Wins</option><option>Custom metric</option></select></label><label>Points per action<input id="pointsInput" type="number" min="1" value="10" /></label></div><label>Win condition<select id="winCondition"><option value="100">First to 100</option><option value="250">First to 250</option><option value="500">First to 500</option><option value="time">Highest score by deadline</option></select></label></fieldset>
               <fieldset><legend>👾 Fighter sprites</legend><div class="sprite-pickers"><button type="button"><span class="sprite blue">•ᴗ•</span><small>Team 1 sprite</small><b>Change</b></button><button type="button"><span class="sprite coral">•ᴗ•</span><small>Team 2 sprite</small><b>Change</b></button></div></fieldset>
               <fieldset><legend>▧ Arena</legend><div class="arena-options"><button type="button">🌊</button><button type="button">🏟</button><button class="is-active" type="button">🌌</button><button type="button">🏢</button><button type="button">＋</button></div></fieldset>

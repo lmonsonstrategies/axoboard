@@ -1,0 +1,48 @@
+document.documentElement.classList.add('js');
+const menuToggle = document.querySelector('.menu-toggle');
+const siteNav = document.querySelector('.site-nav');
+
+menuToggle?.addEventListener('click', () => {
+  const expanded = menuToggle.getAttribute('aria-expanded') === 'true';
+  menuToggle.setAttribute('aria-expanded', String(!expanded));
+  siteNav?.classList.toggle('is-open', !expanded);
+});
+
+document.querySelectorAll('[data-scroll]').forEach((link) => {
+  link.addEventListener('click', (event) => {
+    const target = document.getElementById(link.dataset.scroll);
+    if (!target) return;
+    event.preventDefault();
+    history.pushState({}, '', link.getAttribute('href'));
+    target.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    menuToggle?.setAttribute('aria-expanded', 'false');
+    siteNav?.classList.remove('is-open');
+  });
+});
+
+const routeTarget = { '/features': 'features', '/integrations': 'integrations', '/pricing': 'pricing', '/faq': 'faq' }[location.pathname];
+if (routeTarget) requestAnimationFrame(() => document.getElementById(routeTarget)?.scrollIntoView());
+
+const revealObserver = 'IntersectionObserver' in window ? new IntersectionObserver((entries) => {
+  entries.forEach((entry) => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('is-visible');
+      revealObserver.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.12 }) : null;
+
+document.querySelectorAll('.reveal').forEach((element) => revealObserver ? revealObserver.observe(element) : element.classList.add('is-visible'));
+document.querySelectorAll('[data-year]').forEach((element) => { element.textContent = String(new Date().getFullYear()); });
+
+document.querySelectorAll('details').forEach((details) => {
+  details.addEventListener('toggle', () => {
+    if (!details.open) return;
+    document.querySelectorAll('details[open]').forEach((other) => { if (other !== details) other.open = false; });
+  });
+});
+
+fetch('/api/auth/session', { credentials: 'same-origin' }).then((response) => response.ok ? response.json() : null).then((session) => {
+  if (!session?.authenticated) return;
+  document.querySelectorAll('a[href="/login"]').forEach((link) => { link.textContent = 'Open workspace'; link.href = '/app'; });
+}).catch(() => {});
