@@ -83,6 +83,10 @@ try {
   const landingHtml = await (await fetch(`${baseUrl}/`)).text();
   assert.doesNotMatch(landingHtml, /murphy/i);
   assert.doesNotMatch(landingHtml, /See how it works/i);
+  assert.match(landingHtml, /Don’t just show the score/i);
+  assert.match(landingHtml, /GAMIFICATION (?:&|&amp;) RECOGNITION/i);
+  assert.match(landingHtml, /TEAM COMPETITIONS/i);
+  for (const price of ['$99', '$249', '$599', 'From $1,500']) assert.ok(landingHtml.includes(price), `landing includes ${price} plan`);
   await assertRoute('/features', 200, /AxoBoard/i);
   await assertRoute('/integrations', 200, /AxoBoard/i);
   await assertRoute('/pricing', 200, /AxoBoard/i);

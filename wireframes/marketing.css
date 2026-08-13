@@ -334,3 +334,202 @@ img { max-width: 100%; }
   .integration-logo-list li { flex: 1 1 190px; }
   .ticker-control { display: none; }
 }
+
+/* Engagement engine and full commercial plan ladder */
+.engagement-section {
+  padding-block: clamp(5rem, 10vw, 8rem);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 9% 12%, rgba(233,111,152,.18), transparent 25rem),
+    radial-gradient(circle at 91% 82%, rgba(67,189,232,.16), transparent 28rem),
+    var(--ink);
+  color: white;
+}
+.engagement-shell { display: grid; gap: 2.25rem; }
+.engagement-intro { max-width: 850px; }
+.engagement-intro .section-kicker { color: var(--pink-200); }
+.engagement-intro h2 {
+  margin: .65rem 0 1rem;
+  font: 700 clamp(2.5rem, 5vw, 4.6rem)/1 var(--font-display);
+  letter-spacing: -.04em;
+}
+.engagement-intro p { max-width: 760px; margin: 0; color: #d9cfd7; font-size: 1.05rem; }
+.engagement-flow {
+  display: grid;
+  grid-template-columns: minmax(240px,.8fr) 44px minmax(360px,1.2fr);
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 22px;
+  background: rgba(255,255,255,.065);
+  backdrop-filter: blur(12px);
+}
+.signal-source {
+  min-height: 112px;
+  display: grid;
+  align-content: center;
+  gap: .2rem;
+  padding: 1rem 1.2rem;
+  border: 1px solid rgba(184,245,142,.28);
+  border-radius: 16px;
+  background: rgba(184,245,142,.09);
+}
+.signal-source small { color: var(--green-300); font-size: .65rem; font-weight: 800; letter-spacing: .1em; }
+.signal-source strong { font: 600 1.2rem var(--font-display); }
+.signal-source span { color: #bdb1ba; font-size: .75rem; }
+.flow-arrow { color: var(--pink-200); font-size: 1.6rem; text-align: center; }
+.signal-actions { display: grid; grid-template-columns: repeat(3,1fr); gap: .65rem; }
+.signal-actions span {
+  min-height: 92px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: .4rem;
+  padding: .8rem;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 14px;
+  background: rgba(255,255,255,.07);
+  color: #f7f1f5;
+  font-size: .75rem;
+  font-weight: 700;
+  text-align: center;
+}
+.signal-actions i { color: var(--pink-200); font: 600 1.2rem var(--font-display); }
+.engagement-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; }
+.engagement-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 1.75rem;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 22px;
+  background: rgba(255,255,255,.065);
+}
+.engagement-icon { width: 48px; height: 48px; display: grid; place-items: center; margin-bottom: 1.4rem; border-radius: 14px; font: 700 1.25rem var(--font-display); }
+.engagement-icon.notify { background: rgba(67,189,232,.15); color: #84daf5; }
+.engagement-icon.celebrate { background: rgba(233,111,152,.16); color: var(--pink-200); }
+.engagement-icon.compete { background: rgba(184,245,142,.12); color: var(--green-300); }
+.engagement-card .card-kicker { color: var(--pink-200); }
+.engagement-card h3 { margin: .6rem 0 .75rem; font: 600 1.55rem/1.15 var(--font-display); }
+.engagement-card p { margin: 0; color: #cfc4cc; font-size: .9rem; }
+.engagement-card ul { display: grid; gap: .55rem; margin: 1.25rem 0 0; padding: 0; list-style: none; }
+.engagement-card li { position: relative; padding-left: 1.15rem; color: #eee6ec; font-size: .78rem; }
+.engagement-card li::before { content: ''; position: absolute; top: .53em; left: 0; width: 5px; height: 5px; border-radius: 50%; background: var(--green-300); }
+.engagement-status { margin: -.4rem 0 0; color: #b9adb6; font-size: .75rem; }
+.engagement-status strong { color: #eee6ec; }
+
+.pricing-heading {
+  display: grid;
+  grid-template-columns: minmax(0,1.25fr) minmax(280px,.75fr);
+  align-items: end;
+  gap: 2rem;
+  margin-bottom: 1.5rem;
+}
+.pricing-heading h2 { margin: .6rem 0 0; font: 700 clamp(2.5rem, 5vw, 4.4rem)/1 var(--font-display); letter-spacing: -.04em; }
+.pricing-heading p { margin: 0 0 .35rem; color: var(--ink-soft); font-size: 1rem; }
+.pricing-savings {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: .85rem 1rem;
+  border: 1px solid var(--green-300);
+  border-radius: 14px;
+  background: var(--green-50);
+}
+.pricing-savings strong { color: var(--green-700); }
+.pricing-savings span { color: var(--ink-soft); font-size: .76rem; }
+.marketing-pricing-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; align-items: stretch; }
+.marketing-plan-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 1.65rem;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: white;
+  box-shadow: 0 14px 36px rgba(72,38,59,.055);
+}
+.marketing-plan-card.featured { border: 2px solid var(--pink-500); box-shadow: 0 22px 55px rgba(233,111,152,.15); }
+.recommended-label {
+  position: absolute;
+  top: 0;
+  right: 1.3rem;
+  padding: .5rem .75rem;
+  border-radius: 0 0 10px 10px;
+  background: var(--pink-600);
+  color: white;
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+}
+.marketing-plan-card header { padding-right: .35rem; }
+.marketing-plan-card.featured header { padding-right: 4.2rem; }
+.plan-eyebrow { color: var(--pink-700); font-size: .68rem; font-weight: 800; letter-spacing: .12em; }
+.marketing-plan-card h3 { margin: .35rem 0 .55rem; font: 700 1.65rem/1.1 var(--font-display); }
+.marketing-plan-card header p { min-height: 66px; margin: 0; color: var(--ink-soft); font-size: .82rem; }
+.marketing-price { display: flex; align-items: baseline; flex-wrap: wrap; gap: .35rem; margin: 1.4rem 0 1.1rem; }
+.marketing-price strong { font: 700 clamp(2.15rem,3.6vw,3rem)/1 var(--font-display); letter-spacing: -.035em; }
+.marketing-price span { color: var(--muted); font-size: .78rem; }
+.marketing-price small { width: 100%; margin-top: .3rem; color: var(--green-700); font-size: .7rem; font-weight: 700; }
+.marketing-plan-card > .button { width: 100%; min-height: 50px; }
+.marketing-plan-card ul { display: grid; gap: .65rem; margin: 1.4rem 0; padding: 0; list-style: none; }
+.marketing-plan-card li { position: relative; padding-left: 1.25rem; color: var(--ink-soft); font-size: .78rem; }
+.marketing-plan-card li::before { content: '✓'; position: absolute; left: 0; color: var(--green-700); font-weight: 800; }
+.plan-fit { margin: auto 0 0; padding-top: 1rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .72rem; }
+.marketing-plan-card.enterprise {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(260px,1.15fr) minmax(220px,.7fr) minmax(280px,1fr);
+  align-items: center;
+  gap: 2rem;
+  border: 0;
+  background: linear-gradient(110deg, var(--ink), #4f3548);
+  color: white;
+}
+.marketing-plan-card.enterprise header p { min-height: 0; color: #d8cdd5; }
+.marketing-plan-card.enterprise .plan-eyebrow { color: var(--pink-200); }
+.marketing-plan-card.enterprise .marketing-price { margin: 0; }
+.marketing-plan-card.enterprise .marketing-price strong { font-size: clamp(1.75rem,3vw,2.6rem); }
+.marketing-plan-card.enterprise .marketing-price small { color: var(--green-300); }
+.marketing-plan-card.enterprise ul { grid-column: 1 / -1; grid-template-columns: repeat(4,1fr); margin: 0; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,.13); }
+.marketing-plan-card.enterprise li { color: #eee6ec; }
+.marketing-plan-card.enterprise li::before { color: var(--green-300); }
+.pricing-section > .pricing-status { max-width: 850px; margin: 1rem auto 0; text-align: center; }
+
+@media (max-width: 1040px) {
+  .engagement-grid { grid-template-columns: 1fr 1fr; }
+  .engagement-card:last-child { grid-column: 1 / -1; }
+  .marketing-pricing-grid { grid-template-columns: 1fr 1fr; }
+  .marketing-plan-card.enterprise { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; }
+  .marketing-plan-card.enterprise ul { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 760px) {
+  .engagement-flow { grid-template-columns: 1fr; }
+  .flow-arrow { transform: rotate(90deg); }
+  .signal-actions { grid-template-columns: 1fr 1fr 1fr; }
+  .engagement-grid, .marketing-pricing-grid { grid-template-columns: 1fr; }
+  .engagement-card:last-child, .marketing-plan-card.enterprise { grid-column: auto; }
+  .pricing-heading { grid-template-columns: 1fr; gap: 1rem; }
+  .pricing-savings { align-items: flex-start; flex-direction: column; gap: .2rem; }
+  .marketing-plan-card.enterprise { display: flex; }
+  .marketing-plan-card.enterprise ul { display: grid; grid-template-columns: 1fr; }
+}
+
+@media (max-width: 560px) {
+  .engagement-section { padding-block: 4.5rem; }
+  .engagement-shell { gap: 1.5rem; }
+  .engagement-intro h2, .pricing-heading h2 { font-size: 2.45rem; }
+  .engagement-intro p { font-size: .95rem; }
+  .engagement-flow { padding: .75rem; }
+  .signal-actions { grid-template-columns: 1fr; }
+  .signal-actions span { min-height: 70px; grid-template-columns: 34px 1fr; justify-items: start; text-align: left; }
+  .engagement-card, .marketing-plan-card { padding: 1.35rem; border-radius: 18px; }
+  .marketing-plan-card.featured header { padding-right: 3.5rem; }
+  .marketing-plan-card header p { min-height: 0; }
+  .marketing-plan-card.enterprise .button { background: white; color: var(--ink); }
+}

@@ -126,6 +126,49 @@
       </div>
     </section>
 
+    <section class="engagement-section" aria-labelledby="engagementTitle">
+      <div class="section-shell engagement-shell">
+        <div class="engagement-intro reveal">
+          <span class="section-kicker">THE ENGAGEMENT ENGINE</span>
+          <h2 id="engagementTitle">Don’t just show the score.<br />Make the score matter.</h2>
+          <p>AxoBoard is being built to turn trusted KPI events into the three things performance dashboards usually miss: timely action, visible recognition, and healthy competition.</p>
+        </div>
+        <div class="engagement-flow reveal" aria-label="A KPI event can trigger notifications, celebrations, and competition points">
+          <div class="signal-source"><small>TRUSTED KPI EVENT</small><strong>Revenue reaches 100%</strong><span>Fresh data · rule verified</span></div>
+          <span class="flow-arrow" aria-hidden="true">→</span>
+          <div class="signal-actions">
+            <span><i aria-hidden="true">↗</i> Notify the right people</span>
+            <span><i aria-hidden="true">✦</i> Celebrate the win</span>
+            <span><i aria-hidden="true">⚑</i> Award competition points</span>
+          </div>
+        </div>
+        <div class="engagement-grid">
+          <article class="engagement-card reveal">
+            <div class="engagement-icon notify" aria-hidden="true">↗</div>
+            <span class="card-kicker">NOTIFICATIONS</span>
+            <h3>The right signal, before the number gets expensive.</h3>
+            <p>Route threshold alerts to the metric owner or team through email, Slack, and webhooks—with quiet hours, cooldowns, and stale-data guardrails.</p>
+            <ul><li>Goal and exception alerts</li><li>Owner-aware routing</li><li>Controlled retries and history</li></ul>
+          </article>
+          <article class="engagement-card reveal">
+            <div class="engagement-icon celebrate" aria-hidden="true">✦</div>
+            <span class="card-kicker">GAMIFICATION & RECOGNITION</span>
+            <h3>Make the behavior you want impossible to miss.</h3>
+            <p>Turn real milestones into branded celebrations, sounds, and team moments. Recognition follows verified progress—not manual hype.</p>
+            <ul><li>Custom celebrations and sounds</li><li>Milestone-based triggers</li><li>Quiet-hour and accessibility controls</li></ul>
+          </article>
+          <article class="engagement-card reveal">
+            <div class="engagement-icon compete" aria-hidden="true">⚑</div>
+            <span class="card-kicker">TEAM COMPETITIONS</span>
+            <h3>Give every team a reason to keep the board moving.</h3>
+            <p>Create configurable competitions around the KPIs that matter, with custom teams, scoring rules, seasons, and win conditions.</p>
+            <ul><li>Live team scoreboards</li><li>Configurable points and rules</li><li>Branded arenas and seasons</li></ul>
+          </article>
+        </div>
+        <p class="engagement-status reveal"><strong>Product roadmap:</strong> notifications, advanced celebrations, and Team Competitions launch as each feature passes production reliability and safety testing.</p>
+      </div>
+    </section>
+
     <section class="integrations-section" id="integrations">
       <div class="section-shell">
         <div class="section-heading split reveal"><div><span class="section-kicker">INTEGRATION ROADMAP</span><h2>Your systems already have the answers.</h2></div><div><p>We are building direct, tenant-scoped connections one provider at a time. Google Sheets is first; each connector must pass consent, freshness, isolation, and recovery tests before we call it live.</p><a class="inline-link" href="/pricing" data-scroll="pricing">Choose your plan →</a></div></div>
@@ -142,10 +185,42 @@
     </section>
 
     <section class="section-shell pricing-section" id="pricing">
-      <div class="pricing-panel reveal">
-        <div class="pricing-copy"><span class="section-kicker">STARTER</span><h2>One clear operating score for your team.</h2><p>Create your account, subscribe, and start with the first direct connection as it becomes available. Product access is limited to accounts with an active paid subscription.</p><div class="price-line"><strong>$99</strong><span>/month<br />Starter plan</span></div><a class="button button-primary button-large" href="/signup">Create account</a></div>
-        <div class="pricing-list"><span>Starter plan target</span><ul><li>Unlimited dashboards and viewers</li><li>Three connected accounts</li><li>Responsive web and mobile layouts</li><li>Goals, comparisons, and source drilldowns</li><li>Versioned dashboard publishing</li><li>Starter alerts and celebrations as released</li></ul><p class="pricing-status">Checkout is the next production milestone. Creating an account does not unlock the dashboard until Stripe confirms an active subscription.</p></div>
+      <div class="pricing-heading reveal">
+        <div><span class="section-kicker">SIMPLE, CAPACITY-BASED PRICING</span><h2>Start visible. Upgrade when your operation does.</h2></div>
+        <p>Every plan includes unlimited dashboards and viewers. You pay for the connections, editors, screens, refresh speed, automation, and governance your team needs.</p>
       </div>
+      <div class="pricing-savings reveal"><strong>Save 20% with annual billing</strong><span>Annual-equivalent pricing is shown below each monthly price.</span></div>
+      <div class="marketing-pricing-grid">
+        <article class="marketing-plan-card reveal">
+          <header><span class="plan-eyebrow">STARTER</span><h3>Get visible</h3><p>For one team replacing screenshots and scattered KPI reports.</p></header>
+          <div class="marketing-price"><strong>$99</strong><span>/month</span><small>$79/month billed annually</small></div>
+          <a class="button button-secondary" href="/signup?plan=starter">Start with Starter</a>
+          <ul><li>3 connected accounts</li><li>2 editors and unlimited viewers</li><li>Unlimited dashboards</li><li>1 paired TV screen</li><li>15-minute refresh and 90-day history</li><li>Basic alerts and celebration templates</li></ul>
+          <p class="plan-fit">Best for: a focused team proving its first trusted operating score.</p>
+        </article>
+        <article class="marketing-plan-card featured reveal">
+          <span class="recommended-label">BEST VALUE</span>
+          <header><span class="plan-eyebrow">GROWTH</span><h3>Create momentum</h3><p>For teams using recognition and competition to drive consistent action.</p></header>
+          <div class="marketing-price"><strong>$249</strong><span>/month</span><small>$199/month billed annually</small></div>
+          <a class="button button-primary" href="/signup?plan=growth">Choose Growth</a>
+          <ul><li>10 connected accounts</li><li>5 editors and unlimited viewers</li><li>5 paired TV screens</li><li>5-minute refresh and 2-year history</li><li>Custom celebrations, sounds, and branding</li><li>Team Competitions</li><li>Email, Slack, and webhook actions</li></ul>
+          <p class="plan-fit">Best for: the full AxoBoard engagement system.</p>
+        </article>
+        <article class="marketing-plan-card reveal">
+          <header><span class="plan-eyebrow">SCALE</span><h3>Run the operation</h3><p>For multiple teams, locations, and leaders who need governance.</p></header>
+          <div class="marketing-price"><strong>$599</strong><span>/month</span><small>$499/month billed annually</small></div>
+          <a class="button button-secondary" href="/signup?plan=scale">Choose Scale</a>
+          <ul><li>30 connected accounts</li><li>15 editors and unlimited viewers</li><li>20 paired TV screens</li><li>Up to 1-minute refresh</li><li>3 isolated workspaces</li><li>Advanced roles and approvals</li><li>Audit history and priority support</li></ul>
+          <p class="plan-fit">Best for: governed performance across departments or locations.</p>
+        </article>
+        <article class="marketing-plan-card enterprise reveal">
+          <header><span class="plan-eyebrow">ENTERPRISE</span><h3>Security, scale, and contract certainty</h3><p>For organizations that need SSO, custom capacity, contractual support, and a structured rollout.</p></header>
+          <div class="marketing-price"><strong>From $1,500</strong><span>/month</span><small>Annual contract</small></div>
+          <a class="button button-light" href="mailto:hello@axoboard.io?subject=AxoBoard%20Enterprise">Talk to us</a>
+          <ul><li>SAML/SSO and provisioning</li><li>Negotiated capacity and retention</li><li>Contracted SLA and security review</li><li>Dedicated rollout and success ownership</li></ul>
+        </article>
+      </div>
+      <p class="pricing-status reveal">Checkout is the next production milestone. Creating an account does not unlock the dashboard until Stripe confirms an active subscription. Roadmap features are activated only after production release.</p>
     </section>
 
     <section class="section-shell faq-section" id="faq">

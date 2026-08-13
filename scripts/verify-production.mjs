@@ -15,6 +15,10 @@ if (expectedSha) assert.ok(String(health.version).startsWith(expectedSha), `depl
 const landing = await (await request('/', 200)).text();
 assert.match(landing, /Your team should <em>feel<\/em> the numbers moving/i);
 assert.doesNotMatch(landing, /See how it works/i);
+assert.match(landing, /Don’t just show the score/i);
+assert.match(landing, /GAMIFICATION (?:&|&amp;) RECOGNITION/i);
+assert.match(landing, /TEAM COMPETITIONS/i);
+for (const price of ['$99', '$249', '$599', 'From $1,500']) assert.ok(landing.includes(price), `landing includes ${price} plan`);
 assert.match(await (await request('/signup', 200)).text(), /Create your AxoBoard/);
 assert.match(await (await request('/terms', 200)).text(), /Terms of Service/);
 assert.match(await (await request('/privacy', 200)).text(), /Privacy Policy/);
