@@ -8,7 +8,8 @@ const timeoutMs = Number(process.env.RELEASE_TIMEOUT_MS || 20 * 60_000);
 const promote = process.argv.includes('--promote');
 
 function run(command, args, options = {}) {
-  return execFileSync(command, args, { encoding: 'utf8', stdio: options.stdio || ['ignore', 'pipe', 'pipe'], ...options }).trim();
+  const output = execFileSync(command, args, { encoding: 'utf8', stdio: options.stdio || ['ignore', 'pipe', 'pipe'], ...options });
+  return typeof output === 'string' ? output.trim() : '';
 }
 
 function sleep(ms) {
