@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 jobs:
-  verify:
+  test:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -37,7 +37,25 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run verify
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Scan Git history for secrets
         run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:v8.30.1 detect --source /repo --redact=100 --no-banner
-      - name: Build production image
-        run: docker build -t axoboard:ci .
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: axoboard:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

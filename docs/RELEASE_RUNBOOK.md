@@ -3,23 +3,32 @@
 ## Publishing flow
 
 ```text
-feature/fix branch → local verify + secret scan → push → remote CI → pull request/review or fast-forward promotion
-              → merge to main → Railway builds exact main SHA
-              → health + route + security verification → release complete
+feature/fix branch → focused local tests → push → parallel remote CI
+              → one-command fast-forward → main CI → Railway exact SHA
+              → automated production verification → release complete
 ```
 
 Railway production follows only `main`. Feature branches never deploy to `axoboard.io`.
 
 ## Normal release
 
-1. Create a focused branch: `feat/<short-name>` or `fix/<short-name>`.
-2. Preserve unrelated work and keep commits scoped to one release outcome.
-3. Run `npm run verify` and `docker build -t axoboard:release .`.
-4. Run the pinned Gitleaks history and worktree scans.
-5. Push the branch and let GitHub Actions pass.
-6. Merge the verified commit to `main`; do not force-push production.
-7. Confirm Railway reports the same full Git SHA with deployment status `SUCCESS`.
-8. Run `EXPECTED_SHA=<short-sha> npm run verify:production`.
+1. Create a focused branch: `feat/<short-name>` or `fix/<short-name>` from current `origin/main`.
+2. Preserve unrelated work and run the smallest relevant local tests while editing.
+3. Before the final commit, run `npm run verify` once. Use local Docker/Gitleaks only when changing the image, dependencies, build pipeline, auth, secrets, or deployment surface; CI always runs all three gates.
+4. Commit and push the branch. GitHub runs PostgreSQL tests, the full-history secret scan, and the cached production-image build in parallel.
+5. Run `npm run release:check` for a read-only release preflight.
+6. Run `npm run release` to fast-forward the exact CI-passed SHA to `main`, wait for main CI and Railway, and verify production automatically.
+
+The release command refuses dirty worktrees, stale branches, non-fast-forward promotion, unpushed commits, and feature SHAs without successful CI. It never force-pushes.
+
+## Risk-tiered local validation
+
+- Copy/docs/style-only: syntax check plus focused browser/layout proof.
+- Provider or API behavior: focused provider/integration suite, then `npm run verify` once.
+- Database, auth, billing, tenant boundaries, migrations, dependencies, Docker, or CI: full local suite plus the relevant infrastructure proof.
+- Every pushed branch still receives the same remote test, secret, and image gates; risk tiers only prevent wasteful local repetition.
+
+The release script polls GitHub Actions and `/healthz`, so read-only status checks need no Railway or GitHub token. Git push authentication remains the only publishing credential.
 
 Database migrations run automatically before the HTTP listener starts. Each migration is transactional, serialized with an advisory lock, and checksum-verified against `schema_migrations`. A migration failure prevents the new container from becoming healthy; Railway retains the prior healthy deployment for rollback. Never modify an applied migration file.
 

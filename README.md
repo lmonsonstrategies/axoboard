@@ -18,10 +18,12 @@ Database changes live in `migrations/` and run automatically at startup under a 
 The repository deploys to Railway from `main` using the root `Dockerfile` and `railway.json`. The production health check is `/healthz`.
 
 ```text
-feature branch → verification → main → Railway → production verification
+feature branch → parallel CI → npm run release → main → Railway → exact-SHA verification
 ```
 
 Required release gates include syntax checks, dependency audit, PostgreSQL entitlement tests, sensitive-route probes, Gitleaks scans, Docker build, mobile browser QA, and exact-commit production verification.
+
+After a pushed feature/fix branch passes CI, use `npm run release:check` for a read-only preflight and `npm run release` for guarded fast-forward promotion, CI/deploy waiting, and the production smoke test. The release runbook defines the risk-tiered local test matrix.
 
 ## Current product boundary
 
