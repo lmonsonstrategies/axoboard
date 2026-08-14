@@ -55,7 +55,7 @@ Implement these endpoints behind the existing authenticated AxoBoard route:
 | `GET /api/integrations` | List tenant-owned connection status without exposing credentials |
 | `POST /api/integrations/:id/reconnect` | Issue a Nango reconnect session for the same tenant-owned connection |
 | `DELETE /api/integrations/:id` | Revoke/delete connection and stop dependent mappings after confirmation |
-| `GET /api/integrations/:id/resources` | List Google files/worksheets or HubSpot objects |
+| `GET /api/integrations/:id/resources` | List Google spreadsheets/sheets or HubSpot objects |
 | `GET /api/integrations/:id/fields` | List ranges/columns or HubSpot standard/custom properties |
 | `POST /api/kpi-mappings/preview` | Fetch, normalize, aggregate, and return a non-published KPI preview |
 
@@ -79,7 +79,7 @@ Never trust those returned tags by themselves. Match the webhook to an unexpired
 
 1. Reset Murphy Door to blank.
 2. Start Google OAuth from AxoBoard and complete fresh provider consent.
-3. Select one spreadsheet, worksheet, and A1 range.
+3. Select one spreadsheet, sheet, and A1 range.
 4. Preview a numeric aggregation and publish one KPI.
 5. Confirm source, selector, fetched time, source time, freshness, and synthetic/live status.
 

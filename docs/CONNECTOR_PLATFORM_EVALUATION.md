@@ -76,7 +76,7 @@ Provider adapters output observations, not dashboard cards:
 1. Register separate AxoBoard development OAuth apps for Google and HubSpot with localhost and beta callbacks.
 2. Run a two-week Nango Cloud development spike using only fresh test accounts and synthetic/non-production data.
 3. Implement `NangoAuthAdapter`, tenant ownership checks, connection health, and disconnect/revoke.
-4. Build Google file -> worksheet -> A1 range discovery and HubSpot object -> property -> filter discovery.
+4. Build Google spreadsheet -> sheet -> A1 range discovery and HubSpot object -> property -> filter discovery.
 5. Normalize both into the same `MetricObservation` and render one KPI from each.
 6. Run isolation tests with two customer tenants before adding another provider.
 7. Review Nango license, pricing, data-processing terms, exportability, and self-host/cloud exit path before production commitment.

@@ -32,7 +32,7 @@ Provider client secrets, access tokens, and refresh tokens remain server-side. P
 
 - Refresh access token server-side when needed.
 - Accept an exact spreadsheet URL/ID; Google Picker plus `drive.file` remains the later per-file discovery upgrade.
-- Select worksheet and exact A1 range.
+- Select a sheet and exact A1 range.
 - Preview one numeric KPI with source lineage and freshness.
 
 ## Piece 3 — HubSpot

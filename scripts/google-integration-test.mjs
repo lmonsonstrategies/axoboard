@@ -22,6 +22,7 @@ const testEmails = [];
 const workspaceIds = [];
 let expectedChallenge = '';
 let metadataCalls = 0;
+let driveCalls = 0;
 let valuesCalls = 0;
 let refreshCalls = 0;
 let revokeCalls = 0;
@@ -48,7 +49,7 @@ const fakeGoogle = createServer(async (req, res) => {
       assert.equal(createHash('sha256').update(form.get('code_verifier')).digest('base64url'), expectedChallenge, 'PKCE verifier matches challenge');
       return json(200, {
         access_token: 'google_access_initial', refresh_token: 'google_refresh_secret', expires_in: 3600,
-        token_type: 'Bearer', scope: 'openid email https://www.googleapis.com/auth/spreadsheets.readonly'
+        token_type: 'Bearer', scope: 'openid email https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/spreadsheets.readonly'
       });
     }
     assert.equal(form.get('grant_type'), 'refresh_token');
@@ -59,6 +60,29 @@ const fakeGoogle = createServer(async (req, res) => {
   if (url.pathname === '/userinfo' && req.method === 'GET') {
     assert.equal(req.headers.authorization, 'Bearer google_access_initial');
     return json(200, { sub: 'google-user-001', email: 'sheets-owner@example.com', email_verified: true });
+  }
+  if (url.pathname === '/drive/v3/files' && req.method === 'GET') {
+    assert.match(String(req.headers.authorization), /^Bearer google_access_(initial|refreshed)$/);
+    assert.equal(url.searchParams.get('q'), "mimeType='application/vnd.google-apps.spreadsheet' and trashed=false");
+    assert.equal(url.searchParams.get('orderBy'), 'modifiedTime desc,name_natural');
+    assert.equal(url.searchParams.get('pageSize'), '1000');
+    assert.equal(url.searchParams.get('corpora'), 'user');
+    assert.equal(url.searchParams.get('includeItemsFromAllDrives'), 'true');
+    driveCalls += 1;
+    if (!url.searchParams.get('pageToken')) {
+      return json(200, {
+        files: [
+          { id: 'sheet_recent_123456789', name: 'Latest Revenue', modifiedTime: '2026-08-13T23:00:00.000Z', webViewLink: 'https://docs.google.com/spreadsheets/d/sheet_recent_123456789/edit', starred: true, shared: false },
+          { id: 'sheet_test_123456789', name: 'Revenue Scoreboard', modifiedTime: '2026-08-13T22:00:00.000Z', webViewLink: 'https://docs.google.com/spreadsheets/d/sheet_test_123456789/edit', starred: false, shared: true }
+        ],
+        nextPageToken: 'drive-page-2', incompleteSearch: false
+      }, { 'x-request-id': `drive-${driveCalls}` });
+    }
+    assert.equal(url.searchParams.get('pageToken'), 'drive-page-2');
+    return json(200, {
+      files: [{ id: 'sheet_older_123456789', name: 'Older Scorecard', modifiedTime: '2026-08-10T12:00:00.000Z', webViewLink: 'https://docs.google.com/spreadsheets/d/sheet_older_123456789/edit', starred: false, shared: false }],
+      incompleteSearch: false
+    }, { 'x-request-id': `drive-${driveCalls}` });
   }
   if (url.pathname === '/sheets/v4/spreadsheets/sheet_test_123456789' && req.method === 'GET') {
     assert.match(String(req.headers.authorization), /^Bearer google_access_(initial|refreshed)$/);
@@ -94,6 +118,7 @@ const app = spawn(process.execPath, ['server.mjs'], {
     AXOBOARD_GOOGLE_AUTHORIZATION_URL: `${providerBaseUrl}/authorize`,
     AXOBOARD_GOOGLE_TOKEN_URL: `${providerBaseUrl}/token`,
     AXOBOARD_GOOGLE_USERINFO_URL: `${providerBaseUrl}/userinfo`,
+    AXOBOARD_GOOGLE_DRIVE_API_BASE_URL: `${providerBaseUrl}/drive/v3`,
     AXOBOARD_GOOGLE_SHEETS_API_BASE_URL: `${providerBaseUrl}/sheets/v4`,
     AXOBOARD_GOOGLE_REVOKE_URL: `${providerBaseUrl}/revoke`
   },
@@ -150,7 +175,7 @@ try {
   assert.equal(authorizationUrl.searchParams.get('access_type'), 'offline');
   assert.equal(authorizationUrl.searchParams.get('prompt'), 'consent');
   assert.equal(authorizationUrl.searchParams.get('code_challenge_method'), 'S256');
-  assert.deepEqual(authorizationUrl.searchParams.get('scope').split(' '), ['openid', 'email', 'https://www.googleapis.com/auth/spreadsheets.readonly']);
+  assert.deepEqual(authorizationUrl.searchParams.get('scope').split(' '), ['openid', 'email', 'https://www.googleapis.com/auth/drive.metadata.readonly', 'https://www.googleapis.com/auth/spreadsheets.readonly']);
   expectedChallenge = authorizationUrl.searchParams.get('code_challenge');
   const state = authorizationUrl.searchParams.get('state');
 
@@ -167,6 +192,7 @@ try {
   const connection = JSON.parse(connectionsText).connections[0];
   assert.equal(connection.accountEmail, 'sheets-owner@example.com');
   assert.equal(connection.status, 'healthy');
+  assert.ok(connection.scopes.includes('https://www.googleapis.com/auth/drive.metadata.readonly'));
 
   const encrypted = await pool.query(`SELECT encode(token_ciphertext,'escape') AS ciphertext, token_iv, token_auth_tag
     FROM integration_connections WHERE id=$1 AND workspace_id=$2`, [connection.id, first.workspaceId]);
@@ -175,10 +201,25 @@ try {
   assert.equal(encrypted.rows[0].token_iv.length, 12);
   assert.equal(encrypted.rows[0].token_auth_tag.length, 16);
 
-  const beforeIsolationCalls = metadataCalls + valuesCalls;
+  const beforeIsolationCalls = driveCalls + metadataCalls + valuesCalls;
+  const isolatedList = await api(`/api/axoboard/integrations/google/spreadsheets?connectionId=${connection.id}`, { cookie: second.cookie });
+  assert.equal(isolatedList.status, 403);
   const isolated = await api(`/api/axoboard/integrations/google/spreadsheet?connectionId=${connection.id}&spreadsheet=sheet_test_123456789`, { cookie: second.cookie });
   assert.equal(isolated.status, 403);
-  assert.equal(metadataCalls + valuesCalls, beforeIsolationCalls, 'swapped tenant ID makes zero provider calls');
+  assert.equal(driveCalls + metadataCalls + valuesCalls, beforeIsolationCalls, 'swapped tenant ID makes zero provider calls');
+
+  const firstFilePage = await api(`/api/axoboard/integrations/google/spreadsheets?connectionId=${connection.id}`, { cookie: first.cookie });
+  const firstFilePageText = await firstFilePage.text();
+  assert.equal(firstFilePage.status, 200, firstFilePageText);
+  assert.doesNotMatch(firstFilePageText, /google_access|google_refresh_secret/i, 'tokens never enter spreadsheet list response');
+  const firstFilePageBody = JSON.parse(firstFilePageText);
+  assert.deepEqual(firstFilePageBody.spreadsheets.map((file) => file.title), ['Latest Revenue', 'Revenue Scoreboard']);
+  assert.equal(firstFilePageBody.nextPageToken, 'drive-page-2');
+  const secondFilePage = await api(`/api/axoboard/integrations/google/spreadsheets?connectionId=${connection.id}&pageToken=drive-page-2`, { cookie: first.cookie });
+  const secondFilePageBody = await secondFilePage.json();
+  assert.equal(secondFilePage.status, 200);
+  assert.deepEqual(secondFilePageBody.spreadsheets.map((file) => file.title), ['Older Scorecard']);
+  assert.equal(secondFilePageBody.nextPageToken, null);
 
   const metadata = await api(`/api/axoboard/integrations/google/spreadsheet?connectionId=${connection.id}&spreadsheet=https%3A%2F%2Fdocs.google.com%2Fspreadsheets%2Fd%2Fsheet_test_123456789%2Fedit`, { cookie: first.cookie });
   const metadataText = await metadata.text();
@@ -237,7 +278,7 @@ try {
   assert.equal(retainedKpi.status, 'degraded');
   assert.equal(retainedKpi.lastErrorCode, 'connection_disconnected');
 
-  console.log('AxoBoard Google integration test passed: one-time PKCE OAuth, encrypted refresh, Sheets metadata/range KPI, sync, disconnect, and zero-call tenant isolation.');
+  console.log('AxoBoard Google integration test passed: one-time PKCE OAuth, encrypted refresh, recent-first paginated spreadsheet discovery, sheet/range KPI, sync, disconnect, and zero-call tenant isolation.');
 } finally {
   app.kill('SIGTERM');
   await new Promise((resolveExit) => app.once('exit', resolveExit));

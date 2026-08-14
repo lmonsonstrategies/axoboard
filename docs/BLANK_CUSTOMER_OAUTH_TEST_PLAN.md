@@ -39,7 +39,7 @@ Synthetic KPI fixtures may be loaded to test card visibility and responsive beha
 - Minimal scopes are requested incrementally.
 - Connection records and tokens cannot be accessed across tenants, including through job queues, caches, logs, exports, or support tooling.
 - Token rotation, expiry, revocation, user denial, callback mismatch, rate limits, and provider outage are observable and recoverable.
-- Google file/worksheet/range selection and HubSpot object/property/filter selection work from the newly authorized account only.
+- Google spreadsheet/sheet/range selection and HubSpot object/property/filter selection work from the newly authorized account only.
 - Reset deletes test tenant data and credential references without affecting another workspace.
 
 ## Provider references

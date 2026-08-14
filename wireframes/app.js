@@ -49,7 +49,7 @@ const workspaceProfiles = {
 function insertWorkspaceSandboxStates() {
   const states = {
     dashboard: '<span class="empty-axo">•ᴗ•</span><small>BLANK CUSTOMER WORKSPACE</small><h2>No KPIs yet</h2><p>Choose a responsive layout above, connect a source through a fresh OAuth consent flow, or load clearly labeled synthetic KPIs to test the product safely.</p><div><button class="button button-primary" type="button" data-screen="integrations">Connect a source</button><button class="button button-soft" type="button" data-load-demo>Load synthetic demo KPIs</button></div>',
-    integrations: '<span class="empty-axo">⌁</span><small>0 CONNECTIONS · FRESH OAUTH ONLY</small><h2>Connect your first source</h2><p>No accounts, tokens, service accounts, portals, or credentials are included in this sample workspace. Every connection begins with a new provider consent request.</p><div class="blank-connector-grid"><article><span class="integration-logo google">G</span><strong>Google Sheets</strong><small>Enter an exact spreadsheet URL, then choose a worksheet, cell, or range.</small><button class="button button-primary" type="button" data-fresh-oauth="google">Start fresh Google OAuth</button></article><article><span class="integration-logo hubspot">H</span><strong>HubSpot</strong><small>Pick CRM objects and specific standard or custom properties.</small><button class="button button-primary" type="button" data-fresh-oauth="hubspot">Start fresh HubSpot OAuth</button></article></div><aside class="credential-boundary"><b>Credential boundary</b><span>Credentials must be newly authorized and tenant-scoped. Live redirects remain disabled until AxoBoard-owned OAuth apps and callbacks are configured.</span></aside>',
+    integrations: '<span class="empty-axo">⌁</span><small>0 CONNECTIONS · FRESH OAUTH ONLY</small><h2>Connect your first source</h2><p>No accounts, tokens, service accounts, portals, or credentials are included in this sample workspace. Every connection begins with a new provider consent request.</p><div class="blank-connector-grid"><article><span class="integration-logo google">G</span><strong>Google Sheets</strong><small>Choose a spreadsheet, sheet, cell, or range after authorization.</small><button class="button button-primary" type="button" data-fresh-oauth="google">Start fresh Google OAuth</button></article><article><span class="integration-logo hubspot">H</span><strong>HubSpot</strong><small>Pick CRM objects and specific standard or custom properties.</small><button class="button button-primary" type="button" data-fresh-oauth="hubspot">Start fresh HubSpot OAuth</button></article></div><aside class="credential-boundary"><b>Credential boundary</b><span>Credentials must be newly authorized and tenant-scoped. Live redirects remain disabled until AxoBoard-owned OAuth apps and callbacks are configured.</span></aside>',
     displays: '<span class="empty-axo">▣</span><small>BLANK CUSTOMER WORKSPACE</small><h2>No screens paired</h2><p>Pair a test display after a dashboard exists. Device tokens will be scoped to this workspace.</p><div><button class="button button-primary" type="button" data-empty-workflow="screen">Pair first screen</button></div>',
     automations: '<span class="empty-axo">ϟ</span><small>BLANK CUSTOMER WORKSPACE</small><h2>No automation rules</h2><p>Create a rule only after a trusted or synthetic KPI exists. Dry runs stay separated from production events.</p><div><button class="button button-primary" type="button" data-empty-workflow="automation">Create first rule</button></div>',
     workspace: '<span class="empty-axo">N</span><small>NEW WORKSPACE · SAFE SAMPLE</small><h2>Clean onboarding state</h2><p>0 members · 0 connections · 0 dashboards · 0 displays. This sample intentionally starts empty for repeatable signup testing.</p><div><button class="button button-primary" type="button" data-screen="integrations">Begin with an integration</button><button class="button button-ghost" type="button" data-reset-sample>Reset to blank</button></div>',
@@ -364,8 +364,10 @@ let builderReturnFocus = null;
 let liveConnections = [];
 let liveKpis = [];
 let activeGoogleConnection = null;
+let availableSpreadsheets = [];
 let loadedSpreadsheet = null;
 let builderPreview = null;
+const googleDriveMetadataScope = 'https://www.googleapis.com/auth/drive.metadata.readonly';
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
@@ -425,6 +427,7 @@ function renderLiveConnections() {
   document.body.dataset.liveIntegrations = activeGoogleConnection ? 'true' : 'false';
   document.querySelector('#googleConnectionLabel').textContent = activeGoogleConnection ? `✓ ${activeGoogleConnection.accountEmail}` : 'Connection required';
   if (!activeGoogleConnection) return;
+  const canBrowseSpreadsheets = activeGoogleConnection.scopes?.includes(googleDriveMetadataScope);
   const activeKpis = liveKpis.filter((kpi) => kpi.connectionId === activeGoogleConnection.id);
   document.querySelector('#liveConnectionCount').textContent = String(liveConnections.length);
   document.querySelector('#liveKpiCount').textContent = String(activeKpis.length);
@@ -432,7 +435,7 @@ function renderLiveConnections() {
   document.querySelector('#liveSyncStatus').textContent = activeGoogleConnection.status === 'healthy' ? 'Healthy' : 'Attention';
   document.querySelector('#googleConnectionAccount').textContent = activeGoogleConnection.accountEmail;
   document.querySelector('#googleConnectionMappings').textContent = `${activeKpis.length} KPI${activeKpis.length === 1 ? '' : 's'}`;
-  document.querySelector('#googleConnectionStatus').textContent = activeGoogleConnection.status === 'healthy' ? '● Connected' : '● Reconnect';
+  document.querySelector('#googleConnectionStatus').textContent = activeGoogleConnection.status === 'healthy' && canBrowseSpreadsheets ? '● Connected' : '● Reconnect';
   document.querySelector('#googleHealthDetail').textContent = activeGoogleConnection.lastSyncAt ? `Last sync ${timeAgo(activeGoogleConnection.lastSyncAt)} · encrypted token` : 'Connected · waiting for first KPI';
   document.querySelector('#googleHealthMark').textContent = activeGoogleConnection.status === 'healthy' ? '✓' : '!';
   document.querySelector('#googleHealthBadge').textContent = activeGoogleConnection.status === 'healthy' ? '● Live' : '● Attention';
@@ -465,7 +468,7 @@ function syncBuilderSource(source) {
   const isGoogle = activeKpiSource === 'google';
   document.querySelector('#dataStepTitle').textContent = isGoogle ? 'Choose cells to watch' : 'Choose CRM properties';
   document.querySelector('#dataStepCopy').textContent = isGoogle
-    ? 'Select a spreadsheet, worksheet, and exact A1 range.'
+    ? 'Select a spreadsheet, sheet, and exact A1 range.'
     : 'Select an object, standard or custom property, filters, and aggregation.';
   previewSourceMark.textContent = isGoogle ? 'G' : 'H';
   previewSourceMark.classList.toggle('google', isGoogle);
@@ -494,13 +497,22 @@ function openKpiBuilder(source = 'google', trigger = document.activeElement) {
     showToast('Connect Google Sheets first', 'Authorize one Google account before choosing spreadsheet cells.');
     return;
   }
+  if (source === 'google' && !activeGoogleConnection.scopes?.includes(googleDriveMetadataScope)) {
+    showScreen('integrations');
+    showToast('Reconnect Google Sheets', 'Approve read-only Drive metadata so AxoBoard can list your spreadsheets.');
+    return;
+  }
   builderReturnFocus = trigger;
+  availableSpreadsheets = [];
   loadedSpreadsheet = null;
   builderPreview = null;
-  document.querySelector('#sheetFile').value = '';
-  document.querySelector('#sheetTab').innerHTML = '<option value="">Load a spreadsheet first</option>';
-  document.querySelector('#sheetPickerTitle').textContent = 'No spreadsheet loaded';
-  document.querySelector('#sheetPickerSubtitle').textContent = 'Paste a Google Sheets URL above';
+  document.querySelector('#sheetFile').innerHTML = '<option value="">Loading your spreadsheets…</option>';
+  document.querySelector('#sheetFile').disabled = true;
+  document.querySelector('#sheetTab').innerHTML = '<option value="">Choose a spreadsheet first</option>';
+  document.querySelector('#sheetTab').disabled = true;
+  document.querySelector('#sheetPickerTitle').textContent = 'Loading spreadsheets';
+  document.querySelector('#sheetPickerSubtitle').textContent = 'Reading file names and modified dates from Google Drive';
+  document.querySelector('#spreadsheetPickerHelp').textContent = 'Sorted by most recently updated';
   document.querySelector('#sheetGrid').innerHTML = '<p>Your preview value and exact source lineage will appear here.</p>';
   syncBuilderSource(source);
   showBuilderStep(1);
@@ -508,6 +520,12 @@ function openKpiBuilder(source = 'google', trigger = document.activeElement) {
   kpiBuilderModal.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
   document.querySelector('#closeKpiBuilder').focus();
+  if (source === 'google') loadSpreadsheetList().catch((error) => {
+    document.querySelector('#sheetPickerTitle').textContent = 'Spreadsheet list unavailable';
+    document.querySelector('#sheetPickerSubtitle').textContent = error.message;
+    document.querySelector('#sheetFile').innerHTML = '<option value="">Reconnect Google Sheets</option>';
+    showToast('Reconnect Google Sheets', error.message);
+  });
 }
 
 function closeKpiBuilder() {
@@ -517,9 +535,53 @@ function closeKpiBuilder() {
   builderReturnFocus?.focus?.();
 }
 
+function spreadsheetModifiedLabel(value) {
+  if (!value) return 'Modified date unavailable';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Modified date unavailable';
+  return `Updated ${timeAgo(date.toISOString())}`;
+}
+
+async function loadSpreadsheetList() {
+  const select = document.querySelector('#sheetFile');
+  const seenTokens = new Set();
+  const spreadsheets = [];
+  let pageToken = '';
+  let incompleteSearch = false;
+  do {
+    const query = new URLSearchParams({ connectionId: activeGoogleConnection.id });
+    if (pageToken) query.set('pageToken', pageToken);
+    const payload = await apiJson(`/api/axoboard/integrations/google/spreadsheets?${query}`);
+    spreadsheets.push(...(payload.spreadsheets || []));
+    incompleteSearch ||= Boolean(payload.incompleteSearch);
+    pageToken = payload.nextPageToken || '';
+    if (pageToken && seenTokens.has(pageToken)) throw new Error('Google returned a repeated page. Try reconnecting.');
+    if (pageToken) seenTokens.add(pageToken);
+  } while (pageToken);
+  availableSpreadsheets = spreadsheets.sort((a, b) => new Date(b.modifiedTime || 0) - new Date(a.modifiedTime || 0));
+  if (!availableSpreadsheets.length) {
+    select.innerHTML = '<option value="">No Google spreadsheets found</option>';
+    select.disabled = true;
+    document.querySelector('#sheetPickerTitle').textContent = 'No spreadsheets found';
+    document.querySelector('#sheetPickerSubtitle').textContent = 'Create or share a Google spreadsheet with this account, then reconnect.';
+    document.querySelector('#spreadsheetPickerHelp').textContent = 'No files available';
+    return [];
+  }
+  select.replaceChildren(...availableSpreadsheets.map((spreadsheet) => {
+    const option = document.createElement('option');
+    option.value = spreadsheet.spreadsheetId;
+    option.textContent = `${spreadsheet.title} — ${spreadsheetModifiedLabel(spreadsheet.modifiedTime)}`;
+    return option;
+  }));
+  select.disabled = false;
+  document.querySelector('#spreadsheetPickerHelp').textContent = `${availableSpreadsheets.length} spreadsheet${availableSpreadsheets.length === 1 ? '' : 's'} · newest first${incompleteSearch ? ' · Google reported an incomplete search' : ''}`;
+  await loadSpreadsheetMetadata();
+  return availableSpreadsheets;
+}
+
 async function loadSpreadsheetMetadata() {
   const spreadsheet = document.querySelector('#sheetFile').value.trim();
-  if (!spreadsheet) throw new Error('Paste a Google Sheets URL or spreadsheet ID.');
+  if (!spreadsheet) throw new Error('Choose a spreadsheet.');
   const payload = await apiJson(`/api/axoboard/integrations/google/spreadsheet?connectionId=${encodeURIComponent(activeGoogleConnection.id)}&spreadsheet=${encodeURIComponent(spreadsheet)}`);
   loadedSpreadsheet = { ...payload.spreadsheet, input: spreadsheet };
   const select = document.querySelector('#sheetTab');
@@ -529,8 +591,9 @@ async function loadSpreadsheetMetadata() {
     option.textContent = sheet.title;
     return option;
   }));
+  select.disabled = !loadedSpreadsheet.sheets.length;
   document.querySelector('#sheetPickerTitle').textContent = loadedSpreadsheet.title;
-  document.querySelector('#sheetPickerSubtitle').textContent = `${loadedSpreadsheet.sheets.length} worksheet${loadedSpreadsheet.sheets.length === 1 ? '' : 's'} available`;
+  document.querySelector('#sheetPickerSubtitle').textContent = `${loadedSpreadsheet.sheets.length} sheet${loadedSpreadsheet.sheets.length === 1 ? '' : 's'} available`;
   document.querySelector('#sheetPickerStatus').textContent = 'Metadata loaded';
   return loadedSpreadsheet;
 }
@@ -538,8 +601,9 @@ async function loadSpreadsheetMetadata() {
 async function previewGoogleSelection() {
   const spreadsheetInput = document.querySelector('#sheetFile').value.trim();
   if (!loadedSpreadsheet || loadedSpreadsheet.input !== spreadsheetInput) await loadSpreadsheetMetadata();
-  const sheetId = Number(document.querySelector('#sheetTab').value);
-  if (!Number.isSafeInteger(sheetId)) throw new Error('Choose a worksheet.');
+  const selectedSheet = document.querySelector('#sheetTab').value;
+  const sheetId = Number(selectedSheet);
+  if (!selectedSheet || !Number.isSafeInteger(sheetId)) throw new Error('Choose a sheet.');
   const payload = await apiJson('/api/axoboard/kpis/google/preview', {
     method: 'POST', body: JSON.stringify({
       connectionId: activeGoogleConnection.id, spreadsheet: spreadsheetInput, sheetId,
@@ -605,7 +669,14 @@ document.querySelector('#selectRangeButton').addEventListener('click', async () 
 document.querySelector('#kpiFormat').addEventListener('change', () => {
   if (builderPreview) previewKpiValue.textContent = formatKpiValue(builderPreview.value, document.querySelector('#kpiFormat').value);
 });
-document.querySelector('#sheetFile').addEventListener('input', () => { loadedSpreadsheet = null; builderPreview = null; });
+document.querySelector('#sheetFile').addEventListener('change', async () => {
+  loadedSpreadsheet = null;
+  builderPreview = null;
+  document.querySelector('#sheetTab').disabled = true;
+  document.querySelector('#sheetTab').innerHTML = '<option value="">Loading sheets…</option>';
+  try { await loadSpreadsheetMetadata(); }
+  catch (error) { showToast('Spreadsheet could not load', error.message); }
+});
 document.querySelector('#sheetTab').addEventListener('change', () => { builderPreview = null; });
 document.querySelector('#sheetRange').addEventListener('input', () => { builderPreview = null; });
 document.querySelector('#sheetAggregation').addEventListener('change', () => { builderPreview = null; });
@@ -800,7 +871,7 @@ const workflowDefinitions = {
   layout: { eyebrow: 'DASHBOARD LAYOUT', title: 'Change layout', description: 'Choose a responsive preset, show the sections you need, and put KPIs in the right order.', steps: ['Arrange','Review'], primary: 'Review layout', canvas: '<h3>Shape the dashboard around the decision</h3><p>Every change previews immediately. Cancel restores the layout you started with.</p><fieldset class="layout-preset-fieldset"><legend>Layout preset</legend><div class="layout-preset-options"><label><input type="radio" name="layoutPreset" value="balanced" /><span class="layout-preset-icon balanced" aria-hidden="true"><i></i><i></i><i></i><i></i></span><strong>Balanced</strong><small>Equal KPI cards with trend and actions below.</small></label><label><input type="radio" name="layoutPreset" value="kpi-focus" /><span class="layout-preset-icon kpi-focus" aria-hidden="true"><i></i><i></i><i></i></span><strong>KPI focus</strong><small>Lead with the first KPI and give the score more room.</small></label><label><input type="radio" name="layoutPreset" value="compact" /><span class="layout-preset-icon compact" aria-hidden="true"><i></i><i></i><i></i><i></i></span><strong>Compact</strong><small>Reduce card height to scan more at once.</small></label></div></fieldset><fieldset class="layout-section-fieldset"><legend>Dashboard sections</legend><div class="workflow-checks layout-visibility-options"><label><input id="layoutShowTrend" type="checkbox" /><span><strong>Trend chart</strong><small>Revenue momentum and period comparison</small></span></label><label><input id="layoutShowActionCenter" type="checkbox" /><span><strong>Action Center</strong><small>Alerts and next-best actions</small></span></label></div></fieldset><div class="layout-order-heading"><div><strong>KPI order</strong><small>Use Move up and Move down for a keyboard-safe order.</small></div></div><ol class="layout-order-list" id="layoutKpiOrder"></ol>', context: '<h3>Live layout preview</h3><p>This preview and the dashboard behind it update together. Nothing is sent to a server.</p><div class="layout-mini-preview" data-layout-preview><div class="layout-mini-kpis" data-layout-preview-kpis></div><span class="layout-mini-section trend" data-layout-preview-trend>Trend chart</span><span class="layout-mini-section actions" data-layout-preview-actions>Action Center</span><span class="layout-mini-empty" data-layout-preview-empty hidden>KPI cards only</span></div><div class="workflow-summary"><div><small>PERSISTENCE</small><strong>This browser only</strong></div><div><small>MOBILE</small><strong>Order becomes a single column</strong></div><div><small>SERVER STATUS</small><strong>Not published</strong></div></div>' },
   kpi: { eyebrow: 'KPI SETTINGS', title: 'Edit KPI card', description: 'Update source mapping, calculation, appearance, goal, and alert behavior.', steps: ['Source','Calculation','Display','Publish'], primary: 'Review KPI', canvas: '<h3>Metric and display</h3><p>The source contract stays visible while you customize the card.</p><div class="workflow-form"><label>KPI name<input value="Net sales today" /></label><div class="field-row"><label>Format<select><option>Currency · no decimals</option><option>Number</option><option>Percentage</option></select></label><label>Goal<input value="$65,000" /></label></div><label>Comparison<select><option>Versus yesterday</option><option>Versus prior week</option><option>Versus goal only</option></select></label><div class="workflow-checks"><label><input type="checkbox" checked /> Enable source drilldown</label><label><input type="checkbox" checked /> Show stale warning after 15 minutes</label></div></div>', context: '<h3>Trusted source</h3><p>Google Sheets → 2026 Sales Performance → Summary!D8</p><div class="workflow-summary"><div><small>CURRENT VALUE</small><strong>$55,396</strong></div><div><small>FRESHNESS</small><strong>2 minutes ago · healthy</strong></div><div><small>OWNER</small><strong>Sales Ops</strong></div></div>' },
   alert: { eyebrow: 'ALERT & ACTION BUILDER', title: 'Configure an alert', description: 'Turn a trusted KPI condition into controlled notifications and team actions.', steps: ['Trigger','Actions','Guardrails','Test'], primary: 'Test rule', canvas: '<h3>When should this run?</h3><p>Rules evaluate normalized KPI snapshots—not raw browser values.</p><div class="workflow-form"><div class="field-row"><label>KPI<select><option>Pipeline coverage</option><option>Net sales today</option><option>Team on track</option></select></label><label>Condition<select><option>Falls below</option><option>Reaches</option><option>Changes by more than</option></select></label></div><div class="field-row"><label>Threshold<input value="3×" /></label><label>For at least<select><option>30 minutes</option><option>Immediately</option><option>1 hour</option></select></label></div><div class="workflow-checks"><label><input type="checkbox" checked /> Slack #sales-leadership</label><label><input type="checkbox" /> Email the metric owner</label><label><input type="checkbox" /> Start a quiet celebration</label></div></div>', context: '<h3>Guardrail preview</h3><p>This would have run twice in the last 30 days.</p><div class="workflow-summary"><div><small>COOLDOWN</small><strong>4 hours</strong></div><div><small>QUIET HOURS</small><strong>8 PM–7 AM</strong></div><div><small>STALE DATA</small><strong>Block rule</strong></div></div>' },
-  connector: { eyebrow: 'INTEGRATION SETUP', title: 'Connect a data source', description: 'Authorize the smallest useful scope, validate it, and create the first mapping.', steps: ['Choose source','Authorize','Validate','Map data'], primary: 'Review setup', canvas: '<h3>Connector roadmap</h3><p>Deep, observable connections beat a huge brittle catalog.</p><div class="workflow-grid"><button class="workflow-card is-selected" type="button"><span class="integration-logo google" aria-label="Google Sheets">Google Sheets</span><strong>Google Sheets</strong><small>Files, worksheets, cells, and named ranges</small><i>App setup required</i></button><button class="workflow-card" type="button"><span class="integration-logo hubspot" aria-label="HubSpot">HubSpot</span><strong>HubSpot</strong><small>Objects, standard/custom properties, filters</small><i>Roadmap</i></button><button class="workflow-card" type="button"><span>▤</span><strong>Shopify</strong><small>Orders, refunds, net sales, products</small><i>Roadmap</i></button><button class="workflow-card" type="button"><span>↯</span><strong>Webhook / API</strong><small>Push signed custom events</small><i>Roadmap</i></button></div>', context: '<h3>Connection requirements</h3><p>Tokens stay encrypted server-side. Revocation, freshness, rate limits, and errors remain visible.</p><div class="workflow-summary"><div><small>AUTH</small><strong>OAuth 2.0</strong></div><div><small>SYNC</small><strong>Incremental + retry</strong></div></div>' },
+  connector: { eyebrow: 'INTEGRATION SETUP', title: 'Connect a data source', description: 'Authorize the smallest useful scope, validate it, and create the first mapping.', steps: ['Choose source','Authorize','Validate','Map data'], primary: 'Review setup', canvas: '<h3>Connector roadmap</h3><p>Deep, observable connections beat a huge brittle catalog.</p><div class="workflow-grid"><button class="workflow-card is-selected" type="button"><span class="integration-logo google" aria-label="Google Sheets">Google Sheets</span><strong>Google Sheets</strong><small>Spreadsheets, sheets, cells, and named ranges</small><i>App setup required</i></button><button class="workflow-card" type="button"><span class="integration-logo hubspot" aria-label="HubSpot">HubSpot</span><strong>HubSpot</strong><small>Objects, standard/custom properties, filters</small><i>Roadmap</i></button><button class="workflow-card" type="button"><span>▤</span><strong>Shopify</strong><small>Orders, refunds, net sales, products</small><i>Roadmap</i></button><button class="workflow-card" type="button"><span>↯</span><strong>Webhook / API</strong><small>Push signed custom events</small><i>Roadmap</i></button></div>', context: '<h3>Connection requirements</h3><p>Tokens stay encrypted server-side. Revocation, freshness, rate limits, and errors remain visible.</p><div class="workflow-summary"><div><small>AUTH</small><strong>OAuth 2.0</strong></div><div><small>SYNC</small><strong>Incremental + retry</strong></div></div>' },
   connection: { eyebrow: 'CONNECTION MANAGEMENT', title: 'Manage connection', description: 'Inspect health, scopes, mappings, sync history, and revocation.', steps: ['Health','Mappings','Permissions'], primary: 'Save connection', canvas: '<h3>Google Sheets connection</h3><p>Healthy and currently used by two published KPI mappings.</p><div class="workflow-form"><div class="field-row"><label>Account<input value="jordan@acme.co" readonly /></label><label>Refresh<select><option>Every 5 minutes</option><option>Every 15 minutes</option></select></label></div><ul class="workflow-list"><li><span>▦</span><div><strong>Net sales today</strong><small>Summary!D8 · refreshed 2m ago</small></div><button type="button">Edit</button></li><li><span>◎</span><div><strong>Team on track</strong><small>Reps!G4:G18 · refreshed 2m ago</small></div><button type="button">Edit</button></li></ul></div>', context: '<h3>Connection health</h3><p>OAuth token valid. No rate limits or mapping errors.</p><div class="workflow-summary"><div><small>LAST SYNC</small><strong>2 minutes ago</strong></div><div><small>SCOPES</small><strong>Google Sheets read-only</strong></div><div><small>NEXT CHECK</small><strong>In 3 minutes</strong></div></div>' },
   screen: { eyebrow: 'DISPLAY CONTROL', title: 'Manage TV screen', description: 'Pair, assign content, set a schedule, and diagnose the player remotely.', steps: ['Screen','Content','Schedule','Confirm'], primary: 'Apply to screen', canvas: '<h3>Screen and content</h3><p>Updates apply on the next player heartbeat.</p><div class="workflow-form"><div class="field-row"><label>Screen name<input value="Sales Floor TV" /></label><label>Location<input value="Front office" /></label></div><label>Content<select><option>Revenue pulse · 3 views</option><option>Sales performance</option><option>Team Challenge</option><option>Concierge Pulse</option></select></label><div class="field-row"><label>Wake<select><option>7:00 AM</option><option>Always on</option></select></label><label>Sleep<select><option>8:00 PM</option><option>Never</option></select></label></div><div class="workflow-checks"><label><input type="checkbox" checked /> Auto-recover last-known-good content</label><label><input type="checkbox" /> Notify admin when offline for 5 minutes</label></div></div>', context: '<h3>Player heartbeat</h3><p>Chrome · 4K · player v0.4.1</p><div class="workflow-summary"><div><small>STATUS</small><strong>Online · 18s ago</strong></div><div><small>LAST RENDER</small><strong>Successful</strong></div><div><small>PAIRING</small><strong>Device-bound token</strong></div></div>' },
   automation: { eyebrow: 'AUTOMATION WORKFLOW', title: 'Edit automation rule', description: 'Build the trigger, actions, cooldowns, and replay policy as one auditable rule.', steps: ['Trigger','Actions','Guardrails','Dry run'], primary: 'Run dry test', canvas: '<h3>Rule definition</h3><p>Every destination gets its own idempotency key and retry state.</p><div class="workflow-form"><label>Rule name<input value="Sales goal crossed" /></label><div class="field-row"><label>Metric<select><option>Net sales today</option><option>Open pipeline</option></select></label><label>Condition<select><option>Reaches $65,000</option><option>Crosses 100% of goal</option></select></label></div><div class="workflow-checks"><label><input type="checkbox" checked /> ✦ Play celebration</label><label><input type="checkbox" checked /> # Post to Slack</label><label><input type="checkbox" checked /> ⚔ Award 100 competition points</label></div><div class="field-row"><label>Cooldown<select><option>Once per day</option><option>4 hours</option></select></label><label>Quiet hours<select><option>8 PM–7 AM</option><option>None</option></select></label></div></div>', context: '<h3>Recent dry-run result</h3><p>1 match across the last 30 days; no duplicate event IDs.</p><div class="workflow-summary"><div><small>RULE STATE</small><strong>Draft version 4</strong></div><div><small>STALE METRIC</small><strong>Do not run</strong></div></div>' },

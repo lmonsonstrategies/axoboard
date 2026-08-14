@@ -32,7 +32,7 @@ Google recommends OAuth client libraries for secure implementation and identifie
 
 1. Pick a Google spreadsheet using Picker.
 2. Fetch spreadsheet metadata and list `sheets[].properties`.
-3. Pick a worksheet.
+3. Pick a sheet.
 4. Select or type an A1 range, named range, row, column, or single cell.
 5. Fetch a small preview through `spreadsheets.values.get` or `batchGet`.
 6. Choose interpretation: single value, sum, average, count, min/max, or latest non-empty value.
@@ -57,7 +57,7 @@ The Sheets API represents value ranges in A1 notation and supports retrieving mu
 }
 ```
 
-Persist both immutable `sheetId` and display `sheetTitle`. Detect renamed/deleted worksheets, range shrinkage, formula errors, empty results, permission loss, and locale/number-format changes.
+Persist both immutable `sheetId` and display `sheetTitle`. Detect renamed/deleted sheets, range shrinkage, formula errors, empty results, permission loss, and locale/number-format changes.
 
 ## HubSpot
 
@@ -140,7 +140,7 @@ Nango is the selected connector broker behind an AxoBoard-owned adapter contract
 
 - Google and HubSpot OAuth complete end to end in isolated test tenants.
 - Editor can build, preview, save, publish, and delete one KPI from each provider.
-- Google selection supports spreadsheet, worksheet, and A1 range.
+- Google selection supports spreadsheet, sheet, and A1 range.
 - HubSpot selection supports object, standard/custom property, filters, and aggregation.
 - Each KPI displays source lineage, last refresh, and stale status.
 - Disconnect and tenant deletion paths are tested.

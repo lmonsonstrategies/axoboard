@@ -43,7 +43,7 @@ The browser receives connection status and safe metadata only. OAuth access toke
 - Narrow per-user consent
 - Server-side state + PKCE verification
 - AES-256-GCM token encryption with key rotation plan
-- File discovery, worksheet discovery, and A1-range selection
+- Spreadsheet discovery, sheet discovery, and A1-range selection
 - One KPI calculation with visible source lineage
 - Scheduled refresh with retries/backoff capped at three
 - Stale threshold and last-known-good value
