@@ -49,7 +49,7 @@ const workspaceProfiles = {
 function insertWorkspaceSandboxStates() {
   const states = {
     dashboard: '<span class="empty-axo">•ᴗ•</span><small>BLANK CUSTOMER WORKSPACE</small><h2>No KPIs yet</h2><p>Choose a responsive layout above, connect a source through a fresh OAuth consent flow, or load clearly labeled synthetic KPIs to test the product safely.</p><div><button class="button button-primary" type="button" data-screen="integrations">Connect a source</button><button class="button button-soft" type="button" data-load-demo>Load synthetic demo KPIs</button></div>',
-    integrations: '<span class="empty-axo">⌁</span><small>0 CONNECTIONS · FRESH OAUTH ONLY</small><h2>Connect your first source</h2><p>No accounts, tokens, service accounts, portals, or credentials are included in this sample workspace. Every connection begins with a new provider consent request.</p><div class="blank-connector-grid"><article><span class="integration-logo google">G</span><strong>Google Sheets</strong><small>Pick files, worksheets, cells, and ranges after authorization.</small><button class="button button-primary" type="button" data-fresh-oauth="google">Start fresh Google OAuth</button></article><article><span class="integration-logo hubspot">H</span><strong>HubSpot</strong><small>Pick CRM objects and specific standard or custom properties.</small><button class="button button-primary" type="button" data-fresh-oauth="hubspot">Start fresh HubSpot OAuth</button></article></div><aside class="credential-boundary"><b>Credential boundary</b><span>Credentials must be newly authorized and tenant-scoped. Live redirects remain disabled until AxoBoard-owned OAuth apps and callbacks are configured.</span></aside>',
+    integrations: '<span class="empty-axo">⌁</span><small>0 CONNECTIONS · FRESH OAUTH ONLY</small><h2>Connect your first source</h2><p>No accounts, tokens, service accounts, portals, or credentials are included in this sample workspace. Every connection begins with a new provider consent request.</p><div class="blank-connector-grid"><article><span class="integration-logo google">G</span><strong>Google Sheets</strong><small>Enter an exact spreadsheet URL, then choose a worksheet, cell, or range.</small><button class="button button-primary" type="button" data-fresh-oauth="google">Start fresh Google OAuth</button></article><article><span class="integration-logo hubspot">H</span><strong>HubSpot</strong><small>Pick CRM objects and specific standard or custom properties.</small><button class="button button-primary" type="button" data-fresh-oauth="hubspot">Start fresh HubSpot OAuth</button></article></div><aside class="credential-boundary"><b>Credential boundary</b><span>Credentials must be newly authorized and tenant-scoped. Live redirects remain disabled until AxoBoard-owned OAuth apps and callbacks are configured.</span></aside>',
     displays: '<span class="empty-axo">▣</span><small>BLANK CUSTOMER WORKSPACE</small><h2>No screens paired</h2><p>Pair a test display after a dashboard exists. Device tokens will be scoped to this workspace.</p><div><button class="button button-primary" type="button" data-empty-workflow="screen">Pair first screen</button></div>',
     automations: '<span class="empty-axo">ϟ</span><small>BLANK CUSTOMER WORKSPACE</small><h2>No automation rules</h2><p>Create a rule only after a trusted or synthetic KPI exists. Dry runs stay separated from production events.</p><div><button class="button button-primary" type="button" data-empty-workflow="automation">Create first rule</button></div>',
     workspace: '<span class="empty-axo">N</span><small>NEW WORKSPACE · SAFE SAMPLE</small><h2>Clean onboarding state</h2><p>0 members · 0 connections · 0 dashboards · 0 displays. This sample intentionally starts empty for repeatable signup testing.</p><div><button class="button button-primary" type="button" data-screen="integrations">Begin with an integration</button><button class="button button-ghost" type="button" data-reset-sample>Reset to blank</button></div>',
@@ -361,9 +361,105 @@ const previewSourceMark = document.querySelector('#previewSourceMark');
 let activeBuilderStep = 1;
 let activeKpiSource = 'google';
 let builderReturnFocus = null;
+let liveConnections = [];
+let liveKpis = [];
+let activeGoogleConnection = null;
+let loadedSpreadsheet = null;
+let builderPreview = null;
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
+}
+
+async function apiJson(path, options = {}) {
+  const response = await fetch(path, { credentials: 'same-origin', ...options, headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(options.headers || {}) } });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || 'AxoBoard could not complete that request.');
+  return payload;
+}
+
+function timeAgo(value) {
+  if (!value) return 'Never';
+  const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+  if (seconds < 60) return 'Just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
+}
+
+function formatKpiValue(value, format = 'number') {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '—';
+  if (format === 'currency') return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(number);
+  if (format === 'percentage') return new Intl.NumberFormat(undefined, { style: 'percent', maximumFractionDigits: 1 }).format(number / 100);
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(number);
+}
+
+function renderLiveKpis() {
+  document.body.dataset.liveKpis = liveKpis.length ? 'true' : 'false';
+  if (!liveKpis.length) return;
+  dashboardKpiGrid.replaceChildren(...liveKpis.map((kpi) => {
+    const card = document.createElement('article');
+    card.className = 'surface kpi-card';
+    card.dataset.liveKpi = kpi.id;
+    card.innerHTML = `<header><span class="source-mark google">G</span><small>Google Sheets · ${escapeHtml(kpi.sourceRange || `${kpi.sheetTitle}!${kpi.range}`)}</small><button type="button" data-sync-live-kpi="${escapeHtml(kpi.id)}" aria-label="Refresh ${escapeHtml(kpi.name)}">↻</button></header><p>${escapeHtml(kpi.name)}</p><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><div class="kpi-change ${kpi.status === 'active' ? 'positive' : 'neutral'}">● ${escapeHtml(kpi.status === 'active' ? 'Live' : 'Needs attention')} <span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span></div><div class="mini-progress"><i style="width:${kpi.status === 'active' ? '100' : '20'}%"></i></div><footer><span>${escapeHtml(kpi.aggregation.replaceAll('_', ' '))} · read only</span><b>${escapeHtml(kpi.status)}</b></footer>`;
+    const refresh = card.querySelector('[data-sync-live-kpi]');
+    refresh.dataset.interactionStatus = 'working';
+    refresh.addEventListener('click', async () => {
+      refresh.disabled = true;
+      try {
+        await apiJson(`/api/axoboard/kpis/${encodeURIComponent(kpi.id)}/sync`, { method: 'POST' });
+        await loadLiveData();
+        showToast('KPI refreshed', `${kpi.name} now shows the latest Google Sheets value.`);
+      } catch (error) { showToast('Refresh failed', error.message); }
+      finally { refresh.disabled = false; }
+    });
+    return card;
+  }));
+  document.querySelector('.dashboard-toolbar strong').textContent = 'Google Sheets performance';
+  document.querySelector('.dashboard-toolbar small').textContent = `${liveKpis.length} KPI${liveKpis.length === 1 ? '' : 's'} · latest ${timeAgo(liveKpis[0]?.fetchedAt)}`;
+}
+
+function renderLiveConnections() {
+  activeGoogleConnection = liveConnections.find((connection) => connection.provider === 'google_sheets') || null;
+  document.body.dataset.liveIntegrations = activeGoogleConnection ? 'true' : 'false';
+  document.querySelector('#googleConnectionLabel').textContent = activeGoogleConnection ? `✓ ${activeGoogleConnection.accountEmail}` : 'Connection required';
+  if (!activeGoogleConnection) return;
+  const activeKpis = liveKpis.filter((kpi) => kpi.connectionId === activeGoogleConnection.id);
+  document.querySelector('#liveConnectionCount').textContent = String(liveConnections.length);
+  document.querySelector('#liveKpiCount').textContent = String(activeKpis.length);
+  document.querySelector('#liveLastRefresh').textContent = timeAgo(activeGoogleConnection.lastSyncAt || activeKpis[0]?.fetchedAt);
+  document.querySelector('#liveSyncStatus').textContent = activeGoogleConnection.status === 'healthy' ? 'Healthy' : 'Attention';
+  document.querySelector('#googleConnectionAccount').textContent = activeGoogleConnection.accountEmail;
+  document.querySelector('#googleConnectionMappings').textContent = `${activeKpis.length} KPI${activeKpis.length === 1 ? '' : 's'}`;
+  document.querySelector('#googleConnectionStatus').textContent = activeGoogleConnection.status === 'healthy' ? '● Connected' : '● Reconnect';
+  document.querySelector('#googleHealthDetail').textContent = activeGoogleConnection.lastSyncAt ? `Last sync ${timeAgo(activeGoogleConnection.lastSyncAt)} · encrypted token` : 'Connected · waiting for first KPI';
+  document.querySelector('#googleHealthMark').textContent = activeGoogleConnection.status === 'healthy' ? '✓' : '!';
+  document.querySelector('#googleHealthBadge').textContent = activeGoogleConnection.status === 'healthy' ? '● Live' : '● Attention';
+}
+
+async function loadLiveData() {
+  try {
+    const [session, connectionPayload, kpiPayload] = await Promise.all([
+      apiJson('/api/auth/session'), apiJson('/api/axoboard/integrations/connections'), apiJson('/api/axoboard/kpis')
+    ]);
+    liveConnections = connectionPayload.connections || [];
+    liveKpis = kpiPayload.kpis || [];
+    if (session.user?.workspace_name) {
+      document.querySelector('.workspace-switcher strong').textContent = session.user.workspace_name;
+      document.querySelectorAll('.workspace-switcher .workspace-avatar, .mobile-workspace-switch .workspace-avatar').forEach((avatar) => { avatar.textContent = session.user.workspace_name[0].toUpperCase(); });
+      document.querySelector('.sidebar-user strong').textContent = session.user.full_name;
+      document.querySelector('.sidebar-user small').textContent = `Workspace ${session.user.role}`;
+    }
+    renderLiveConnections();
+    renderLiveKpis();
+  } catch (error) {
+    console.warn('[axoboard] live integration state unavailable', error.message);
+  }
+}
 
 function syncBuilderSource(source) {
-  activeKpiSource = source === 'hubspot' ? 'hubspot' : 'google';
+  activeKpiSource = source === 'hubspot' && !sourceChoices.find((choice) => choice.dataset.kpiSource === 'hubspot')?.disabled ? 'hubspot' : 'google';
   sourceChoices.forEach((choice) => choice.classList.toggle('is-selected', choice.dataset.kpiSource === activeKpiSource));
   sourceConfigs.forEach((config) => config.classList.toggle('is-active', config.dataset.sourceConfig === activeKpiSource));
   const isGoogle = activeKpiSource === 'google';
@@ -374,8 +470,8 @@ function syncBuilderSource(source) {
   previewSourceMark.textContent = isGoogle ? 'G' : 'H';
   previewSourceMark.classList.toggle('google', isGoogle);
   previewSourceMark.classList.toggle('hubspot', !isGoogle);
-  previewKpiValue.textContent = isGoogle ? '$55,396' : '$1.28M';
-  kpiName.value = isGoogle ? 'Net sales today' : 'Open pipeline';
+  previewKpiValue.textContent = '—';
+  kpiName.value = isGoogle ? 'My Google Sheets KPI' : 'Open pipeline';
   previewKpiName.textContent = kpiName.value;
 }
 
@@ -389,11 +485,23 @@ function showBuilderStep(step) {
   });
   builderBack.disabled = activeBuilderStep === 1;
   builderNext.textContent = activeBuilderStep === 1 ? 'Choose data →' : activeBuilderStep === 2 ? 'Design KPI →' : '＋ Add to dashboard';
-  document.querySelector('#builderStatus').textContent = activeBuilderStep === 3 ? 'Ready to add · draft only' : 'Draft changes only';
+  document.querySelector('#builderStatus').textContent = activeBuilderStep === 3 ? 'Ready to create live KPI' : 'Nothing saved until the final step';
 }
 
 function openKpiBuilder(source = 'google', trigger = document.activeElement) {
+  if (source === 'google' && !activeGoogleConnection) {
+    showScreen('integrations');
+    showToast('Connect Google Sheets first', 'Authorize one Google account before choosing spreadsheet cells.');
+    return;
+  }
   builderReturnFocus = trigger;
+  loadedSpreadsheet = null;
+  builderPreview = null;
+  document.querySelector('#sheetFile').value = '';
+  document.querySelector('#sheetTab').innerHTML = '<option value="">Load a spreadsheet first</option>';
+  document.querySelector('#sheetPickerTitle').textContent = 'No spreadsheet loaded';
+  document.querySelector('#sheetPickerSubtitle').textContent = 'Paste a Google Sheets URL above';
+  document.querySelector('#sheetGrid').innerHTML = '<p>Your preview value and exact source lineage will appear here.</p>';
   syncBuilderSource(source);
   showBuilderStep(1);
   kpiBuilderModal.classList.add('is-visible');
@@ -409,26 +517,73 @@ function closeKpiBuilder() {
   builderReturnFocus?.focus?.();
 }
 
-function addPrototypeKpi() {
-  const grid = document.querySelector('.kpi-grid');
-  const isGoogle = activeKpiSource === 'google';
-  const article = document.createElement('article');
-  article.className = 'surface kpi-card newly-added-kpi';
-  article.innerHTML = `<header><span class="source-mark ${isGoogle ? 'google' : 'hubspot'}">${isGoogle ? 'G' : 'H'}</span><small>${isGoogle ? `Google Sheets · ${document.querySelector('#sheetTab').value}!${document.querySelector('#sheetRange').value}` : `HubSpot · ${document.querySelector('#hubspotObject').value}.${document.querySelector('#hubspotProperty').value}`}</small><button type="button" aria-label="Edit KPI">•••</button></header><p>${kpiName.value || 'Untitled KPI'}</p><strong>${previewKpiValue.textContent}</strong><div class="kpi-change positive">● Live <span>new draft KPI</span></div><div class="mini-progress"><i style="width:76%"></i></div><footer><span>Refresh every 5 min</span><b>Draft</b></footer>`;
-  grid.appendChild(article);
+async function loadSpreadsheetMetadata() {
+  const spreadsheet = document.querySelector('#sheetFile').value.trim();
+  if (!spreadsheet) throw new Error('Paste a Google Sheets URL or spreadsheet ID.');
+  const payload = await apiJson(`/api/axoboard/integrations/google/spreadsheet?connectionId=${encodeURIComponent(activeGoogleConnection.id)}&spreadsheet=${encodeURIComponent(spreadsheet)}`);
+  loadedSpreadsheet = { ...payload.spreadsheet, input: spreadsheet };
+  const select = document.querySelector('#sheetTab');
+  select.replaceChildren(...loadedSpreadsheet.sheets.map((sheet) => {
+    const option = document.createElement('option');
+    option.value = String(sheet.sheetId);
+    option.textContent = sheet.title;
+    return option;
+  }));
+  document.querySelector('#sheetPickerTitle').textContent = loadedSpreadsheet.title;
+  document.querySelector('#sheetPickerSubtitle').textContent = `${loadedSpreadsheet.sheets.length} worksheet${loadedSpreadsheet.sheets.length === 1 ? '' : 's'} available`;
+  document.querySelector('#sheetPickerStatus').textContent = 'Metadata loaded';
+  return loadedSpreadsheet;
+}
+
+async function previewGoogleSelection() {
+  const spreadsheetInput = document.querySelector('#sheetFile').value.trim();
+  if (!loadedSpreadsheet || loadedSpreadsheet.input !== spreadsheetInput) await loadSpreadsheetMetadata();
+  const sheetId = Number(document.querySelector('#sheetTab').value);
+  if (!Number.isSafeInteger(sheetId)) throw new Error('Choose a worksheet.');
+  const payload = await apiJson('/api/axoboard/kpis/google/preview', {
+    method: 'POST', body: JSON.stringify({
+      connectionId: activeGoogleConnection.id, spreadsheet: spreadsheetInput, sheetId,
+      range: document.querySelector('#sheetRange').value.trim(), aggregation: document.querySelector('#sheetAggregation').value
+    })
+  });
+  builderPreview = payload.preview;
+  previewKpiValue.textContent = formatKpiValue(builderPreview.value, document.querySelector('#kpiFormat').value);
+  document.querySelector('#previewLineage').textContent = `${builderPreview.spreadsheetTitle} · ${builderPreview.sourceRange}`;
+  document.querySelector('#previewFreshness').textContent = 'previewed just now';
+  document.querySelector('#sheetPickerStatus').textContent = 'Preview healthy';
+  document.querySelector('#sheetGrid').innerHTML = `<div><strong>${escapeHtml(formatKpiValue(builderPreview.value, document.querySelector('#kpiFormat').value))}</strong><small>${escapeHtml(builderPreview.sourceRange)} · ${builderPreview.sourceRowCount} contributing cell${builderPreview.sourceRowCount === 1 ? '' : 's'}</small></div>`;
+  return builderPreview;
+}
+
+async function saveLiveKpi() {
+  if (!builderPreview) await previewGoogleSelection();
+  const payload = await apiJson('/api/axoboard/kpis', {
+    method: 'POST', body: JSON.stringify({
+      connectionId: activeGoogleConnection.id, spreadsheet: document.querySelector('#sheetFile').value.trim(),
+      sheetId: Number(document.querySelector('#sheetTab').value), range: document.querySelector('#sheetRange').value.trim(),
+      aggregation: document.querySelector('#sheetAggregation').value, name: kpiName.value.trim(),
+      displayFormat: document.querySelector('#kpiFormat').value
+    })
+  });
   closeKpiBuilder();
+  await loadLiveData();
   showScreen('dashboard');
-  showToast('KPI added to draft', `${kpiName.value || 'Your KPI'} is ready to place and publish.`);
-  article.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  showToast('Live KPI created', `${payload.kpi.name} is synced from ${payload.kpi.sourceRange}.`);
+  document.querySelector(`[data-live-kpi="${payload.kpi.id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 document.querySelector('#addKpiButton').addEventListener('click', (event) => openKpiBuilder('google', event.currentTarget));
 document.querySelectorAll('.build-source-kpi').forEach((button) => button.addEventListener('click', () => openKpiBuilder(button.dataset.source, button)));
 sourceChoices.forEach((choice) => choice.addEventListener('click', () => syncBuilderSource(choice.dataset.kpiSource)));
 builderBack.addEventListener('click', () => showBuilderStep(activeBuilderStep - 1));
-builderNext.addEventListener('click', () => {
-  if (activeBuilderStep < 3) showBuilderStep(activeBuilderStep + 1);
-  else addPrototypeKpi();
+builderNext.addEventListener('click', async () => {
+  builderNext.disabled = true;
+  try {
+    if (activeBuilderStep === 1) showBuilderStep(2);
+    else if (activeBuilderStep === 2) { await previewGoogleSelection(); showBuilderStep(3); }
+    else await saveLiveKpi();
+  } catch (error) { showToast('KPI setup needs attention', error.message); }
+  finally { builderNext.disabled = false; }
 });
 document.querySelector('#closeKpiBuilder').addEventListener('click', closeKpiBuilder);
 kpiBuilderModal.addEventListener('click', (event) => { if (event.target === kpiBuilderModal) closeKpiBuilder(); });
@@ -440,13 +595,23 @@ document.querySelectorAll('#sheetGrid button').forEach((cell) => cell.addEventLi
   document.querySelectorAll('#sheetGrid button').forEach((item) => item.classList.toggle('is-selected', item === cell));
   if (cell.dataset.cell) document.querySelector('#sheetRange').value = cell.dataset.cell;
 }));
-document.querySelector('#selectRangeButton').addEventListener('click', () => {
-  document.querySelector('#sheetGrid').scrollIntoView({ behavior: 'smooth', block: 'center' });
-  showToast('Cell selector ready', 'Choose a cell in the preview or enter any A1 range.');
+document.querySelector('#selectRangeButton').addEventListener('click', async () => {
+  const button = document.querySelector('#selectRangeButton');
+  button.disabled = true;
+  try { await previewGoogleSelection(); showToast('Range previewed', 'The value came directly from Google Sheets.'); }
+  catch (error) { showToast('Preview failed', error.message); }
+  finally { button.disabled = false; }
 });
-document.querySelector('#reconnectSource').addEventListener('click', () => showToast('OAuth handoff ready', `Production will open ${activeKpiSource === 'google' ? 'Google' : 'HubSpot'} consent in a secure new window.`));
-document.querySelectorAll('.connect-source').forEach((button) => button.addEventListener('click', () => showToast(`${button.dataset.source === 'google' ? 'Google Sheets' : 'HubSpot'} connection`, 'Healthy, scoped, and refreshing every five minutes.')));
-document.querySelector('#browseIntegrations').addEventListener('click', () => showToast('Integration catalog', 'Google Sheets and HubSpot are ready; Shopify is next.'));
+document.querySelector('#kpiFormat').addEventListener('change', () => {
+  if (builderPreview) previewKpiValue.textContent = formatKpiValue(builderPreview.value, document.querySelector('#kpiFormat').value);
+});
+document.querySelector('#sheetFile').addEventListener('input', () => { loadedSpreadsheet = null; builderPreview = null; });
+document.querySelector('#sheetTab').addEventListener('change', () => { builderPreview = null; });
+document.querySelector('#sheetRange').addEventListener('input', () => { builderPreview = null; });
+document.querySelector('#sheetAggregation').addEventListener('change', () => { builderPreview = null; });
+document.querySelector('#reconnectSource').addEventListener('click', (event) => openFreshOAuth('google', event.currentTarget));
+document.querySelectorAll('.connect-source').forEach((button) => button.addEventListener('click', (event) => openFreshOAuth('google', event.currentTarget)));
+document.querySelector('#browseIntegrations').addEventListener('click', (event) => activeGoogleConnection ? showToast('Google Sheets is connected', 'Build a KPI or reconnect the account from the Google card.') : openFreshOAuth('google', event.currentTarget));
 document.querySelectorAll('.integration-catalog button').forEach((button) => button.addEventListener('click', () => showToast(button.querySelector('b').textContent, button.querySelector('i').textContent === 'Suggest' ? 'Request captured in this prototype.' : 'This connector is queued for a later phase.')));
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && kpiBuilderModal.classList.contains('is-visible')) closeKpiBuilder();
@@ -636,7 +801,7 @@ const workflowDefinitions = {
   kpi: { eyebrow: 'KPI SETTINGS', title: 'Edit KPI card', description: 'Update source mapping, calculation, appearance, goal, and alert behavior.', steps: ['Source','Calculation','Display','Publish'], primary: 'Review KPI', canvas: '<h3>Metric and display</h3><p>The source contract stays visible while you customize the card.</p><div class="workflow-form"><label>KPI name<input value="Net sales today" /></label><div class="field-row"><label>Format<select><option>Currency · no decimals</option><option>Number</option><option>Percentage</option></select></label><label>Goal<input value="$65,000" /></label></div><label>Comparison<select><option>Versus yesterday</option><option>Versus prior week</option><option>Versus goal only</option></select></label><div class="workflow-checks"><label><input type="checkbox" checked /> Enable source drilldown</label><label><input type="checkbox" checked /> Show stale warning after 15 minutes</label></div></div>', context: '<h3>Trusted source</h3><p>Google Sheets → 2026 Sales Performance → Summary!D8</p><div class="workflow-summary"><div><small>CURRENT VALUE</small><strong>$55,396</strong></div><div><small>FRESHNESS</small><strong>2 minutes ago · healthy</strong></div><div><small>OWNER</small><strong>Sales Ops</strong></div></div>' },
   alert: { eyebrow: 'ALERT & ACTION BUILDER', title: 'Configure an alert', description: 'Turn a trusted KPI condition into controlled notifications and team actions.', steps: ['Trigger','Actions','Guardrails','Test'], primary: 'Test rule', canvas: '<h3>When should this run?</h3><p>Rules evaluate normalized KPI snapshots—not raw browser values.</p><div class="workflow-form"><div class="field-row"><label>KPI<select><option>Pipeline coverage</option><option>Net sales today</option><option>Team on track</option></select></label><label>Condition<select><option>Falls below</option><option>Reaches</option><option>Changes by more than</option></select></label></div><div class="field-row"><label>Threshold<input value="3×" /></label><label>For at least<select><option>30 minutes</option><option>Immediately</option><option>1 hour</option></select></label></div><div class="workflow-checks"><label><input type="checkbox" checked /> Slack #sales-leadership</label><label><input type="checkbox" /> Email the metric owner</label><label><input type="checkbox" /> Start a quiet celebration</label></div></div>', context: '<h3>Guardrail preview</h3><p>This would have run twice in the last 30 days.</p><div class="workflow-summary"><div><small>COOLDOWN</small><strong>4 hours</strong></div><div><small>QUIET HOURS</small><strong>8 PM–7 AM</strong></div><div><small>STALE DATA</small><strong>Block rule</strong></div></div>' },
   connector: { eyebrow: 'INTEGRATION SETUP', title: 'Connect a data source', description: 'Authorize the smallest useful scope, validate it, and create the first mapping.', steps: ['Choose source','Authorize','Validate','Map data'], primary: 'Review setup', canvas: '<h3>Connector roadmap</h3><p>Deep, observable connections beat a huge brittle catalog.</p><div class="workflow-grid"><button class="workflow-card is-selected" type="button"><span class="integration-logo google" aria-label="Google Sheets">Google Sheets</span><strong>Google Sheets</strong><small>Files, worksheets, cells, and named ranges</small><i>App setup required</i></button><button class="workflow-card" type="button"><span class="integration-logo hubspot" aria-label="HubSpot">HubSpot</span><strong>HubSpot</strong><small>Objects, standard/custom properties, filters</small><i>Roadmap</i></button><button class="workflow-card" type="button"><span>▤</span><strong>Shopify</strong><small>Orders, refunds, net sales, products</small><i>Roadmap</i></button><button class="workflow-card" type="button"><span>↯</span><strong>Webhook / API</strong><small>Push signed custom events</small><i>Roadmap</i></button></div>', context: '<h3>Connection requirements</h3><p>Tokens stay encrypted server-side. Revocation, freshness, rate limits, and errors remain visible.</p><div class="workflow-summary"><div><small>AUTH</small><strong>OAuth 2.0</strong></div><div><small>SYNC</small><strong>Incremental + retry</strong></div></div>' },
-  connection: { eyebrow: 'CONNECTION MANAGEMENT', title: 'Manage connection', description: 'Inspect health, scopes, mappings, sync history, and revocation.', steps: ['Health','Mappings','Permissions'], primary: 'Save connection', canvas: '<h3>Google Sheets connection</h3><p>Healthy and currently used by two published KPI mappings.</p><div class="workflow-form"><div class="field-row"><label>Account<input value="jordan@acme.co" readonly /></label><label>Refresh<select><option>Every 5 minutes</option><option>Every 15 minutes</option></select></label></div><ul class="workflow-list"><li><span>▦</span><div><strong>Net sales today</strong><small>Summary!D8 · refreshed 2m ago</small></div><button type="button">Edit</button></li><li><span>◎</span><div><strong>Team on track</strong><small>Reps!G4:G18 · refreshed 2m ago</small></div><button type="button">Edit</button></li></ul></div>', context: '<h3>Connection health</h3><p>OAuth token valid. No rate limits or mapping errors.</p><div class="workflow-summary"><div><small>LAST SYNC</small><strong>2 minutes ago</strong></div><div><small>SCOPES</small><strong>Selected files only</strong></div><div><small>NEXT CHECK</small><strong>In 3 minutes</strong></div></div>' },
+  connection: { eyebrow: 'CONNECTION MANAGEMENT', title: 'Manage connection', description: 'Inspect health, scopes, mappings, sync history, and revocation.', steps: ['Health','Mappings','Permissions'], primary: 'Save connection', canvas: '<h3>Google Sheets connection</h3><p>Healthy and currently used by two published KPI mappings.</p><div class="workflow-form"><div class="field-row"><label>Account<input value="jordan@acme.co" readonly /></label><label>Refresh<select><option>Every 5 minutes</option><option>Every 15 minutes</option></select></label></div><ul class="workflow-list"><li><span>▦</span><div><strong>Net sales today</strong><small>Summary!D8 · refreshed 2m ago</small></div><button type="button">Edit</button></li><li><span>◎</span><div><strong>Team on track</strong><small>Reps!G4:G18 · refreshed 2m ago</small></div><button type="button">Edit</button></li></ul></div>', context: '<h3>Connection health</h3><p>OAuth token valid. No rate limits or mapping errors.</p><div class="workflow-summary"><div><small>LAST SYNC</small><strong>2 minutes ago</strong></div><div><small>SCOPES</small><strong>Google Sheets read-only</strong></div><div><small>NEXT CHECK</small><strong>In 3 minutes</strong></div></div>' },
   screen: { eyebrow: 'DISPLAY CONTROL', title: 'Manage TV screen', description: 'Pair, assign content, set a schedule, and diagnose the player remotely.', steps: ['Screen','Content','Schedule','Confirm'], primary: 'Apply to screen', canvas: '<h3>Screen and content</h3><p>Updates apply on the next player heartbeat.</p><div class="workflow-form"><div class="field-row"><label>Screen name<input value="Sales Floor TV" /></label><label>Location<input value="Front office" /></label></div><label>Content<select><option>Revenue pulse · 3 views</option><option>Sales performance</option><option>Team Challenge</option><option>Concierge Pulse</option></select></label><div class="field-row"><label>Wake<select><option>7:00 AM</option><option>Always on</option></select></label><label>Sleep<select><option>8:00 PM</option><option>Never</option></select></label></div><div class="workflow-checks"><label><input type="checkbox" checked /> Auto-recover last-known-good content</label><label><input type="checkbox" /> Notify admin when offline for 5 minutes</label></div></div>', context: '<h3>Player heartbeat</h3><p>Chrome · 4K · player v0.4.1</p><div class="workflow-summary"><div><small>STATUS</small><strong>Online · 18s ago</strong></div><div><small>LAST RENDER</small><strong>Successful</strong></div><div><small>PAIRING</small><strong>Device-bound token</strong></div></div>' },
   automation: { eyebrow: 'AUTOMATION WORKFLOW', title: 'Edit automation rule', description: 'Build the trigger, actions, cooldowns, and replay policy as one auditable rule.', steps: ['Trigger','Actions','Guardrails','Dry run'], primary: 'Run dry test', canvas: '<h3>Rule definition</h3><p>Every destination gets its own idempotency key and retry state.</p><div class="workflow-form"><label>Rule name<input value="Sales goal crossed" /></label><div class="field-row"><label>Metric<select><option>Net sales today</option><option>Open pipeline</option></select></label><label>Condition<select><option>Reaches $65,000</option><option>Crosses 100% of goal</option></select></label></div><div class="workflow-checks"><label><input type="checkbox" checked /> ✦ Play celebration</label><label><input type="checkbox" checked /> # Post to Slack</label><label><input type="checkbox" checked /> ⚔ Award 100 competition points</label></div><div class="field-row"><label>Cooldown<select><option>Once per day</option><option>4 hours</option></select></label><label>Quiet hours<select><option>8 PM–7 AM</option><option>None</option></select></label></div></div>', context: '<h3>Recent dry-run result</h3><p>1 match across the last 30 days; no duplicate event IDs.</p><div class="workflow-summary"><div><small>RULE STATE</small><strong>Draft version 4</strong></div><div><small>STALE METRIC</small><strong>Do not run</strong></div></div>' },
   runs: { eyebrow: 'AUTOMATION OBSERVABILITY', title: 'Automation run log', description: 'Inspect every evaluation, suppression, destination attempt, and replay.', steps: ['Runs','Details','Replay'], primary: 'Export log', canvas: '<h3>Recent runs</h3><p>Filter by rule, metric, outcome, destination, or event ID.</p><div class="run-ledger"><div class="run-row"><span>Today · 1:06</span><strong>Big deal landed · 3 actions</strong><b class="success">Succeeded</b></div><div class="run-row"><span>Today · 10:18</span><strong>Pipeline coverage · Slack + email</strong><b class="success">Succeeded</b></div><div class="run-row"><span>Yesterday</span><strong>Sales goal crossed · cooldown active</strong><b class="suppressed">Suppressed</b></div><div class="run-row"><span>Aug 10</span><strong>Big deal landed · duplicate event ID</strong><b class="suppressed">Deduped</b></div></div>', context: '<h3>Thirty-day health</h3><p>128 evaluations with no duplicate outcomes.</p><div class="workflow-summary"><div><small>SUCCESS</small><strong>100%</strong></div><div><small>SUPPRESSED</small><strong>14 expected</strong></div><div><small>RETRIES</small><strong>2 recovered</strong></div></div>' },
@@ -882,3 +1047,8 @@ applyWorkspaceMode();
 applyDashboardLayout(betaState.dashboardLayout);
 if (screens.some((screen) => screen.dataset.screenPanel === initialScreen)) showScreen(initialScreen);
 syncCelebrationPreview();
+const integrationResult = new URLSearchParams(location.search).get('status');
+if (integrationResult === 'connected') showToast('Google Sheets connected', 'Choose a spreadsheet and exact range to build the first live KPI.');
+else if (integrationResult && integrationResult !== 'connected') showToast('Google connection not completed', 'Start a new consent attempt from Integrations.');
+if (location.search) history.replaceState(null, '', `/app${location.hash || ''}`);
+loadLiveData();

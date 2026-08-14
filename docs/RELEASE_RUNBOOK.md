@@ -34,10 +34,12 @@ Database migrations run automatically before the HTTP listener starts. Each migr
 - sensitive probes such as `/.env`, `/server.mjs`, `/package.json`, `/Dockerfile`, and `/.git/config` return `404`.
 - the public browser bundle contains no Murphy Door references or high-risk secret patterns.
 
-Until Stripe webhooks are implemented, new workspaces start in `pending_payment` and fail closed. Manual entitlement changes must be explicit, auditable, and limited to approved test accounts; do not activate a workspace merely because its member is an owner or administrator.
+New workspaces start in `pending_payment` and fail closed until Stripe's signed webhook projection activates them. Manual entitlement changes must be explicit, auditable, and limited to approved test accounts; do not activate a workspace merely because its member is an owner or administrator.
 Every subscription insert and status transition is appended to `subscription_status_events` with its previous/new state, source, actor, workspace, and timestamp.
 
-The PostgreSQL-backed CI smoke suite proves `pending_payment`, `active`, `past_due`, `canceled`, mixed-workspace session binding, private product caching, and entitlement-history behavior. Production verification intentionally stays read-only: it proves anonymous denial and direct-file/API bypass protection but does not mutate live subscriptions or create test customers. Add Stripe test-mode checkout/webhook verification before enabling self-service billing.
+The PostgreSQL-backed CI suite proves `pending_payment`, `active`, `past_due`, `canceled`, mixed-workspace session binding, private product caching, entitlement history, Stripe webhook behavior, and the Google Sheets connection/KPI contract. Production verification intentionally stays read-only; controlled sandbox purchase and signed entitlement drills use the retained QA workspace.
+
+Google Sheets must remain `not_configured` until all four Railway variables are present. Before enabling customer consent, require a fresh AxoBoard-owned Google application, exact callback registration, Sheets API enablement, a new production encryption key, and a test-user consent pass. A swapped workspace/connection ID must return `403` before any Google request.
 
 ## Rollback
 

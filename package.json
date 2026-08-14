@@ -6,10 +6,11 @@
   "description": "AxoBoard standalone SaaS application",
   "scripts": {
     "start": "node server.mjs",
-    "check": "node --check server.mjs && node --check wireframes/app.js && node --check wireframes/marketing.js && node --check wireframes/auth.js && node --check scripts/smoke-test.mjs && node --check scripts/verify-production.mjs",
+    "check": "node --check server.mjs && node --check lib/crypto-vault.mjs && node --check lib/google-provider.mjs && node --check lib/google-integration.mjs && node --check wireframes/app.js && node --check wireframes/marketing.js && node --check wireframes/auth.js && node --check scripts/smoke-test.mjs && node --check scripts/billing-test.mjs && node --check scripts/google-integration-test.mjs && node --check scripts/verify-production.mjs",
     "test:smoke": "node scripts/smoke-test.mjs",
     "test:billing": "node scripts/billing-test.mjs",
-    "verify": "npm run check && npm audit --omit=dev && npm run test:smoke && npm run test:billing",
+    "test:google": "node scripts/google-integration-test.mjs",
+    "verify": "npm run check && npm audit --omit=dev && npm run test:smoke && npm run test:billing && npm run test:google",
     "verify:production": "node scripts/verify-production.mjs"
   },
   "dependencies": {

@@ -5,6 +5,9 @@ import { extname, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import Stripe from 'stripe';
+import { createVault } from './lib/crypto-vault.mjs';
+import { createGoogleProvider } from './lib/google-provider.mjs';
+import { createGoogleIntegration } from './lib/google-integration.mjs';
 
 const { Pool } = pg;
 const appRoot = resolve(fileURLToPath(new URL('.', import.meta.url)));
@@ -27,6 +30,12 @@ const stripeOptions = process.env.NODE_ENV === 'test' && process.env.STRIPE_API_
   ? { host: process.env.STRIPE_API_HOST, port: Number(process.env.STRIPE_API_PORT), protocol: 'http' }
   : {};
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey, { ...stripeOptions, apiVersion: '2025-12-15.clover', maxNetworkRetries: 2, timeout: 10_000 }) : null;
+const oauthVault = createVault(process.env.AXOBOARD_OAUTH_ENCRYPTION_KEY);
+const googleProvider = createGoogleProvider();
+const googleIntegration = createGoogleIntegration({
+  pool, vault: oauthVault, provider: googleProvider, env: process.env,
+  sendJson, readJson, currentSession, sameOrigin
+});
 
 const contentTypes = new Map([
   ['.css', 'text/css; charset=utf-8'], ['.html', 'text/html; charset=utf-8'],
@@ -508,8 +517,13 @@ const server = createServer(async (req, res) => {
         try { await pool.query('SELECT 1'); database = 'healthy'; }
         catch { database = 'unhealthy'; }
       }
-      return sendJson(res, database === 'unhealthy' ? 503 : 200, { ok: database !== 'unhealthy', service: 'axoboard-web', version: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.APP_VERSION || 'development', database });
+      return sendJson(res, database === 'unhealthy' ? 503 : 200, {
+        ok: database !== 'unhealthy', service: 'axoboard-web',
+        version: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.APP_VERSION || 'development',
+        database, googleSheets: googleIntegration.ready ? 'configured' : 'not_configured'
+      });
     }
+    if (url.pathname === '/api/integrations/oauth/google/callback' && req.method === 'GET') return await googleIntegration.handleCallback(req, res, url);
     if (url.pathname.startsWith('/api/auth/')) return await handleAuth(req, res, url.pathname);
     if (url.pathname.startsWith('/api/billing/')) return await handleBilling(req, res, url.pathname);
     if (url.pathname === '/demo' || url.pathname === '/index.html') return sendJson(res, 404, { error: 'Not found' });
@@ -528,8 +542,11 @@ const server = createServer(async (req, res) => {
         }
         return sendJson(res, 404, { error: 'Not found' });
       }
-      // No product API is implemented yet. Keep this fail-closed branch above future handlers.
-      if (url.pathname.startsWith('/api/axoboard/')) return sendJson(res, 404, { error: 'Not found' });
+      if (url.pathname.startsWith('/api/axoboard/')) {
+        const handled = await googleIntegration.handleProductRequest(req, res, url, productSession);
+        if (handled !== false) return handled;
+        return sendJson(res, 404, { error: 'Not found' });
+      }
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.setHeader('Allow', 'GET, HEAD');
@@ -572,10 +589,12 @@ const server = createServer(async (req, res) => {
 });
 
 await initializeDatabase();
+const stopGoogleScheduler = googleIntegration.startScheduler();
 server.listen(port, '0.0.0.0', () => console.log(`[axoboard-web] listening on 0.0.0.0:${port}`));
 
 function shutdown(signal) {
   console.log(`[axoboard-web] received ${signal}; shutting down`);
+  stopGoogleScheduler();
   server.close(async () => { if (pool) await pool.end(); process.exit(0); });
   setTimeout(() => process.exit(1), 10_000).unref();
 }

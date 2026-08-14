@@ -289,6 +289,8 @@ button { min-height: 44px; }
 
 /* Blank example-customer sandbox */
 .workspace-empty-state, .synthetic-data-banner, .blank-tenant-note { display: none; }
+.sheet-grid-live { min-height: 180px; display: grid; place-items: center; padding: 24px; background: linear-gradient(145deg,var(--aqua-050),white); color: var(--plum-500); text-align: center; }
+.sheet-grid-live strong, .sheet-grid-live small { display: block; }.sheet-grid-live strong { color: var(--plum-900); font: 700 30px var(--font-display); }.sheet-grid-live small { margin-top: 7px; font-size: 10px; }
 .workspace-empty-state { max-width: 1120px; min-height: 430px; place-items: center; align-content: center; gap: 10px; margin: 0 auto; padding: 48px; border-color: var(--aqua-200); background: radial-gradient(circle at 82% 18%,var(--gfp-100),transparent 10rem),radial-gradient(circle at 14% 85%,var(--pink-100),transparent 15rem),white; text-align: center; }
 .workspace-empty-state > .empty-axo { width: 68px; height: 68px; display: grid; place-items: center; border: 1px solid var(--pink-200); border-radius: 22px; background: var(--pink-050); color: var(--pink-700); font: 700 26px var(--font-display); }
 .workspace-empty-state > small { color: var(--pink-700); font-size: 9px; font-weight: 800; letter-spacing: .1em; }
@@ -318,6 +320,13 @@ body[data-active-workspace="sample-empty"] [data-screen-panel="automations"] .au
 body[data-active-workspace="sample-empty"] [data-screen-panel="workspace"] .service-layout,
 body[data-active-workspace="sample-empty"] [data-screen-panel="celebrations"] .celebration-layout,
 body[data-active-workspace="sample-empty"] [data-screen-panel="sounds"] .sounds-layout { display: none; }
+body[data-live-integrations="true"] [data-screen-panel="integrations"] .workspace-empty-state { display: none; }
+body[data-live-integrations="true"] [data-screen-panel="integrations"] .integration-layout { display: grid; }
+body[data-live-kpis="true"] [data-screen-panel="dashboard"] .workspace-empty-state { display: none; }
+body[data-live-kpis="true"] [data-screen-panel="dashboard"] .dashboard-toolbar,
+body[data-live-kpis="true"] [data-screen-panel="dashboard"] .kpi-grid { display: flex; }
+body[data-live-kpis="true"] [data-screen-panel="dashboard"] .kpi-grid { display: grid; }
+body[data-live-kpis="true"] [data-screen-panel="dashboard"] .dashboard-lower-grid { display: none; }
 
 @media (max-width: 1250px) {
   :root { --sidebar: 86px; }

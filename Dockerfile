@@ -6,6 +6,7 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY server.mjs ./
+COPY lib ./lib
 COPY migrations ./migrations
 COPY wireframes ./wireframes
 

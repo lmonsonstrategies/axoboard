@@ -21,17 +21,17 @@ Provider client secrets, access tokens, and refresh tokens remain server-side. P
 ## Piece 1 — Google Sheets
 
 - Fresh AxoBoard Google Cloud OAuth application.
-- Exact callback: `https://murphydashboards.ngrok.io/api/axoboard/integrations/oauth/google/callback`.
-- Initial scopes: OpenID email, Sheets read-only, and Drive metadata read-only.
+- Exact callback: `https://axoboard.io/api/integrations/oauth/google/callback`.
+- Initial scopes: OpenID, email, and Sheets read-only. The MVP accepts a spreadsheet URL/ID instead of requesting restricted Drive-wide discovery.
 - Ten-minute one-time state and PKCE S256 challenge.
 - Offline access with explicit consent for a refresh token.
-- AES-256-GCM encrypted local development token store with atomic writes and mode `600`.
+- AES-256-GCM encrypted PostgreSQL token envelopes with tenant/connection-bound authenticated data.
 - Account identity fetched from Google's OpenID userinfo endpoint after token exchange.
 
 ## Piece 2 — Google resource discovery
 
 - Refresh access token server-side when needed.
-- List available spreadsheets without exposing the refresh token.
+- Accept an exact spreadsheet URL/ID; Google Picker plus `drive.file` remains the later per-file discovery upgrade.
 - Select worksheet and exact A1 range.
 - Preview one numeric KPI with source lineage and freshness.
 
@@ -48,4 +48,4 @@ Provider client secrets, access tokens, and refresh tokens remain server-side. P
 - OAuth state is one-time, expires, and fails closed after restart.
 - Tokens never appear in responses, logs, browser storage, or Git.
 - Reconnect, revoke, and disconnect behavior is tested.
-- Dedicated `api-staging.axoboard.io` callback replaces ngrok before external customers.
+- Separate Google OAuth clients and encryption keys are required for development and production.
