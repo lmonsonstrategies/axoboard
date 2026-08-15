@@ -369,8 +369,15 @@ let loadedSpreadsheet = null;
 let builderPreview = null;
 let sheetGridState = null;
 let sheetGridRequest = 0;
+let sheetGridScrollTimer = null;
 let selectingSheetCells = false;
 let sheetSelection = { anchor: { row: 8, column: 4 }, focus: { row: 8, column: 4 } };
+const sheetCellWidth = 110;
+const sheetCellHeight = 38;
+const sheetRowHeaderWidth = 42;
+const sheetColumnHeaderHeight = 38;
+const sheetWindowRows = 24;
+const sheetWindowColumns = 12;
 const googleDriveMetadataScope = 'https://www.googleapis.com/auth/drive.metadata.readonly';
 
 function escapeHtml(value) {
@@ -399,6 +406,34 @@ function formatKpiValue(value, format = 'number') {
   if (format === 'currency') return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(number);
   if (format === 'percentage') return new Intl.NumberFormat(undefined, { style: 'percent', maximumFractionDigits: 1 }).format(number / 100);
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(number);
+}
+
+function comparisonBuilderPayload() {
+  const enabled = document.querySelector('#kpiComparisonMode').value === 'range';
+  return {
+    goalValue: document.querySelector('#kpiGoal').value.trim(),
+    comparisonSheetId: enabled ? Number(document.querySelector('#comparisonSheet').value) : null,
+    comparisonRange: enabled ? document.querySelector('#comparisonRange').value.trim() : '',
+    comparisonAggregation: enabled ? document.querySelector('#comparisonAggregation').value : null,
+    comparisonIncludeHeaders: enabled && document.querySelector('#comparisonHasHeaders').checked
+  };
+}
+
+function renderComparisonPreview(comparison = null) {
+  const preview = document.querySelector('#previewComparison');
+  const status = document.querySelector('#comparisonPreviewStatus');
+  if (!comparison) {
+    preview.hidden = true;
+    preview.textContent = '';
+    status.textContent = document.querySelector('#kpiComparisonMode').value === 'range' ? 'Preview required' : 'No comparison';
+    return;
+  }
+  const format = document.querySelector('#kpiFormat').value;
+  const delta = `${comparison.delta >= 0 ? '+' : ''}${formatKpiValue(comparison.delta, format)}`;
+  const percent = comparison.percentChange === null ? '' : ` · ${comparison.percentChange >= 0 ? '+' : ''}${comparison.percentChange.toFixed(1)}%`;
+  preview.textContent = `${delta}${percent} vs ${comparison.sourceRange} (${formatKpiValue(comparison.value, format)})`;
+  preview.hidden = false;
+  status.textContent = 'Previewed just now';
 }
 
 function sheetColumnLabel(column) {
@@ -464,30 +499,67 @@ function setSheetSelection(anchor, focus = anchor, { writeInput = true } = {}) {
   syncSheetSelection();
 }
 
+function updateSheetGridOverlays() {
+  const grid = document.querySelector('#sheetGrid');
+  if (!sheetGridState) return;
+  const columnOverlay = grid.querySelector('.sheet-column-overlay');
+  const rowOverlay = grid.querySelector('.sheet-row-overlay');
+  const corner = grid.querySelector('.sheet-grid-corner');
+  const columnWindow = grid.querySelector('.sheet-column-window');
+  const rowWindow = grid.querySelector('.sheet-row-window');
+  if (!columnOverlay || !rowOverlay || !corner || !columnWindow || !rowWindow) return;
+  columnOverlay.style.width = `${grid.clientWidth}px`;
+  rowOverlay.style.height = `${grid.clientHeight}px`;
+  columnOverlay.style.transform = `translate(${grid.scrollLeft}px, ${grid.scrollTop}px)`;
+  rowOverlay.style.transform = `translate(${grid.scrollLeft}px, ${grid.scrollTop}px)`;
+  corner.style.transform = `translate(${grid.scrollLeft}px, ${grid.scrollTop}px)`;
+  columnWindow.style.left = `${sheetRowHeaderWidth + ((sheetGridState.startColumn - 1) * sheetCellWidth) - grid.scrollLeft}px`;
+  rowWindow.style.top = `${sheetColumnHeaderHeight + ((sheetGridState.startRow - 1) * sheetCellHeight) - grid.scrollTop}px`;
+}
+
 function renderSheetGrid() {
   const grid = document.querySelector('#sheetGrid');
   if (!sheetGridState) {
     grid.innerHTML = '<p>Choose a spreadsheet and sheet to browse its cells.</p>';
     return;
   }
-  const table = document.createElement('div');
-  table.className = 'sheet-data-grid';
-  table.style.setProperty('--sheet-columns', sheetGridState.columnCount);
-  const corner = document.createElement('b');
-  corner.setAttribute('aria-hidden', 'true');
-  table.append(corner);
+  const scrollLeft = grid.scrollLeft;
+  const scrollTop = grid.scrollTop;
+  const canvas = document.createElement('div');
+  canvas.className = 'sheet-virtual-canvas';
+  canvas.style.width = `${sheetRowHeaderWidth + (sheetGridState.maxColumns * sheetCellWidth)}px`;
+  canvas.style.height = `${sheetColumnHeaderHeight + (sheetGridState.maxRows * sheetCellHeight)}px`;
+
+  const cells = document.createElement('div');
+  cells.className = 'sheet-cell-window';
+  cells.style.left = `${sheetRowHeaderWidth + ((sheetGridState.startColumn - 1) * sheetCellWidth)}px`;
+  cells.style.top = `${sheetColumnHeaderHeight + ((sheetGridState.startRow - 1) * sheetCellHeight)}px`;
+  cells.style.gridTemplateColumns = `repeat(${sheetGridState.columnCount}, ${sheetCellWidth}px)`;
+  cells.style.gridTemplateRows = `repeat(${sheetGridState.rowCount}, ${sheetCellHeight}px)`;
+
+  const columnOverlay = document.createElement('div');
+  columnOverlay.className = 'sheet-column-overlay';
+  const columnWindow = document.createElement('div');
+  columnWindow.className = 'sheet-column-window';
+  columnWindow.style.gridTemplateColumns = `repeat(${sheetGridState.columnCount}, ${sheetCellWidth}px)`;
   sheetGridState.columns.forEach((column) => {
     const heading = document.createElement('b');
     heading.textContent = column;
     heading.setAttribute('role', 'columnheader');
-    table.append(heading);
+    columnWindow.append(heading);
   });
+  columnOverlay.append(columnWindow);
+
+  const rowOverlay = document.createElement('div');
+  rowOverlay.className = 'sheet-row-overlay';
+  const rowWindow = document.createElement('div');
+  rowWindow.className = 'sheet-row-window';
   sheetGridState.values.forEach((rowValues, rowIndex) => {
     const row = sheetGridState.startRow + rowIndex;
     const heading = document.createElement('i');
     heading.textContent = row;
     heading.setAttribute('role', 'rowheader');
-    table.append(heading);
+    rowWindow.append(heading);
     rowValues.forEach((value, columnIndex) => {
       const column = sheetGridState.startColumn + columnIndex;
       const cell = document.createElement('button');
@@ -500,15 +572,20 @@ function renderSheetGrid() {
       cell.setAttribute('aria-label', `${address}: ${value === '' ? 'empty' : value}`);
       cell.title = `${address}${value === '' ? '' : ` · ${value}`}`;
       cell.textContent = value === '' ? '' : String(value);
-      table.append(cell);
+      cells.append(cell);
     });
   });
-  grid.replaceChildren(table);
+  rowOverlay.append(rowWindow);
+
+  const corner = document.createElement('b');
+  corner.className = 'sheet-grid-corner';
+  corner.setAttribute('aria-hidden', 'true');
+  canvas.append(cells, columnOverlay, rowOverlay, corner);
+  grid.replaceChildren(canvas);
+  grid.scrollLeft = scrollLeft;
+  grid.scrollTop = scrollTop;
   document.querySelector('#sheetViewportLabel').textContent = sheetGridState.range;
-  document.querySelector('#sheetPageLeft').disabled = sheetGridState.startColumn <= 1;
-  document.querySelector('#sheetPageUp').disabled = sheetGridState.startRow <= 1;
-  document.querySelector('#sheetPageRight').disabled = sheetGridState.startColumn + sheetGridState.columnCount > sheetGridState.maxColumns;
-  document.querySelector('#sheetPageDown').disabled = sheetGridState.startRow + sheetGridState.rowCount > sheetGridState.maxRows;
+  updateSheetGridOverlays();
   syncSheetSelection();
 }
 
@@ -523,7 +600,10 @@ async function loadSheetGrid(startRow = 1, startColumn = 1) {
   const column = Math.max(1, Math.min(Number(startColumn) || 1, sheet.columnCount));
   const request = ++sheetGridRequest;
   document.querySelector('#sheetPickerStatus').textContent = 'Loading cells…';
-  const query = new URLSearchParams({ connectionId: activeGoogleConnection.id, spreadsheet, sheetId: String(sheetId), row: String(row), column: String(column) });
+  const query = new URLSearchParams({
+    connectionId: activeGoogleConnection.id, spreadsheet, sheetId: String(sheetId), row: String(row), column: String(column),
+    rows: String(sheetWindowRows), columns: String(sheetWindowColumns)
+  });
   try {
     const payload = await apiJson(`/api/axoboard/integrations/google/grid?${query}`);
     if (request !== sheetGridRequest) return null;
@@ -533,19 +613,47 @@ async function loadSheetGrid(startRow = 1, startColumn = 1) {
     return sheetGridState;
   } catch (error) {
     if (request !== sheetGridRequest) return null;
-    sheetGridState = null;
-    document.querySelector('#sheetGrid').innerHTML = `<p>${escapeHtml(error.message)}</p>`;
-    document.querySelector('#sheetPickerStatus').textContent = 'Preview unavailable';
+    if (!sheetGridState) {
+      document.querySelector('#sheetGrid').innerHTML = `<p>${escapeHtml(error.message)}</p>`;
+      document.querySelector('#sheetPickerStatus').textContent = 'Preview unavailable';
+    } else {
+      document.querySelector('#sheetPickerStatus').textContent = 'Scroll preview paused';
+    }
     throw error;
   }
 }
 
+function scheduleSheetGridLoad() {
+  const grid = document.querySelector('#sheetGrid');
+  updateSheetGridOverlays();
+  if (!sheetGridState) return;
+  window.clearTimeout(sheetGridScrollTimer);
+  sheetGridScrollTimer = window.setTimeout(async () => {
+    const visibleRow = Math.max(1, Math.floor(grid.scrollTop / sheetCellHeight) + 1);
+    const visibleColumn = Math.max(1, Math.floor(grid.scrollLeft / sheetCellWidth) + 1);
+    const startRow = Math.floor((visibleRow - 1) / 12) * 12 + 1;
+    const startColumn = Math.floor((visibleColumn - 1) / 6) * 6 + 1;
+    if (startRow === sheetGridState.startRow && startColumn === sheetGridState.startColumn) return;
+    try { await loadSheetGrid(startRow, startColumn); }
+    catch (error) { showToast('Sheet scroll paused', error.message); }
+  }, 140);
+}
+
 async function revealSheetSelection() {
   const bounds = sheetSelectionBounds();
-  if (sheetGridState && bounds.minRow >= sheetGridState.startRow && bounds.maxRow < sheetGridState.startRow + sheetGridState.rowCount && bounds.minColumn >= sheetGridState.startColumn && bounds.maxColumn < sheetGridState.startColumn + sheetGridState.columnCount) return sheetGridState;
-  const startRow = bounds.minRow <= 12 ? 1 : Math.max(1, bounds.minRow - 2);
-  const startColumn = bounds.minColumn <= 8 ? 1 : Math.max(1, bounds.minColumn - 2);
-  return loadSheetGrid(startRow, startColumn);
+  const startRow = Math.max(1, bounds.minRow - 3);
+  const startColumn = Math.max(1, bounds.minColumn - 2);
+  const loaded = sheetGridState && bounds.minRow >= sheetGridState.startRow && bounds.maxRow < sheetGridState.startRow + sheetGridState.rowCount && bounds.minColumn >= sheetGridState.startColumn && bounds.maxColumn < sheetGridState.startColumn + sheetGridState.columnCount
+    ? sheetGridState
+    : await loadSheetGrid(startRow, startColumn);
+  const grid = document.querySelector('#sheetGrid');
+  grid.scrollTo({
+    top: Math.max(0, ((bounds.minRow - 1) * sheetCellHeight) - (sheetCellHeight * 2)),
+    left: Math.max(0, ((bounds.minColumn - 1) * sheetCellWidth) - sheetCellWidth),
+    behavior: 'auto'
+  });
+  updateSheetGridOverlays();
+  return loaded;
 }
 
 function renderLiveKpis() {
@@ -555,7 +663,11 @@ function renderLiveKpis() {
     const card = document.createElement('article');
     card.className = 'surface kpi-card';
     card.dataset.liveKpi = kpi.id;
-    card.innerHTML = `<header><span class="source-mark google">G</span><small>Google Sheets · ${escapeHtml(kpi.sourceRange || `${kpi.sheetTitle}!${kpi.range}`)}</small><button type="button" data-sync-live-kpi="${escapeHtml(kpi.id)}" aria-label="Refresh ${escapeHtml(kpi.name)}">↻</button></header><p>${escapeHtml(kpi.name)}</p><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><div class="kpi-change ${kpi.status === 'active' ? 'positive' : 'neutral'}">● ${escapeHtml(kpi.status === 'active' ? 'Live' : 'Needs attention')} <span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span></div><div class="mini-progress"><i style="width:${kpi.status === 'active' ? '100' : '20'}%"></i></div><footer><span>${escapeHtml(kpi.aggregation.replaceAll('_', ' '))} · read only</span><b>${escapeHtml(kpi.status)}</b></footer>`;
+    const goalProgress = kpi.goalValue === null || kpi.goalValue === 0 ? null : Math.max(0, Math.min(100, (kpi.value / kpi.goalValue) * 100));
+    const comparisonPercent = kpi.comparisonValue === null || kpi.comparisonValue === 0 ? null : (kpi.comparisonDelta / Math.abs(kpi.comparisonValue)) * 100;
+    const comparisonText = kpi.comparisonValue === null ? '' : `${kpi.comparisonDelta >= 0 ? '+' : ''}${formatKpiValue(kpi.comparisonDelta, kpi.displayFormat)}${comparisonPercent === null ? '' : ` (${comparisonPercent >= 0 ? '+' : ''}${comparisonPercent.toFixed(1)}%)`} vs ${kpi.comparisonSourceRange}`;
+    const contextText = comparisonText || (goalProgress === null ? (kpi.status === 'active' ? 'Live' : 'Needs attention') : `${goalProgress.toFixed(1)}% of ${formatKpiValue(kpi.goalValue, kpi.displayFormat)} goal`);
+    card.innerHTML = `<header><span class="source-mark google">G</span><small>Google Sheets · ${escapeHtml(kpi.sourceRange || `${kpi.sheetTitle}!${kpi.range}`)}</small><button type="button" data-sync-live-kpi="${escapeHtml(kpi.id)}" aria-label="Refresh ${escapeHtml(kpi.name)}">↻</button></header><p>${escapeHtml(kpi.name)}</p><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><div class="kpi-change ${kpi.status === 'active' ? 'positive' : 'neutral'}">● ${escapeHtml(contextText)} <span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span></div><div class="mini-progress"><i style="width:${goalProgress === null ? (kpi.status === 'active' ? '100' : '20') : goalProgress}%"></i></div><footer><span>${escapeHtml(kpi.aggregation.replaceAll('_', ' '))} · read only</span><b>${escapeHtml(kpi.status)}</b></footer>`;
     const refresh = card.querySelector('[data-sync-live-kpi]');
     refresh.dataset.interactionStatus = 'working';
     refresh.addEventListener('click', async () => {
@@ -659,9 +771,17 @@ function openKpiBuilder(source = 'google', trigger = document.activeElement) {
   builderPreview = null;
   sheetGridState = null;
   sheetGridRequest += 1;
+  window.clearTimeout(sheetGridScrollTimer);
   document.querySelector('#sheetRange').value = 'D8';
   sheetSelection = parseSheetRange('D8');
   document.querySelector('#sheetHasHeaders').checked = false;
+  document.querySelector('#kpiGoal').value = '';
+  document.querySelector('#kpiComparisonMode').value = 'none';
+  document.querySelector('#kpiComparisonFields').hidden = true;
+  document.querySelector('#comparisonRange').value = 'E8';
+  document.querySelector('#comparisonAggregation').value = 'single_value';
+  document.querySelector('#comparisonHasHeaders').checked = false;
+  renderComparisonPreview();
   document.querySelector('#sheetPreviewResult').textContent = 'No value previewed';
   document.querySelector('#sheetSelectionSummary').textContent = 'Select one cell or drag across several cells.';
   document.querySelector('#sheetFile').innerHTML = '<option value="">Loading your spreadsheets…</option>';
@@ -750,6 +870,14 @@ async function loadSpreadsheetMetadata() {
     return option;
   }));
   select.disabled = !loadedSpreadsheet.sheets.length;
+  const comparisonSelect = document.querySelector('#comparisonSheet');
+  comparisonSelect.replaceChildren(...loadedSpreadsheet.sheets.map((sheet) => {
+    const option = document.createElement('option');
+    option.value = String(sheet.sheetId);
+    option.textContent = sheet.title;
+    return option;
+  }));
+  comparisonSelect.value = select.value;
   document.querySelector('#sheetPickerTitle').textContent = loadedSpreadsheet.title;
   document.querySelector('#sheetPickerSubtitle').textContent = `${loadedSpreadsheet.sheets.length} sheet${loadedSpreadsheet.sheets.length === 1 ? '' : 's'} available`;
   document.querySelector('#sheetPickerStatus').textContent = 'Metadata loaded';
@@ -767,7 +895,7 @@ async function previewGoogleSelection() {
     method: 'POST', body: JSON.stringify({
       connectionId: activeGoogleConnection.id, spreadsheet: spreadsheetInput, sheetId,
       range: document.querySelector('#sheetRange').value.trim(), aggregation: document.querySelector('#sheetAggregation').value,
-      includeHeaders: document.querySelector('#sheetHasHeaders').checked
+      includeHeaders: document.querySelector('#sheetHasHeaders').checked, ...comparisonBuilderPayload()
     })
   });
   builderPreview = payload.preview;
@@ -776,6 +904,7 @@ async function previewGoogleSelection() {
   document.querySelector('#previewFreshness').textContent = 'previewed just now';
   document.querySelector('#sheetPickerStatus').textContent = 'Preview healthy';
   document.querySelector('#sheetPreviewResult').textContent = `${formatKpiValue(builderPreview.value, document.querySelector('#kpiFormat').value)} · ${builderPreview.sourceRowCount} contributing cell${builderPreview.sourceRowCount === 1 ? '' : 's'}`;
+  renderComparisonPreview(builderPreview.comparison);
   return builderPreview;
 }
 
@@ -786,7 +915,7 @@ async function saveLiveKpi() {
       connectionId: activeGoogleConnection.id, spreadsheet: document.querySelector('#sheetFile').value.trim(),
       sheetId: Number(document.querySelector('#sheetTab').value), range: document.querySelector('#sheetRange').value.trim(),
       aggregation: document.querySelector('#sheetAggregation').value, includeHeaders: document.querySelector('#sheetHasHeaders').checked, name: kpiName.value.trim(),
-      displayFormat: document.querySelector('#kpiFormat').value
+      displayFormat: document.querySelector('#kpiFormat').value, ...comparisonBuilderPayload()
     })
   });
   closeKpiBuilder();
@@ -812,9 +941,24 @@ builderNext.addEventListener('click', async () => {
 document.querySelector('#closeKpiBuilder').addEventListener('click', closeKpiBuilder);
 kpiBuilderModal.addEventListener('click', (event) => { if (event.target === kpiBuilderModal) closeKpiBuilder(); });
 kpiName.addEventListener('input', () => { previewKpiName.textContent = kpiName.value || 'Untitled KPI'; });
-document.querySelectorAll('[data-visual]').forEach((button) => button.addEventListener('click', () => {
-  document.querySelectorAll('[data-visual]').forEach((item) => item.classList.toggle('is-selected', item === button));
-}));
+document.querySelector('#kpiComparisonMode').addEventListener('change', (event) => {
+  document.querySelector('#kpiComparisonFields').hidden = event.target.value !== 'range';
+  builderPreview = null;
+  renderComparisonPreview();
+});
+['#comparisonSheet', '#comparisonRange', '#comparisonAggregation', '#comparisonHasHeaders'].forEach((selector) => {
+  document.querySelector(selector).addEventListener(selector === '#comparisonRange' ? 'input' : 'change', () => {
+    builderPreview = null;
+    renderComparisonPreview();
+  });
+});
+document.querySelector('#previewComparisonButton').addEventListener('click', async () => {
+  const button = document.querySelector('#previewComparisonButton');
+  button.disabled = true;
+  try { await previewGoogleSelection(); }
+  catch (error) { showToast('Comparison preview failed', error.message); }
+  finally { button.disabled = false; }
+});
 document.querySelector('#selectRangeButton').addEventListener('click', async () => {
   const button = document.querySelector('#selectRangeButton');
   button.disabled = true;
@@ -834,11 +978,14 @@ document.querySelector('#kpiFormat').addEventListener('change', () => {
     const formatted = formatKpiValue(builderPreview.value, document.querySelector('#kpiFormat').value);
     previewKpiValue.textContent = formatted;
     document.querySelector('#sheetPreviewResult').textContent = `${formatted} · ${builderPreview.sourceRowCount} contributing cell${builderPreview.sourceRowCount === 1 ? '' : 's'}`;
+    renderComparisonPreview(builderPreview.comparison);
   }
 });
 document.querySelector('#sheetFile').addEventListener('change', async () => {
   loadedSpreadsheet = null;
   builderPreview = null;
+  sheetGridState = null;
+  document.querySelector('#sheetGrid').scrollTo({ top: 0, left: 0 });
   document.querySelector('#sheetTab').disabled = true;
   document.querySelector('#sheetTab').innerHTML = '<option value="">Loading sheets…</option>';
   try { await loadSpreadsheetMetadata(); }
@@ -847,6 +994,7 @@ document.querySelector('#sheetFile').addEventListener('change', async () => {
 document.querySelector('#sheetTab').addEventListener('change', async () => {
   builderPreview = null;
   sheetGridState = null;
+  document.querySelector('#sheetGrid').scrollTo({ top: 0, left: 0 });
   try { await revealSheetSelection(); }
   catch (error) { showToast('Sheet preview could not load', error.message); }
 });
@@ -875,6 +1023,14 @@ document.querySelector('#sheetGrid').addEventListener('pointerover', (event) => 
   const cell = event.target.closest('[data-sheet-cell]');
   if (cell) setSheetSelection(sheetSelection.anchor, { row: Number(cell.dataset.row), column: Number(cell.dataset.column) });
 });
+document.querySelector('#sheetGrid').addEventListener('pointermove', (event) => {
+  if (!selectingSheetCells) return;
+  const grid = event.currentTarget;
+  const bounds = grid.getBoundingClientRect();
+  const horizontal = event.clientX < bounds.left + 28 ? -22 : event.clientX > bounds.right - 28 ? 22 : 0;
+  const vertical = event.clientY < bounds.top + 28 ? -22 : event.clientY > bounds.bottom - 28 ? 22 : 0;
+  if (horizontal || vertical) grid.scrollBy({ left: horizontal, top: vertical });
+});
 document.querySelector('#sheetGrid').addEventListener('keydown', (event) => {
   const cell = event.target.closest('[data-sheet-cell]');
   if (!cell || !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
@@ -889,10 +1045,7 @@ document.querySelector('#sheetGrid').addEventListener('keydown', (event) => {
   next.focus();
 });
 document.addEventListener('pointerup', () => { selectingSheetCells = false; });
-document.querySelector('#sheetPageLeft').addEventListener('click', () => loadSheetGrid(sheetGridState?.startRow || 1, Math.max(1, (sheetGridState?.startColumn || 1) - 8)).catch((error) => showToast('Sheet navigation failed', error.message)));
-document.querySelector('#sheetPageRight').addEventListener('click', () => loadSheetGrid(sheetGridState?.startRow || 1, (sheetGridState?.startColumn || 1) + 8).catch((error) => showToast('Sheet navigation failed', error.message)));
-document.querySelector('#sheetPageUp').addEventListener('click', () => loadSheetGrid(Math.max(1, (sheetGridState?.startRow || 1) - 12), sheetGridState?.startColumn || 1).catch((error) => showToast('Sheet navigation failed', error.message)));
-document.querySelector('#sheetPageDown').addEventListener('click', () => loadSheetGrid((sheetGridState?.startRow || 1) + 12, sheetGridState?.startColumn || 1).catch((error) => showToast('Sheet navigation failed', error.message)));
+document.querySelector('#sheetGrid').addEventListener('scroll', scheduleSheetGridLoad, { passive: true });
 document.querySelector('#reconnectSource').addEventListener('click', (event) => openFreshOAuth('google', event.currentTarget));
 document.querySelectorAll('.connect-source').forEach((button) => button.addEventListener('click', (event) => openFreshOAuth('google', event.currentTarget)));
 document.querySelector('#browseIntegrations').addEventListener('click', (event) => activeGoogleConnection ? showToast('Google Sheets is connected', 'Build a KPI or reconnect the account from the Google card.') : openFreshOAuth('google', event.currentTarget));
