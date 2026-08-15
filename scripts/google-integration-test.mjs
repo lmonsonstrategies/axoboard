@@ -94,9 +94,18 @@ const fakeGoogle = createServer(async (req, res) => {
   }
   if (url.pathname.startsWith('/sheets/v4/spreadsheets/sheet_test_123456789/values/') && req.method === 'GET') {
     assert.match(String(req.headers.authorization), /^Bearer google_access_(initial|refreshed)$/);
-    assert.equal(decodeURIComponent(url.pathname.split('/values/')[1]), "'Summary'!D8:D10");
+    const requestedRange = decodeURIComponent(url.pathname.split('/values/')[1]);
     valuesCalls += 1;
-    return json(200, { range: 'Summary!D8:D10', majorDimension: 'ROWS', values: [[10], [20], [30]] }, { 'x-request-id': `values-${valuesCalls}` });
+    if (requestedRange === "'Summary'!A1:H12") {
+      assert.equal(url.searchParams.get('valueRenderOption'), 'FORMATTED_VALUE');
+      return json(200, {
+        range: 'Summary!A1:H12', majorDimension: 'ROWS',
+        values: [['Metric', 'Jan', 'Feb', 'Mar'], ['Revenue', '$10', '$20', '$30'], ['Orders', '1', '2', '3']]
+      }, { 'x-request-id': `values-${valuesCalls}` });
+    }
+    assert.equal(requestedRange, "'Summary'!D8:D10");
+    assert.equal(url.searchParams.get('valueRenderOption'), 'UNFORMATTED_VALUE');
+    return json(200, { range: 'Summary!D8:D10', majorDimension: 'ROWS', values: [['Revenue'], [20], [30]] }, { 'x-request-id': `values-${valuesCalls}` });
   }
   if (url.pathname === '/revoke' && req.method === 'POST') {
     const form = new URLSearchParams(await requestBody(req));
@@ -228,22 +237,35 @@ try {
   assert.equal(metadataBody.spreadsheet.title, 'Revenue Scoreboard');
   assert.deepEqual(metadataBody.spreadsheet.sheets.map((sheet) => sheet.title), ['Summary']);
 
-  const selection = { connectionId: connection.id, spreadsheet: 'sheet_test_123456789', sheetId: 12345, range: 'D8:D10', aggregation: 'sum' };
+  const grid = await api(`/api/axoboard/integrations/google/grid?connectionId=${connection.id}&spreadsheet=sheet_test_123456789&sheetId=12345&row=1&column=1`, { cookie: first.cookie });
+  const gridText = await grid.text();
+  assert.equal(grid.status, 200, gridText);
+  const gridPreview = JSON.parse(gridText).grid;
+  assert.equal(gridPreview.range, 'A1:H12');
+  assert.deepEqual(gridPreview.columns, ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']);
+  assert.equal(gridPreview.values.length, 12);
+  assert.deepEqual(gridPreview.values[0].slice(0, 4), ['Metric', 'Jan', 'Feb', 'Mar']);
+  assert.equal(gridPreview.values[11].length, 8, 'sparse provider rows are padded for a stable grid');
+
+  const selection = { connectionId: connection.id, spreadsheet: 'sheet_test_123456789', sheetId: 12345, range: 'D8:D10', aggregation: 'sum', includeHeaders: true };
   const preview = await api('/api/axoboard/kpis/google/preview', { method: 'POST', cookie: first.cookie, body: selection });
   const previewText = await preview.text();
   assert.equal(preview.status, 200, previewText);
-  assert.equal(JSON.parse(previewText).preview.value, 60);
+  assert.equal(JSON.parse(previewText).preview.value, 50);
+  assert.equal(JSON.parse(previewText).preview.sourceRowCount, 2);
+  assert.equal(JSON.parse(previewText).preview.includeHeaders, true);
 
   const create = await api('/api/axoboard/kpis', { method: 'POST', cookie: first.cookie, body: { ...selection, name: 'Qualified pipeline', displayFormat: 'currency' } });
   const createText = await create.text();
   assert.equal(create.status, 201, createText);
   const createdKpi = JSON.parse(createText).kpi;
-  assert.equal(createdKpi.value, 60);
+  assert.equal(createdKpi.value, 50);
   const list = await api('/api/axoboard/kpis', { cookie: first.cookie });
   const kpis = (await list.json()).kpis;
   assert.equal(kpis.length, 1);
-  assert.equal(kpis[0].value, 60);
+  assert.equal(kpis[0].value, 50);
   assert.equal(kpis[0].sourceRange, "'Summary'!D8:D10");
+  assert.equal(kpis[0].includeHeaders, true);
 
   const connectionRow = (await pool.query('SELECT * FROM integration_connections WHERE id=$1', [connection.id])).rows[0];
   const aad = `connection:${connection.id}:${first.workspaceId}:v1`;
@@ -254,7 +276,7 @@ try {
   const sync = await api(`/api/axoboard/kpis/${createdKpi.id}/sync`, { method: 'POST', cookie: first.cookie });
   const syncText = await sync.text();
   assert.equal(sync.status, 200, syncText);
-  assert.equal(JSON.parse(syncText).kpi.value, 60);
+  assert.equal(JSON.parse(syncText).kpi.value, 50);
   assert.equal(refreshCalls, 1, 'expired access token is refreshed server-side');
 
   const valuesBeforeScheduledSync = valuesCalls;
@@ -274,11 +296,11 @@ try {
   assert.equal(afterDisconnect.status, 409);
   const retained = await api('/api/axoboard/kpis', { cookie: first.cookie });
   const retainedKpi = (await retained.json()).kpis[0];
-  assert.equal(retainedKpi.value, 60, 'disconnect preserves last known good value');
+  assert.equal(retainedKpi.value, 50, 'disconnect preserves last known good value');
   assert.equal(retainedKpi.status, 'degraded');
   assert.equal(retainedKpi.lastErrorCode, 'connection_disconnected');
 
-  console.log('AxoBoard Google integration test passed: one-time PKCE OAuth, encrypted refresh, recent-first paginated spreadsheet discovery, sheet/range KPI, sync, disconnect, and zero-call tenant isolation.');
+  console.log('AxoBoard Google integration test passed: OAuth, recent-first discovery, navigable grid preview, header-aware range KPI, sync, disconnect, and tenant isolation.');
 } finally {
   app.kill('SIGTERM');
   await new Promise((resolveExit) => app.once('exit', resolveExit));

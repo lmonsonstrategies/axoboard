@@ -367,6 +367,10 @@ let activeGoogleConnection = null;
 let availableSpreadsheets = [];
 let loadedSpreadsheet = null;
 let builderPreview = null;
+let sheetGridState = null;
+let sheetGridRequest = 0;
+let selectingSheetCells = false;
+let sheetSelection = { anchor: { row: 8, column: 4 }, focus: { row: 8, column: 4 } };
 const googleDriveMetadataScope = 'https://www.googleapis.com/auth/drive.metadata.readonly';
 
 function escapeHtml(value) {
@@ -395,6 +399,153 @@ function formatKpiValue(value, format = 'number') {
   if (format === 'currency') return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(number);
   if (format === 'percentage') return new Intl.NumberFormat(undefined, { style: 'percent', maximumFractionDigits: 1 }).format(number / 100);
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(number);
+}
+
+function sheetColumnLabel(column) {
+  let value = Number(column);
+  let label = '';
+  while (value > 0) {
+    value -= 1;
+    label = String.fromCharCode(65 + (value % 26)) + label;
+    value = Math.floor(value / 26);
+  }
+  return label;
+}
+
+function sheetColumnNumber(label) {
+  return [...String(label).toUpperCase()].reduce((total, character) => total * 26 + character.charCodeAt(0) - 64, 0);
+}
+
+function parseSheetRange(value = document.querySelector('#sheetRange').value) {
+  const match = String(value).trim().toUpperCase().match(/^([A-Z]{1,3})([1-9][0-9]*)(?::([A-Z]{1,3})([1-9][0-9]*))?$/);
+  if (!match) return null;
+  return {
+    anchor: { row: Number(match[2]), column: sheetColumnNumber(match[1]) },
+    focus: { row: Number(match[4] || match[2]), column: sheetColumnNumber(match[3] || match[1]) }
+  };
+}
+
+function sheetSelectionBounds() {
+  const { anchor, focus } = sheetSelection;
+  return {
+    minRow: Math.min(anchor.row, focus.row), maxRow: Math.max(anchor.row, focus.row),
+    minColumn: Math.min(anchor.column, focus.column), maxColumn: Math.max(anchor.column, focus.column)
+  };
+}
+
+function sheetSelectionA1() {
+  const bounds = sheetSelectionBounds();
+  const first = `${sheetColumnLabel(bounds.minColumn)}${bounds.minRow}`;
+  const last = `${sheetColumnLabel(bounds.maxColumn)}${bounds.maxRow}`;
+  return first === last ? first : `${first}:${last}`;
+}
+
+function syncSheetSelection() {
+  const bounds = sheetSelectionBounds();
+  const includesHeaders = document.querySelector('#sheetHasHeaders').checked;
+  document.querySelectorAll('#sheetGrid [data-sheet-cell]').forEach((cell) => {
+    const row = Number(cell.dataset.row);
+    const column = Number(cell.dataset.column);
+    const selected = row >= bounds.minRow && row <= bounds.maxRow && column >= bounds.minColumn && column <= bounds.maxColumn;
+    cell.classList.toggle('is-selected', selected);
+    cell.classList.toggle('is-selection-edge', selected && (row === bounds.minRow || row === bounds.maxRow || column === bounds.minColumn || column === bounds.maxColumn));
+    cell.classList.toggle('is-header-cell', selected && includesHeaders && row === bounds.minRow);
+    cell.setAttribute('aria-selected', String(selected));
+  });
+  const cellCount = (bounds.maxRow - bounds.minRow + 1) * (bounds.maxColumn - bounds.minColumn + 1);
+  document.querySelector('#sheetSelectionSummary').textContent = `${sheetSelectionA1()} · ${cellCount} selected cell${cellCount === 1 ? '' : 's'}${includesHeaders ? ' · first row treated as headers' : ''}`;
+}
+
+function setSheetSelection(anchor, focus = anchor, { writeInput = true } = {}) {
+  sheetSelection = { anchor: { ...anchor }, focus: { ...focus } };
+  if (writeInput) document.querySelector('#sheetRange').value = sheetSelectionA1();
+  builderPreview = null;
+  document.querySelector('#sheetPreviewResult').textContent = 'Selection changed · preview to calculate';
+  syncSheetSelection();
+}
+
+function renderSheetGrid() {
+  const grid = document.querySelector('#sheetGrid');
+  if (!sheetGridState) {
+    grid.innerHTML = '<p>Choose a spreadsheet and sheet to browse its cells.</p>';
+    return;
+  }
+  const table = document.createElement('div');
+  table.className = 'sheet-data-grid';
+  table.style.setProperty('--sheet-columns', sheetGridState.columnCount);
+  const corner = document.createElement('b');
+  corner.setAttribute('aria-hidden', 'true');
+  table.append(corner);
+  sheetGridState.columns.forEach((column) => {
+    const heading = document.createElement('b');
+    heading.textContent = column;
+    heading.setAttribute('role', 'columnheader');
+    table.append(heading);
+  });
+  sheetGridState.values.forEach((rowValues, rowIndex) => {
+    const row = sheetGridState.startRow + rowIndex;
+    const heading = document.createElement('i');
+    heading.textContent = row;
+    heading.setAttribute('role', 'rowheader');
+    table.append(heading);
+    rowValues.forEach((value, columnIndex) => {
+      const column = sheetGridState.startColumn + columnIndex;
+      const cell = document.createElement('button');
+      const address = `${sheetColumnLabel(column)}${row}`;
+      cell.type = 'button';
+      cell.dataset.sheetCell = address;
+      cell.dataset.row = row;
+      cell.dataset.column = column;
+      cell.setAttribute('role', 'gridcell');
+      cell.setAttribute('aria-label', `${address}: ${value === '' ? 'empty' : value}`);
+      cell.title = `${address}${value === '' ? '' : ` · ${value}`}`;
+      cell.textContent = value === '' ? '' : String(value);
+      table.append(cell);
+    });
+  });
+  grid.replaceChildren(table);
+  document.querySelector('#sheetViewportLabel').textContent = sheetGridState.range;
+  document.querySelector('#sheetPageLeft').disabled = sheetGridState.startColumn <= 1;
+  document.querySelector('#sheetPageUp').disabled = sheetGridState.startRow <= 1;
+  document.querySelector('#sheetPageRight').disabled = sheetGridState.startColumn + sheetGridState.columnCount > sheetGridState.maxColumns;
+  document.querySelector('#sheetPageDown').disabled = sheetGridState.startRow + sheetGridState.rowCount > sheetGridState.maxRows;
+  syncSheetSelection();
+}
+
+async function loadSheetGrid(startRow = 1, startColumn = 1) {
+  const spreadsheet = document.querySelector('#sheetFile').value.trim();
+  const selectedSheet = document.querySelector('#sheetTab').value;
+  const sheetId = Number(selectedSheet);
+  if (!loadedSpreadsheet || !spreadsheet || !selectedSheet || !Number.isSafeInteger(sheetId)) return null;
+  const sheet = loadedSpreadsheet.sheets.find((candidate) => candidate.sheetId === sheetId);
+  if (!sheet) return null;
+  const row = Math.max(1, Math.min(Number(startRow) || 1, sheet.rowCount));
+  const column = Math.max(1, Math.min(Number(startColumn) || 1, sheet.columnCount));
+  const request = ++sheetGridRequest;
+  document.querySelector('#sheetPickerStatus').textContent = 'Loading cells…';
+  const query = new URLSearchParams({ connectionId: activeGoogleConnection.id, spreadsheet, sheetId: String(sheetId), row: String(row), column: String(column) });
+  try {
+    const payload = await apiJson(`/api/axoboard/integrations/google/grid?${query}`);
+    if (request !== sheetGridRequest) return null;
+    sheetGridState = payload.grid;
+    document.querySelector('#sheetPickerStatus').textContent = 'Drag to select';
+    renderSheetGrid();
+    return sheetGridState;
+  } catch (error) {
+    if (request !== sheetGridRequest) return null;
+    sheetGridState = null;
+    document.querySelector('#sheetGrid').innerHTML = `<p>${escapeHtml(error.message)}</p>`;
+    document.querySelector('#sheetPickerStatus').textContent = 'Preview unavailable';
+    throw error;
+  }
+}
+
+async function revealSheetSelection() {
+  const bounds = sheetSelectionBounds();
+  if (sheetGridState && bounds.minRow >= sheetGridState.startRow && bounds.maxRow < sheetGridState.startRow + sheetGridState.rowCount && bounds.minColumn >= sheetGridState.startColumn && bounds.maxColumn < sheetGridState.startColumn + sheetGridState.columnCount) return sheetGridState;
+  const startRow = bounds.minRow <= 12 ? 1 : Math.max(1, bounds.minRow - 2);
+  const startColumn = bounds.minColumn <= 8 ? 1 : Math.max(1, bounds.minColumn - 2);
+  return loadSheetGrid(startRow, startColumn);
 }
 
 function renderLiveKpis() {
@@ -506,6 +657,13 @@ function openKpiBuilder(source = 'google', trigger = document.activeElement) {
   availableSpreadsheets = [];
   loadedSpreadsheet = null;
   builderPreview = null;
+  sheetGridState = null;
+  sheetGridRequest += 1;
+  document.querySelector('#sheetRange').value = 'D8';
+  sheetSelection = parseSheetRange('D8');
+  document.querySelector('#sheetHasHeaders').checked = false;
+  document.querySelector('#sheetPreviewResult').textContent = 'No value previewed';
+  document.querySelector('#sheetSelectionSummary').textContent = 'Select one cell or drag across several cells.';
   document.querySelector('#sheetFile').innerHTML = '<option value="">Loading your spreadsheets…</option>';
   document.querySelector('#sheetFile').disabled = true;
   document.querySelector('#sheetTab').innerHTML = '<option value="">Choose a spreadsheet first</option>';
@@ -513,7 +671,7 @@ function openKpiBuilder(source = 'google', trigger = document.activeElement) {
   document.querySelector('#sheetPickerTitle').textContent = 'Loading spreadsheets';
   document.querySelector('#sheetPickerSubtitle').textContent = 'Reading file names and modified dates from Google Drive';
   document.querySelector('#spreadsheetPickerHelp').textContent = 'Sorted by most recently updated';
-  document.querySelector('#sheetGrid').innerHTML = '<p>Your preview value and exact source lineage will appear here.</p>';
+  document.querySelector('#sheetGrid').innerHTML = '<p>Choose a spreadsheet and sheet to browse its cells.</p>';
   syncBuilderSource(source);
   showBuilderStep(1);
   kpiBuilderModal.classList.add('is-visible');
@@ -595,6 +753,7 @@ async function loadSpreadsheetMetadata() {
   document.querySelector('#sheetPickerTitle').textContent = loadedSpreadsheet.title;
   document.querySelector('#sheetPickerSubtitle').textContent = `${loadedSpreadsheet.sheets.length} sheet${loadedSpreadsheet.sheets.length === 1 ? '' : 's'} available`;
   document.querySelector('#sheetPickerStatus').textContent = 'Metadata loaded';
+  if (loadedSpreadsheet.sheets.length) await revealSheetSelection();
   return loadedSpreadsheet;
 }
 
@@ -607,7 +766,8 @@ async function previewGoogleSelection() {
   const payload = await apiJson('/api/axoboard/kpis/google/preview', {
     method: 'POST', body: JSON.stringify({
       connectionId: activeGoogleConnection.id, spreadsheet: spreadsheetInput, sheetId,
-      range: document.querySelector('#sheetRange').value.trim(), aggregation: document.querySelector('#sheetAggregation').value
+      range: document.querySelector('#sheetRange').value.trim(), aggregation: document.querySelector('#sheetAggregation').value,
+      includeHeaders: document.querySelector('#sheetHasHeaders').checked
     })
   });
   builderPreview = payload.preview;
@@ -615,7 +775,7 @@ async function previewGoogleSelection() {
   document.querySelector('#previewLineage').textContent = `${builderPreview.spreadsheetTitle} · ${builderPreview.sourceRange}`;
   document.querySelector('#previewFreshness').textContent = 'previewed just now';
   document.querySelector('#sheetPickerStatus').textContent = 'Preview healthy';
-  document.querySelector('#sheetGrid').innerHTML = `<div><strong>${escapeHtml(formatKpiValue(builderPreview.value, document.querySelector('#kpiFormat').value))}</strong><small>${escapeHtml(builderPreview.sourceRange)} · ${builderPreview.sourceRowCount} contributing cell${builderPreview.sourceRowCount === 1 ? '' : 's'}</small></div>`;
+  document.querySelector('#sheetPreviewResult').textContent = `${formatKpiValue(builderPreview.value, document.querySelector('#kpiFormat').value)} · ${builderPreview.sourceRowCount} contributing cell${builderPreview.sourceRowCount === 1 ? '' : 's'}`;
   return builderPreview;
 }
 
@@ -625,7 +785,7 @@ async function saveLiveKpi() {
     method: 'POST', body: JSON.stringify({
       connectionId: activeGoogleConnection.id, spreadsheet: document.querySelector('#sheetFile').value.trim(),
       sheetId: Number(document.querySelector('#sheetTab').value), range: document.querySelector('#sheetRange').value.trim(),
-      aggregation: document.querySelector('#sheetAggregation').value, name: kpiName.value.trim(),
+      aggregation: document.querySelector('#sheetAggregation').value, includeHeaders: document.querySelector('#sheetHasHeaders').checked, name: kpiName.value.trim(),
       displayFormat: document.querySelector('#kpiFormat').value
     })
   });
@@ -655,19 +815,26 @@ kpiName.addEventListener('input', () => { previewKpiName.textContent = kpiName.v
 document.querySelectorAll('[data-visual]').forEach((button) => button.addEventListener('click', () => {
   document.querySelectorAll('[data-visual]').forEach((item) => item.classList.toggle('is-selected', item === button));
 }));
-document.querySelectorAll('#sheetGrid button').forEach((cell) => cell.addEventListener('click', () => {
-  document.querySelectorAll('#sheetGrid button').forEach((item) => item.classList.toggle('is-selected', item === cell));
-  if (cell.dataset.cell) document.querySelector('#sheetRange').value = cell.dataset.cell;
-}));
 document.querySelector('#selectRangeButton').addEventListener('click', async () => {
   const button = document.querySelector('#selectRangeButton');
   button.disabled = true;
-  try { await previewGoogleSelection(); showToast('Range previewed', 'The value came directly from Google Sheets.'); }
+  try {
+    const parsed = parseSheetRange();
+    if (!parsed) throw new Error('Use a cell or range such as D8 or D8:D20.');
+    setSheetSelection(parsed.anchor, parsed.focus, { writeInput: false });
+    await revealSheetSelection();
+    await previewGoogleSelection();
+    showToast('Range previewed', 'The value came directly from Google Sheets.');
+  }
   catch (error) { showToast('Preview failed', error.message); }
   finally { button.disabled = false; }
 });
 document.querySelector('#kpiFormat').addEventListener('change', () => {
-  if (builderPreview) previewKpiValue.textContent = formatKpiValue(builderPreview.value, document.querySelector('#kpiFormat').value);
+  if (builderPreview) {
+    const formatted = formatKpiValue(builderPreview.value, document.querySelector('#kpiFormat').value);
+    previewKpiValue.textContent = formatted;
+    document.querySelector('#sheetPreviewResult').textContent = `${formatted} · ${builderPreview.sourceRowCount} contributing cell${builderPreview.sourceRowCount === 1 ? '' : 's'}`;
+  }
 });
 document.querySelector('#sheetFile').addEventListener('change', async () => {
   loadedSpreadsheet = null;
@@ -677,9 +844,55 @@ document.querySelector('#sheetFile').addEventListener('change', async () => {
   try { await loadSpreadsheetMetadata(); }
   catch (error) { showToast('Spreadsheet could not load', error.message); }
 });
-document.querySelector('#sheetTab').addEventListener('change', () => { builderPreview = null; });
-document.querySelector('#sheetRange').addEventListener('input', () => { builderPreview = null; });
+document.querySelector('#sheetTab').addEventListener('change', async () => {
+  builderPreview = null;
+  sheetGridState = null;
+  try { await revealSheetSelection(); }
+  catch (error) { showToast('Sheet preview could not load', error.message); }
+});
+document.querySelector('#sheetRange').addEventListener('input', () => {
+  builderPreview = null;
+  const parsed = parseSheetRange();
+  if (parsed) setSheetSelection(parsed.anchor, parsed.focus, { writeInput: false });
+});
 document.querySelector('#sheetAggregation').addEventListener('change', () => { builderPreview = null; });
+document.querySelector('#sheetHasHeaders').addEventListener('change', () => {
+  builderPreview = null;
+  document.querySelector('#sheetPreviewResult').textContent = 'Header setting changed · preview to calculate';
+  syncSheetSelection();
+});
+document.querySelector('#sheetGrid').addEventListener('pointerdown', (event) => {
+  const cell = event.target.closest('[data-sheet-cell]');
+  if (!cell) return;
+  event.preventDefault();
+  const coordinate = { row: Number(cell.dataset.row), column: Number(cell.dataset.column) };
+  selectingSheetCells = true;
+  setSheetSelection(event.shiftKey ? sheetSelection.anchor : coordinate, coordinate);
+  cell.focus();
+});
+document.querySelector('#sheetGrid').addEventListener('pointerover', (event) => {
+  if (!selectingSheetCells) return;
+  const cell = event.target.closest('[data-sheet-cell]');
+  if (cell) setSheetSelection(sheetSelection.anchor, { row: Number(cell.dataset.row), column: Number(cell.dataset.column) });
+});
+document.querySelector('#sheetGrid').addEventListener('keydown', (event) => {
+  const cell = event.target.closest('[data-sheet-cell]');
+  if (!cell || !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+  event.preventDefault();
+  const delta = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[event.key];
+  const row = Number(cell.dataset.row) + delta[0];
+  const column = Number(cell.dataset.column) + delta[1];
+  const next = document.querySelector(`#sheetGrid [data-row="${row}"][data-column="${column}"]`);
+  if (!next) return;
+  const coordinate = { row, column };
+  setSheetSelection(event.shiftKey ? sheetSelection.anchor : coordinate, coordinate);
+  next.focus();
+});
+document.addEventListener('pointerup', () => { selectingSheetCells = false; });
+document.querySelector('#sheetPageLeft').addEventListener('click', () => loadSheetGrid(sheetGridState?.startRow || 1, Math.max(1, (sheetGridState?.startColumn || 1) - 8)).catch((error) => showToast('Sheet navigation failed', error.message)));
+document.querySelector('#sheetPageRight').addEventListener('click', () => loadSheetGrid(sheetGridState?.startRow || 1, (sheetGridState?.startColumn || 1) + 8).catch((error) => showToast('Sheet navigation failed', error.message)));
+document.querySelector('#sheetPageUp').addEventListener('click', () => loadSheetGrid(Math.max(1, (sheetGridState?.startRow || 1) - 12), sheetGridState?.startColumn || 1).catch((error) => showToast('Sheet navigation failed', error.message)));
+document.querySelector('#sheetPageDown').addEventListener('click', () => loadSheetGrid((sheetGridState?.startRow || 1) + 12, sheetGridState?.startColumn || 1).catch((error) => showToast('Sheet navigation failed', error.message)));
 document.querySelector('#reconnectSource').addEventListener('click', (event) => openFreshOAuth('google', event.currentTarget));
 document.querySelectorAll('.connect-source').forEach((button) => button.addEventListener('click', (event) => openFreshOAuth('google', event.currentTarget)));
 document.querySelector('#browseIntegrations').addEventListener('click', (event) => activeGoogleConnection ? showToast('Google Sheets is connected', 'Build a KPI or reconnect the account from the Google card.') : openFreshOAuth('google', event.currentTarget));
