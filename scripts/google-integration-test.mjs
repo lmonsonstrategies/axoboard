@@ -280,6 +280,22 @@ try {
   assert.equal(JSON.parse(previewText).preview.comparison.delta, 25);
   assert.equal(JSON.parse(previewText).preview.comparison.percentChange, 100);
 
+  const ambiguousRange = await api('/api/axoboard/kpis/google/preview', {
+    method: 'POST', cookie: first.cookie,
+    body: { ...selection, range: 'D8:D10', aggregation: 'single_value', includeHeaders: false, comparisonRange: '' }
+  });
+  const ambiguousRangeBody = await ambiguousRange.json();
+  assert.equal(ambiguousRange.status, 422);
+  assert.equal(ambiguousRangeBody.code, 'single_value_requires_one_cell', 'multi-cell ranges cannot silently collapse to the first value');
+
+  const sameComparison = await api('/api/axoboard/kpis/google/preview', {
+    method: 'POST', cookie: first.cookie,
+    body: { ...selection, comparisonSheetId: 12345, comparisonRange: 'D8:D10' }
+  });
+  const sameComparisonBody = await sameComparison.json();
+  assert.equal(sameComparison.status, 422);
+  assert.equal(sameComparisonBody.code, 'comparison_matches_kpi_range', 'a KPI cannot compare against itself');
+
   const create = await api('/api/axoboard/kpis', { method: 'POST', cookie: first.cookie, body: { ...selection, name: 'Qualified pipeline', displayFormat: 'currency' } });
   const createText = await create.text();
   assert.equal(create.status, 201, createText);
@@ -313,11 +329,13 @@ try {
 
   const valuesBeforeScheduledSync = valuesCalls;
   await pool.query('UPDATE kpi_mappings SET next_sync_at=NOW() WHERE id=$1', [createdKpi.id]);
-  for (let attempt = 0; attempt < 30 && valuesCalls < valuesBeforeScheduledSync + 2; attempt += 1) {
+  let successfulRuns;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    successfulRuns = await pool.query("SELECT COUNT(*)::int AS count FROM integration_sync_runs WHERE mapping_id=$1 AND status='succeeded'", [createdKpi.id]);
+    if (successfulRuns.rows[0].count >= 3) break;
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 500));
   }
   assert.equal(valuesCalls, valuesBeforeScheduledSync + 2, 'due KPI refreshes its primary and comparison ranges exactly once');
-  const successfulRuns = await pool.query("SELECT COUNT(*)::int AS count FROM integration_sync_runs WHERE mapping_id=$1 AND status='succeeded'", [createdKpi.id]);
   assert.equal(successfulRuns.rows[0].count, 3, 'initial, manual, and scheduled syncs are observable');
 
   const disconnected = await api(`/api/axoboard/integrations/connections/${connection.id}`, { method: 'DELETE', cookie: first.cookie });
