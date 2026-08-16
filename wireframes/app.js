@@ -372,7 +372,7 @@ let sheetGridState = null;
 let sheetGridRequest = 0;
 let sheetGridScrollTimer = null;
 let selectingSheetCells = false;
-let sheetSelection = { anchor: { row: 8, column: 4 }, focus: { row: 8, column: 4 } };
+let sheetSelection = { anchor: { row: 1, column: 1 }, focus: { row: 1, column: 1 } };
 let rangePickerTarget = 'primary';
 let rangePickerReturnFocus = null;
 const sheetCellWidth = 110;
@@ -412,10 +412,10 @@ function formatKpiValue(value, format = 'number') {
 }
 
 const displayTypeHelp = {
-  scorecard: 'Best for one cell or a range summarized into one number.',
-  rep_cards: 'Use a header row of names plus one or more value rows. AxoBoard creates one period card per person.',
-  leaderboard: 'Use a header row of names plus values, or a label column beside a value column.',
-  table: 'Preserves the selected rows and columns instead of collapsing them into one number.'
+  scorecard: 'Best for one number already calculated in Google Sheets.',
+  rep_cards: 'Select two columns: a label column and one calculated value column. Include the header row.',
+  leaderboard: 'Select two columns: a label column and one calculated value column. Include the header row.',
+  table: 'Shows the selected rows and columns exactly as they appear in Google Sheets.'
 };
 
 const periodLabels = { day: 'Daily', week: 'Weekly', month: 'Monthly', year: 'Yearly' };
@@ -428,9 +428,12 @@ function renderStructuredPreview(payload = builderPreview?.displayPayload) {
     previewKpiValue.hidden = false;
     return;
   }
+  const structuredItems = payload.kind === 'leaderboard'
+    ? [...(payload.items || [])].sort((a, b) => Number(b.value) - Number(a.value))
+    : (payload.items || []);
   const items = payload.kind === 'table'
     ? payload.rows.slice(0, 3).map((row, index) => ({ label: row[0] || `Row ${index + 1}`, value: row.slice(1).filter((value) => value !== '').join(' · ') || '—' }))
-    : (payload.items || []).slice(0, 5);
+    : structuredItems.slice(0, 5);
   preview.replaceChildren(...items.map((item) => {
     const row = document.createElement('div');
     const value = payload.kind === 'table' ? item.value : formatKpiValue(item.value, document.querySelector('#kpiFormat').value);
@@ -446,8 +449,50 @@ function selectDisplayType(type) {
   document.querySelectorAll('[data-display-type]').forEach((button) => button.classList.toggle('is-selected', button.dataset.displayType === activeDisplayType));
   document.querySelector('#displayTypeHelp').textContent = displayTypeHelp[activeDisplayType];
   document.querySelector('#periodGranularityField').hidden = activeDisplayType !== 'rep_cards';
+  document.querySelector('#comparisonModeField').hidden = activeDisplayType === 'table';
+  if (activeDisplayType === 'table') {
+    document.querySelector('#kpiComparisonMode').value = 'none';
+    document.querySelector('#kpiComparisonFields').hidden = true;
+  }
+  document.querySelector('#sheetAggregation').value = activeDisplayType === 'scorecard' ? 'single_value' : 'sum';
+  document.querySelector('#comparisonAggregation').value = activeDisplayType === 'scorecard' ? 'single_value' : 'sum';
+  updateDisplayRequirement();
   builderPreview = null;
   renderStructuredPreview(null);
+}
+
+function currentRangeShape() {
+  const parsed = parseSheetRange(document.querySelector('#sheetRange').value);
+  if (!parsed) return null;
+  return {
+    rows: Math.abs(parsed.focus.row - parsed.anchor.row) + 1,
+    columns: Math.abs(parsed.focus.column - parsed.anchor.column) + 1
+  };
+}
+
+function updateDisplayRequirement() {
+  const note = document.querySelector('#displayDataRequirement');
+  const headers = document.querySelector('#sheetHasHeaders').checked;
+  const shape = currentRangeShape();
+  note.classList.remove('is-warning');
+  if (activeDisplayType === 'scorecard') {
+    note.hidden = false;
+    note.textContent = headers
+      ? 'Scorecard expects one header cell and one calculated value cell beneath it.'
+      : 'Scorecard expects exactly one calculated numeric cell.';
+    if (shape && ((headers && shape.rows * shape.columns !== 2) || (!headers && shape.rows * shape.columns !== 1))) note.classList.add('is-warning');
+    return;
+  }
+  if (activeDisplayType === 'rep_cards' || activeDisplayType === 'leaderboard') {
+    note.hidden = false;
+    note.textContent = headers
+      ? 'Ready: the first row supplies column headers. Select exactly two columns—labels first, calculated values second.'
+      : 'Headers are required. Go back to Data and turn on “Use first row as headers.”';
+    if (!headers || (shape && !((shape.columns === 2 && shape.rows >= 2) || (shape.rows === 2 && shape.columns >= 2)))) note.classList.add('is-warning');
+    return;
+  }
+  note.hidden = false;
+  note.textContent = headers ? 'The first selected row will become the table’s column headings.' : 'The selected cells will appear as a table with spreadsheet column letters.';
 }
 
 function comparisonBuilderPayload() {
@@ -724,12 +769,9 @@ function updatePrimaryRangeSummary() {
   const rows = Math.abs(parsed.focus.row - parsed.anchor.row) + 1;
   const columns = Math.abs(parsed.focus.column - parsed.anchor.column) + 1;
   const count = rows * columns;
-  if (count > 1 && document.querySelector('#sheetAggregation').value === 'single_value') {
-    document.querySelector('#sheetAggregation').value = 'sum';
-  }
   document.querySelector('#sheetSelectionSummary').textContent = `${document.querySelector('#sheetRange').value.trim().toUpperCase()} · ${count} cell${count === 1 ? '' : 's'}`;
-  document.querySelector('#sheetPreviewResult').textContent = count > 1 ? `${document.querySelector('#sheetAggregation').selectedOptions[0].textContent} calculation` : 'Single-cell KPI';
-  document.querySelector('#aggregationHelp').textContent = count > 1 ? 'Choose how AxoBoard should summarize these cells.' : 'Use Single value for one cell.';
+  document.querySelector('#sheetPreviewResult').textContent = document.querySelector('#sheetHasHeaders').checked ? 'First row will be used as headers' : 'Ready to choose a display';
+  updateDisplayRequirement();
 }
 
 async function openRangePicker(target, trigger = document.activeElement) {
@@ -737,8 +779,8 @@ async function openRangePicker(target, trigger = document.activeElement) {
   rangePickerTarget = target === 'comparison' ? 'comparison' : 'primary';
   rangePickerReturnFocus = trigger;
   const sourceRange = rangePickerTarget === 'comparison'
-    ? document.querySelector('#comparisonRange').value || document.querySelector('#sheetRange').value || 'D8'
-    : document.querySelector('#sheetRange').value || 'D8';
+    ? document.querySelector('#comparisonRange').value || document.querySelector('#sheetRange').value || 'A1'
+    : document.querySelector('#sheetRange').value || 'A1';
   const sourceSheet = rangePickerTarget === 'comparison'
     ? document.querySelector('#comparisonSheet').value || document.querySelector('#sheetTab').value
     : document.querySelector('#sheetTab').value;
@@ -787,16 +829,10 @@ function applyRangePickerSelection() {
     document.querySelector('#comparisonHasHeaders').checked = includesHeaders;
     document.querySelector('#comparisonSelectionLabel').textContent = `${selectedSheetTitle(pickerSheet)}!${range}`;
     document.querySelector('#comparisonPreviewStatus').textContent = 'Ready to preview';
-    if (cellCount > 1 && document.querySelector('#comparisonAggregation').value === 'single_value') {
-      document.querySelector('#comparisonAggregation').value = 'sum';
-    }
   } else {
     document.querySelector('#sheetTab').value = pickerSheet;
     document.querySelector('#sheetRange').value = range;
     document.querySelector('#sheetHasHeaders').checked = includesHeaders;
-    if (cellCount > 1 && document.querySelector('#sheetAggregation').value === 'single_value') {
-      document.querySelector('#sheetAggregation').value = 'sum';
-    }
     updatePrimaryRangeSummary();
   }
   builderPreview = null;
@@ -921,6 +957,22 @@ function showBuilderStep(step) {
   document.querySelector('#builderStatus').textContent = activeBuilderStep === 3 ? 'Ready to create live KPI' : 'Nothing saved until the final step';
 }
 
+function validateSelectedData() {
+  const spreadsheet = document.querySelector('#sheetFile').value.trim();
+  if (!spreadsheet) throw new Error('Choose a spreadsheet.');
+  const selectedSheet = document.querySelector('#sheetTab').value;
+  if (!selectedSheet || !Number.isSafeInteger(Number(selectedSheet))) throw new Error('Choose a sheet.');
+  const shape = currentRangeShape();
+  if (!shape) throw new Error('Use a valid range such as D8 or A1:B12.');
+  return shape;
+}
+
+function recommendDisplayForSelection(shape) {
+  if (shape.rows * shape.columns === 1) return 'scorecard';
+  if (document.querySelector('#sheetHasHeaders').checked && ((shape.columns === 2 && shape.rows >= 2) || (shape.rows === 2 && shape.columns >= 2))) return 'leaderboard';
+  return 'table';
+}
+
 function openKpiBuilder(source = 'google', trigger = document.activeElement) {
   if (source === 'google' && !activeGoogleConnection) {
     showScreen('integrations');
@@ -939,8 +991,8 @@ function openKpiBuilder(source = 'google', trigger = document.activeElement) {
   sheetGridState = null;
   sheetGridRequest += 1;
   window.clearTimeout(sheetGridScrollTimer);
-  document.querySelector('#sheetRange').value = 'D8';
-  sheetSelection = parseSheetRange('D8');
+  document.querySelector('#sheetRange').value = 'A1';
+  sheetSelection = parseSheetRange('A1');
   document.querySelector('#sheetHasHeaders').checked = false;
   document.querySelector('#kpiGoal').value = '';
   document.querySelector('#periodGranularity').value = 'month';
@@ -952,8 +1004,8 @@ function openKpiBuilder(source = 'google', trigger = document.activeElement) {
   document.querySelector('#comparisonHasHeaders').checked = false;
   document.querySelector('#comparisonSelectionLabel').textContent = 'Choose comparison cells';
   renderComparisonPreview();
-  document.querySelector('#sheetPreviewResult').textContent = 'Previewed when you continue';
-  document.querySelector('#sheetSelectionSummary').textContent = 'D8 · 1 cell';
+  document.querySelector('#sheetPreviewResult').textContent = 'Ready to choose a display';
+  document.querySelector('#sheetSelectionSummary').textContent = 'A1 · 1 cell';
   document.querySelector('#sheetFile').innerHTML = '<option value="">Loading your spreadsheets…</option>';
   document.querySelector('#sheetFile').disabled = true;
   document.querySelector('#sheetTab').innerHTML = '<option value="">Choose a spreadsheet first</option>';
@@ -1115,6 +1167,10 @@ sourceChoices.forEach((choice) => choice.addEventListener('click', () => syncBui
 document.querySelectorAll('[data-display-type]').forEach((button) => button.addEventListener('click', async () => {
   selectDisplayType(button.dataset.displayType);
   if (activeBuilderStep !== 3) return;
+  if ((activeDisplayType === 'rep_cards' || activeDisplayType === 'leaderboard') && !document.querySelector('#sheetHasHeaders').checked) {
+    showToast('Headers are required', 'Go back to Data and turn on “Use first row as headers.”');
+    return;
+  }
   try { await previewGoogleSelection(); }
   catch (error) { showToast('Display needs different data', error.message); }
 }));
@@ -1123,7 +1179,13 @@ builderNext.addEventListener('click', async () => {
   builderNext.disabled = true;
   try {
     if (activeBuilderStep === 1) showBuilderStep(2);
-    else if (activeBuilderStep === 2) { await previewGoogleSelection(); showBuilderStep(3); }
+    else if (activeBuilderStep === 2) {
+      const shape = validateSelectedData();
+      selectDisplayType(recommendDisplayForSelection(shape));
+      showBuilderStep(3);
+      try { await previewGoogleSelection(); }
+      catch (error) { showToast('Choose a matching display', error.message); }
+    }
     else await saveLiveKpi();
   } catch (error) { showToast('KPI setup needs attention', error.message); }
   finally { builderNext.disabled = false; }
@@ -1183,10 +1245,9 @@ document.querySelector('#sheetRange').addEventListener('input', () => {
   builderPreview = null;
   updatePrimaryRangeSummary();
 });
-document.querySelector('#sheetAggregation').addEventListener('change', () => { builderPreview = null; updatePrimaryRangeSummary(); });
 document.querySelector('#sheetHasHeaders').addEventListener('change', () => {
   builderPreview = null;
-  document.querySelector('#sheetPreviewResult').textContent = 'Header setting changed · preview to calculate';
+  updatePrimaryRangeSummary();
 });
 document.querySelector('#rangePickerSheet').addEventListener('change', async () => {
   sheetGridState = null;
@@ -1443,7 +1504,7 @@ const workflowDefinitions = {
   profile: { eyebrow: 'ACCOUNT & PREFERENCES', title: 'Your AxoBoard profile', description: 'Manage personal display, notification, sound, and accessibility defaults.', steps: ['Profile','Preferences','Security'], primary: 'Save preferences', canvas: '<h3>Personal preferences</h3><p>These follow you across workspaces unless an admin policy overrides them.</p><div class="workflow-form"><div class="field-row"><label>Display name<input value="Jordan Lee" /></label><label>Timezone<select><option>America/Denver</option><option>America/New_York</option></select></label></div><div class="workflow-checks"><label><input type="checkbox" checked /> Email me when an automation needs attention</label><label><input type="checkbox" checked /> Respect reduced-motion system preference</label><label><input type="checkbox" /> Mute celebration sounds on this device</label></div></div>', context: '<h3>Account security</h3><p>Last sign-in today at 8:14 AM. MFA is enabled.</p><div class="workflow-summary"><div><small>ROLE</small><strong>Workspace owner</strong></div><div><small>ACTIVE SESSIONS</small><strong>2 devices</strong></div></div>' },
   dashboard: { eyebrow: 'DASHBOARD CONFIGURATION', title: 'Edit dashboard', description: 'Change the time window, layout, refresh behavior, and card settings.', steps: ['Configure','Preview','Publish'], primary: 'Preview changes', canvas: '<h3>Dashboard settings</h3><p>Changes stay in a draft until you publish them.</p><div class="workflow-form"><div class="field-row"><label>Time window<select><option>Today</option><option>This week</option><option>This month</option><option>Rolling 30 days</option></select></label><label>Refresh interval<select><option>Every 5 minutes</option><option>Every minute</option><option>Every 15 minutes</option></select></label></div><label>Layout density<select><option>Comfortable</option><option>Compact</option><option>TV optimized</option></select></label><div class="workflow-checks"><label><input type="checkbox" checked /> Show source and freshness on every card</label><label><input type="checkbox" checked /> Preserve mobile card order</label></div></div>', context: '<h3>Draft impact</h3><p>4 KPI cards, 1 trend chart, and 3 attention rules use this dashboard.</p><div class="workflow-preview"><span>▦</span><strong>Sales performance</strong><small>Responsive preview · no live changes</small></div>' },
   layout: { eyebrow: 'DASHBOARD LAYOUT', title: 'Change layout', description: 'Choose a responsive preset, show the sections you need, and put KPIs in the right order.', steps: ['Arrange','Review'], primary: 'Review layout', canvas: '<h3>Shape the dashboard around the decision</h3><p>Every change previews immediately. Cancel restores the layout you started with.</p><fieldset class="layout-preset-fieldset"><legend>Layout preset</legend><div class="layout-preset-options"><label><input type="radio" name="layoutPreset" value="balanced" /><span class="layout-preset-icon balanced" aria-hidden="true"><i></i><i></i><i></i><i></i></span><strong>Balanced</strong><small>Equal KPI cards with trend and actions below.</small></label><label><input type="radio" name="layoutPreset" value="kpi-focus" /><span class="layout-preset-icon kpi-focus" aria-hidden="true"><i></i><i></i><i></i></span><strong>KPI focus</strong><small>Lead with the first KPI and give the score more room.</small></label><label><input type="radio" name="layoutPreset" value="compact" /><span class="layout-preset-icon compact" aria-hidden="true"><i></i><i></i><i></i><i></i></span><strong>Compact</strong><small>Reduce card height to scan more at once.</small></label></div></fieldset><fieldset class="layout-section-fieldset"><legend>Dashboard sections</legend><div class="workflow-checks layout-visibility-options"><label><input id="layoutShowTrend" type="checkbox" /><span><strong>Trend chart</strong><small>Revenue momentum and period comparison</small></span></label><label><input id="layoutShowActionCenter" type="checkbox" /><span><strong>Action Center</strong><small>Alerts and next-best actions</small></span></label></div></fieldset><div class="layout-order-heading"><div><strong>KPI order</strong><small>Use Move up and Move down for a keyboard-safe order.</small></div></div><ol class="layout-order-list" id="layoutKpiOrder"></ol>', context: '<h3>Live layout preview</h3><p>This preview and the dashboard behind it update together. Nothing is sent to a server.</p><div class="layout-mini-preview" data-layout-preview><div class="layout-mini-kpis" data-layout-preview-kpis></div><span class="layout-mini-section trend" data-layout-preview-trend>Trend chart</span><span class="layout-mini-section actions" data-layout-preview-actions>Action Center</span><span class="layout-mini-empty" data-layout-preview-empty hidden>KPI cards only</span></div><div class="workflow-summary"><div><small>PERSISTENCE</small><strong>This browser only</strong></div><div><small>MOBILE</small><strong>Order becomes a single column</strong></div><div><small>SERVER STATUS</small><strong>Not published</strong></div></div>' },
-  kpi: { eyebrow: 'KPI SETTINGS', title: 'Edit KPI card', description: 'Update source mapping, calculation, appearance, goal, and alert behavior.', steps: ['Source','Calculation','Display','Publish'], primary: 'Review KPI', canvas: '<h3>Metric and display</h3><p>The source contract stays visible while you customize the card.</p><div class="workflow-form"><label>KPI name<input value="Net sales today" /></label><div class="field-row"><label>Format<select><option>Currency · no decimals</option><option>Number</option><option>Percentage</option></select></label><label>Goal<input value="$65,000" /></label></div><label>Comparison<select><option>Versus yesterday</option><option>Versus prior week</option><option>Versus goal only</option></select></label><div class="workflow-checks"><label><input type="checkbox" checked /> Enable source drilldown</label><label><input type="checkbox" checked /> Show stale warning after 15 minutes</label></div></div>', context: '<h3>Trusted source</h3><p>Google Sheets → 2026 Sales Performance → Summary!D8</p><div class="workflow-summary"><div><small>CURRENT VALUE</small><strong>$55,396</strong></div><div><small>FRESHNESS</small><strong>2 minutes ago · healthy</strong></div><div><small>OWNER</small><strong>Sales Ops</strong></div></div>' },
+  kpi: { eyebrow: 'KPI SETTINGS', title: 'Edit KPI card', description: 'Update source data, appearance, goal, and comparison behavior.', steps: ['Source','Data','Display','Publish'], primary: 'Review KPI', canvas: '<h3>Metric and display</h3><p>The source contract stays visible while you customize the card.</p><div class="workflow-form"><label>KPI name<input value="Net sales today" /></label><div class="field-row"><label>Format<select><option>Currency · no decimals</option><option>Number</option><option>Percentage</option></select></label><label>Goal<input value="$65,000" /></label></div><label>Comparison<select><option>Versus another Sheets cell</option><option>Versus a matching Sheets range</option><option>Versus goal only</option></select></label><div class="workflow-checks"><label><input type="checkbox" checked /> Enable source drilldown</label><label><input type="checkbox" checked /> Show stale warning after 15 minutes</label></div></div>', context: '<h3>Trusted source</h3><p>Google Sheets → 2026 Sales Performance → Summary!D8</p><div class="workflow-summary"><div><small>CURRENT VALUE</small><strong>$55,396</strong></div><div><small>FRESHNESS</small><strong>2 minutes ago · healthy</strong></div><div><small>OWNER</small><strong>Sales Ops</strong></div></div>' },
   alert: { eyebrow: 'ALERT & ACTION BUILDER', title: 'Configure an alert', description: 'Turn a trusted KPI condition into controlled notifications and team actions.', steps: ['Trigger','Actions','Guardrails','Test'], primary: 'Test rule', canvas: '<h3>When should this run?</h3><p>Rules evaluate normalized KPI snapshots—not raw browser values.</p><div class="workflow-form"><div class="field-row"><label>KPI<select><option>Pipeline coverage</option><option>Net sales today</option><option>Team on track</option></select></label><label>Condition<select><option>Falls below</option><option>Reaches</option><option>Changes by more than</option></select></label></div><div class="field-row"><label>Threshold<input value="3×" /></label><label>For at least<select><option>30 minutes</option><option>Immediately</option><option>1 hour</option></select></label></div><div class="workflow-checks"><label><input type="checkbox" checked /> Slack #sales-leadership</label><label><input type="checkbox" /> Email the metric owner</label><label><input type="checkbox" /> Start a quiet celebration</label></div></div>', context: '<h3>Guardrail preview</h3><p>This would have run twice in the last 30 days.</p><div class="workflow-summary"><div><small>COOLDOWN</small><strong>4 hours</strong></div><div><small>QUIET HOURS</small><strong>8 PM–7 AM</strong></div><div><small>STALE DATA</small><strong>Block rule</strong></div></div>' },
   connector: { eyebrow: 'INTEGRATION SETUP', title: 'Connect a data source', description: 'Authorize the smallest useful scope, validate it, and create the first mapping.', steps: ['Choose source','Authorize','Validate','Map data'], primary: 'Review setup', canvas: '<h3>Connector roadmap</h3><p>Deep, observable connections beat a huge brittle catalog.</p><div class="workflow-grid"><button class="workflow-card is-selected" type="button"><span class="integration-logo google" aria-label="Google Sheets">Google Sheets</span><strong>Google Sheets</strong><small>Spreadsheets, sheets, cells, and named ranges</small><i>App setup required</i></button><button class="workflow-card" type="button"><span class="integration-logo hubspot" aria-label="HubSpot">HubSpot</span><strong>HubSpot</strong><small>Objects, standard/custom properties, filters</small><i>Roadmap</i></button><button class="workflow-card" type="button"><span>▤</span><strong>Shopify</strong><small>Orders, refunds, net sales, products</small><i>Roadmap</i></button><button class="workflow-card" type="button"><span>↯</span><strong>Webhook / API</strong><small>Push signed custom events</small><i>Roadmap</i></button></div>', context: '<h3>Connection requirements</h3><p>Tokens stay encrypted server-side. Revocation, freshness, rate limits, and errors remain visible.</p><div class="workflow-summary"><div><small>AUTH</small><strong>OAuth 2.0</strong></div><div><small>SYNC</small><strong>Incremental + retry</strong></div></div>' },
   connection: { eyebrow: 'CONNECTION MANAGEMENT', title: 'Manage connection', description: 'Inspect health, scopes, mappings, sync history, and revocation.', steps: ['Health','Mappings','Permissions'], primary: 'Save connection', canvas: '<h3>Google Sheets connection</h3><p>Healthy and currently used by two published KPI mappings.</p><div class="workflow-form"><div class="field-row"><label>Account<input value="jordan@acme.co" readonly /></label><label>Refresh<select><option>Every 5 minutes</option><option>Every 15 minutes</option></select></label></div><ul class="workflow-list"><li><span>▦</span><div><strong>Net sales today</strong><small>Summary!D8 · refreshed 2m ago</small></div><button type="button">Edit</button></li><li><span>◎</span><div><strong>Team on track</strong><small>Reps!G4:G18 · refreshed 2m ago</small></div><button type="button">Edit</button></li></ul></div>', context: '<h3>Connection health</h3><p>OAuth token valid. No rate limits or mapping errors.</p><div class="workflow-summary"><div><small>LAST SYNC</small><strong>2 minutes ago</strong></div><div><small>SCOPES</small><strong>Google Sheets read-only</strong></div><div><small>NEXT CHECK</small><strong>In 3 minutes</strong></div></div>' },

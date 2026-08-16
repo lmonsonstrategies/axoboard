@@ -7,16 +7,21 @@ import { createVault } from '../lib/crypto-vault.mjs';
 import { googleIntegrationInternals } from '../lib/google-integration.mjs';
 
 const repPayload = googleIntegrationInternals.displayPayload(
-  [['Andrew', 'Jacob'], ['10', '20'], ['5', '7']],
-  'sum', true, 'rep_cards', [['100', '200']], false
+  [['Rep', 'Sales'], ['Andrew', '10'], ['Jacob', '20']],
+  'sum', true, 'rep_cards', [['100'], ['200']], false
 );
 assert.deepEqual(repPayload, {
   kind: 'rep_cards',
   items: [
-    { label: 'Andrew', value: 15, comparisonValue: 100 },
-    { label: 'Jacob', value: 27, comparisonValue: 200 }
+    { label: 'Andrew', value: 10, comparisonValue: 100 },
+    { label: 'Jacob', value: 20, comparisonValue: 200 }
   ]
 });
+assert.throws(
+  () => googleIntegrationInternals.displayPayload([['Andrew', 10]], 'sum', false, 'leaderboard'),
+  /Use first row as headers/,
+  'ranked displays require an explicit header row'
+);
 assert.deepEqual(
   googleIntegrationInternals.displayPayload([['Rep', 'Sales'], ['Andrew', '$10']], 'count', true, 'table'),
   { kind: 'table', columns: ['Rep', 'Sales'], rows: [['Andrew', '$10']] }
@@ -130,9 +135,9 @@ const fakeGoogle = createServer(async (req, res) => {
         values: [['Metric', 'Jan', 'Feb', 'Mar'], ['Revenue', '$10', '$20', '$30']]
       }, { 'x-request-id': `values-${valuesCalls}` });
     }
-    if (requestedRange === "'Baseline'!E8:E10") {
+    if (requestedRange === "'Baseline'!E8:E9") {
       assert.equal(url.searchParams.get('valueRenderOption'), 'UNFORMATTED_VALUE');
-      return json(200, { range: 'Baseline!E8:E10', majorDimension: 'ROWS', values: [['Prior'], [10], [15]] }, { 'x-request-id': `values-${valuesCalls}` });
+      return json(200, { range: 'Baseline!E8:E9', majorDimension: 'ROWS', values: [['Prior'], [10]] }, { 'x-request-id': `values-${valuesCalls}` });
     }
     if (requestedRange === "'Summary'!G1:J2") {
       return json(200, { range: 'Summary!G1:J2', majorDimension: 'ROWS', values: [['Andrew', 'Jacob', 'Jaden', 'Xavier'], [46189, 13897, 64281, 21938]] }, { 'x-request-id': `values-${valuesCalls}` });
@@ -140,9 +145,13 @@ const fakeGoogle = createServer(async (req, res) => {
     if (requestedRange === "'Baseline'!G3:J3") {
       return json(200, { range: 'Baseline!G3:J3', majorDimension: 'ROWS', values: [[50000, 40000, 60000, 50000]] }, { 'x-request-id': `values-${valuesCalls}` });
     }
-    assert.equal(requestedRange, "'Summary'!D8:D10");
+    if (requestedRange === "'Summary'!D8:D10") {
+      assert.equal(url.searchParams.get('valueRenderOption'), 'UNFORMATTED_VALUE');
+      return json(200, { range: 'Summary!D8:D10', majorDimension: 'ROWS', values: [['Revenue'], [20], [30]] }, { 'x-request-id': `values-${valuesCalls}` });
+    }
+    assert.equal(requestedRange, "'Summary'!D8:D9");
     assert.equal(url.searchParams.get('valueRenderOption'), 'UNFORMATTED_VALUE');
-    return json(200, { range: 'Summary!D8:D10', majorDimension: 'ROWS', values: [['Revenue'], [20], [30]] }, { 'x-request-id': `values-${valuesCalls}` });
+    return json(200, { range: 'Summary!D8:D9', majorDimension: 'ROWS', values: [['Revenue'], [20]] }, { 'x-request-id': `values-${valuesCalls}` });
   }
   if (url.pathname === '/revoke' && req.method === 'POST') {
     const form = new URLSearchParams(await requestBody(req));
@@ -292,15 +301,15 @@ try {
   assert.equal(scrollGridPreview.values.length, 24);
   assert.equal(scrollGridPreview.values[23].length, 12, 'virtual-scroll windows are padded to their requested shape');
 
-  const selection = { connectionId: connection.id, spreadsheet: 'sheet_test_123456789', sheetId: 12345, range: 'D8:D10', aggregation: 'sum', includeHeaders: true, goalValue: 100, comparisonSheetId: 0, comparisonRange: 'E8:E10', comparisonAggregation: 'sum', comparisonIncludeHeaders: true };
+  const selection = { connectionId: connection.id, spreadsheet: 'sheet_test_123456789', sheetId: 12345, range: 'D8:D9', includeHeaders: true, goalValue: 100, comparisonSheetId: 0, comparisonRange: 'E8:E9', comparisonIncludeHeaders: true };
   const preview = await api('/api/axoboard/kpis/google/preview', { method: 'POST', cookie: first.cookie, body: selection });
   const previewText = await preview.text();
   assert.equal(preview.status, 200, previewText);
-  assert.equal(JSON.parse(previewText).preview.value, 50);
-  assert.equal(JSON.parse(previewText).preview.sourceRowCount, 2);
+  assert.equal(JSON.parse(previewText).preview.value, 20);
+  assert.equal(JSON.parse(previewText).preview.sourceRowCount, 1);
   assert.equal(JSON.parse(previewText).preview.includeHeaders, true);
-  assert.equal(JSON.parse(previewText).preview.comparison.value, 25);
-  assert.equal(JSON.parse(previewText).preview.comparison.delta, 25);
+  assert.equal(JSON.parse(previewText).preview.comparison.value, 10);
+  assert.equal(JSON.parse(previewText).preview.comparison.delta, 10);
   assert.equal(JSON.parse(previewText).preview.comparison.percentChange, 100);
 
   const repCardsPreview = await api('/api/axoboard/kpis/google/preview', {
@@ -321,7 +330,7 @@ try {
 
   const ambiguousRange = await api('/api/axoboard/kpis/google/preview', {
     method: 'POST', cookie: first.cookie,
-    body: { ...selection, range: 'D8:D10', aggregation: 'single_value', includeHeaders: false, comparisonRange: '' }
+    body: { ...selection, range: 'D8:D10', includeHeaders: false, comparisonRange: '' }
   });
   const ambiguousRangeBody = await ambiguousRange.json();
   assert.equal(ambiguousRange.status, 422);
@@ -329,7 +338,7 @@ try {
 
   const sameComparison = await api('/api/axoboard/kpis/google/preview', {
     method: 'POST', cookie: first.cookie,
-    body: { ...selection, comparisonSheetId: 12345, comparisonRange: 'D8:D10' }
+    body: { ...selection, comparisonSheetId: 12345, comparisonRange: 'D8:D9' }
   });
   const sameComparisonBody = await sameComparison.json();
   assert.equal(sameComparison.status, 422);
@@ -339,19 +348,19 @@ try {
   const createText = await create.text();
   assert.equal(create.status, 201, createText);
   const createdKpi = JSON.parse(createText).kpi;
-  assert.equal(createdKpi.value, 50);
+  assert.equal(createdKpi.value, 20);
   const list = await api('/api/axoboard/kpis', { cookie: first.cookie });
   const kpis = (await list.json()).kpis;
   assert.equal(kpis.length, 1);
-  assert.equal(kpis[0].value, 50);
-  assert.equal(kpis[0].sourceRange, "'Summary'!D8:D10");
+  assert.equal(kpis[0].value, 20);
+  assert.equal(kpis[0].sourceRange, "'Summary'!D8:D9");
   assert.equal(kpis[0].includeHeaders, true);
   assert.equal(kpis[0].goalValue, 100);
-  assert.equal(kpis[0].comparisonRange, 'E8:E10');
+  assert.equal(kpis[0].comparisonRange, 'E8:E9');
   assert.equal(kpis[0].comparisonSheetId, 0);
   assert.equal(kpis[0].comparisonSheetTitle, 'Baseline');
-  assert.equal(kpis[0].comparisonValue, 25);
-  assert.equal(kpis[0].comparisonDelta, 25);
+  assert.equal(kpis[0].comparisonValue, 10);
+  assert.equal(kpis[0].comparisonDelta, 10);
 
   const connectionRow = (await pool.query('SELECT * FROM integration_connections WHERE id=$1', [connection.id])).rows[0];
   const aad = `connection:${connection.id}:${first.workspaceId}:v1`;
@@ -362,8 +371,8 @@ try {
   const sync = await api(`/api/axoboard/kpis/${createdKpi.id}/sync`, { method: 'POST', cookie: first.cookie });
   const syncText = await sync.text();
   assert.equal(sync.status, 200, syncText);
-  assert.equal(JSON.parse(syncText).kpi.value, 50);
-  assert.equal(JSON.parse(syncText).kpi.comparison.value, 25);
+  assert.equal(JSON.parse(syncText).kpi.value, 20);
+  assert.equal(JSON.parse(syncText).kpi.comparison.value, 10);
   assert.equal(refreshCalls, 1, 'expired access token is refreshed server-side');
 
   const valuesBeforeScheduledSync = valuesCalls;
@@ -385,7 +394,7 @@ try {
   assert.equal(afterDisconnect.status, 409);
   const retained = await api('/api/axoboard/kpis', { cookie: first.cookie });
   const retainedKpi = (await retained.json()).kpis[0];
-  assert.equal(retainedKpi.value, 50, 'disconnect preserves last known good value');
+  assert.equal(retainedKpi.value, 20, 'disconnect preserves last known good value');
   assert.equal(retainedKpi.status, 'degraded');
   assert.equal(retainedKpi.lastErrorCode, 'connection_disconnected');
 
