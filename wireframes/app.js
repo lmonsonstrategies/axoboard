@@ -367,6 +367,7 @@ let activeGoogleConnection = null;
 let availableSpreadsheets = [];
 let loadedSpreadsheet = null;
 let builderPreview = null;
+let activeDisplayType = 'scorecard';
 let sheetGridState = null;
 let sheetGridRequest = 0;
 let sheetGridScrollTimer = null;
@@ -408,6 +409,45 @@ function formatKpiValue(value, format = 'number') {
   if (format === 'currency') return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(number);
   if (format === 'percentage') return new Intl.NumberFormat(undefined, { style: 'percent', maximumFractionDigits: 1 }).format(number / 100);
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(number);
+}
+
+const displayTypeHelp = {
+  scorecard: 'Best for one cell or a range summarized into one number.',
+  rep_cards: 'Use a header row of names plus one or more value rows. AxoBoard creates one period card per person.',
+  leaderboard: 'Use a header row of names plus values, or a label column beside a value column.',
+  table: 'Preserves the selected rows and columns instead of collapsing them into one number.'
+};
+
+const periodLabels = { day: 'Daily', week: 'Weekly', month: 'Monthly', year: 'Yearly' };
+
+function renderStructuredPreview(payload = builderPreview?.displayPayload) {
+  const preview = document.querySelector('#previewStructured');
+  if (!payload || activeDisplayType === 'scorecard') {
+    preview.hidden = true;
+    preview.replaceChildren();
+    previewKpiValue.hidden = false;
+    return;
+  }
+  const items = payload.kind === 'table'
+    ? payload.rows.slice(0, 3).map((row, index) => ({ label: row[0] || `Row ${index + 1}`, value: row.slice(1).filter((value) => value !== '').join(' · ') || '—' }))
+    : (payload.items || []).slice(0, 5);
+  preview.replaceChildren(...items.map((item) => {
+    const row = document.createElement('div');
+    const value = payload.kind === 'table' ? item.value : formatKpiValue(item.value, document.querySelector('#kpiFormat').value);
+    row.innerHTML = `<span>${escapeHtml(item.label)}</span><strong>${escapeHtml(value)}</strong>`;
+    return row;
+  }));
+  preview.hidden = false;
+  previewKpiValue.hidden = true;
+}
+
+function selectDisplayType(type) {
+  activeDisplayType = displayTypeHelp[type] ? type : 'scorecard';
+  document.querySelectorAll('[data-display-type]').forEach((button) => button.classList.toggle('is-selected', button.dataset.displayType === activeDisplayType));
+  document.querySelector('#displayTypeHelp').textContent = displayTypeHelp[activeDisplayType];
+  document.querySelector('#periodGranularityField').hidden = activeDisplayType !== 'rep_cards';
+  builderPreview = null;
+  renderStructuredPreview(null);
 }
 
 function comparisonBuilderPayload() {
@@ -718,7 +758,9 @@ async function openRangePicker(target, trigger = document.activeElement) {
   const modal = document.querySelector('#rangePickerModal');
   modal.classList.add('is-visible');
   modal.setAttribute('aria-hidden', 'false');
-  await revealSheetSelection();
+  await loadSheetGrid(1, 1);
+  document.querySelector('#sheetGrid').scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  updateSheetGridOverlays();
   document.querySelector('#rangePickerInput').focus();
 }
 
@@ -767,13 +809,32 @@ function renderLiveKpis() {
   if (!liveKpis.length) return;
   dashboardKpiGrid.replaceChildren(...liveKpis.map((kpi) => {
     const card = document.createElement('article');
-    card.className = 'surface kpi-card';
+    const structured = kpi.displayType && kpi.displayType !== 'scorecard' && kpi.displayPayload;
+    card.className = `surface kpi-card${structured ? ' kpi-card-structured' : ''}`;
     card.dataset.liveKpi = kpi.id;
     const goalProgress = kpi.goalValue === null || kpi.goalValue === 0 ? null : Math.max(0, Math.min(100, (kpi.value / kpi.goalValue) * 100));
     const comparisonPercent = kpi.comparisonValue === null || kpi.comparisonValue === 0 ? null : (kpi.comparisonDelta / Math.abs(kpi.comparisonValue)) * 100;
     const comparisonText = kpi.comparisonValue === null ? '' : `${kpi.comparisonDelta >= 0 ? '+' : ''}${formatKpiValue(kpi.comparisonDelta, kpi.displayFormat)}${comparisonPercent === null ? '' : ` (${comparisonPercent >= 0 ? '+' : ''}${comparisonPercent.toFixed(1)}%)`} vs ${kpi.comparisonSourceRange}`;
     const contextText = comparisonText || (goalProgress === null ? (kpi.status === 'active' ? 'Live' : 'Needs attention') : `${goalProgress.toFixed(1)}% of ${formatKpiValue(kpi.goalValue, kpi.displayFormat)} goal`);
-    card.innerHTML = `<header><span class="source-mark google">G</span><small>Google Sheets · ${escapeHtml(kpi.sourceRange || `${kpi.sheetTitle}!${kpi.range}`)}</small><button type="button" data-sync-live-kpi="${escapeHtml(kpi.id)}" aria-label="Refresh ${escapeHtml(kpi.name)}">↻</button></header><p>${escapeHtml(kpi.name)}</p><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><div class="kpi-change ${kpi.status === 'active' ? 'positive' : 'neutral'}">● ${escapeHtml(contextText)} <span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span></div><div class="mini-progress"><i style="width:${goalProgress === null ? (kpi.status === 'active' ? '100' : '20') : goalProgress}%"></i></div><footer><span>${escapeHtml(kpi.aggregation.replaceAll('_', ' '))} · read only</span><b>${escapeHtml(kpi.status)}</b></footer>`;
+    const header = `<header class="structured-kpi-head"><span class="source-mark google">G</span><small>Google Sheets · ${escapeHtml(kpi.sourceRange || `${kpi.sheetTitle}!${kpi.range}`)}</small><button type="button" data-sync-live-kpi="${escapeHtml(kpi.id)}" aria-label="Refresh ${escapeHtml(kpi.name)}">↻</button></header>`;
+    if (!structured) {
+      card.innerHTML = `${header}<p>${escapeHtml(kpi.name)}</p><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><div class="kpi-change ${kpi.status === 'active' ? 'positive' : 'neutral'}">● ${escapeHtml(contextText)} <span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span></div><div class="mini-progress"><i style="width:${goalProgress === null ? (kpi.status === 'active' ? '100' : '20') : goalProgress}%"></i></div><footer><span>${escapeHtml(kpi.aggregation.replaceAll('_', ' '))} · read only</span><b>${escapeHtml(kpi.status)}</b></footer>`;
+    } else if (kpi.displayType === 'rep_cards') {
+      const period = periodLabels[kpi.periodGranularity] || 'Monthly';
+      const cards = (kpi.displayPayload.items || []).map((item) => {
+        const target = item.comparisonValue ?? kpi.goalValue;
+        const progress = !target ? null : Math.max(0, Math.min(100, (Number(item.value) / Number(target)) * 100));
+        return `<article class="period-rep-card"><small>${escapeHtml(item.label)}</small><strong>${escapeHtml(formatKpiValue(item.value, kpi.displayFormat))}</strong><span>${progress === null ? `${period} value` : `${progress.toFixed(0)}% of ${formatKpiValue(target, kpi.displayFormat)}`}</span><i><b style="width:${progress ?? 100}%"></b></i></article>`;
+      }).join('');
+      card.innerHTML = `${header}<div class="structured-kpi-title"><p>${escapeHtml(period)} rep cards</p><strong>${escapeHtml(kpi.name)}</strong></div><div class="rep-card-grid">${cards}</div>`;
+    } else if (kpi.displayType === 'leaderboard') {
+      const rows = [...(kpi.displayPayload.items || [])].sort((a, b) => Number(b.value) - Number(a.value)).map((item, index) => `<div class="leaderboard-row"><b>${index + 1}</b><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(formatKpiValue(item.value, kpi.displayFormat))}</strong></div>`).join('');
+      card.innerHTML = `${header}<div class="structured-kpi-title"><p>Leaderboard</p><strong>${escapeHtml(kpi.name)}</strong></div><div class="leaderboard-list">${rows}</div>`;
+    } else {
+      const columns = (kpi.displayPayload.columns || []).map((column) => `<th>${escapeHtml(column)}</th>`).join('');
+      const rows = (kpi.displayPayload.rows || []).slice(0, 25).map((row) => `<tr>${row.map((value) => `<td>${escapeHtml(value)}</td>`).join('')}</tr>`).join('');
+      card.innerHTML = `${header}<div class="structured-kpi-title"><p>Data table</p><strong>${escapeHtml(kpi.name)}</strong></div><div class="structured-table-scroll"><table class="structured-table"><thead><tr>${columns}</tr></thead><tbody>${rows}</tbody></table></div>`;
+    }
     const refresh = card.querySelector('[data-sync-live-kpi]');
     refresh.dataset.interactionStatus = 'working';
     refresh.addEventListener('click', async () => {
@@ -882,6 +943,8 @@ function openKpiBuilder(source = 'google', trigger = document.activeElement) {
   sheetSelection = parseSheetRange('D8');
   document.querySelector('#sheetHasHeaders').checked = false;
   document.querySelector('#kpiGoal').value = '';
+  document.querySelector('#periodGranularity').value = 'month';
+  selectDisplayType('scorecard');
   document.querySelector('#kpiComparisonMode').value = 'none';
   document.querySelector('#kpiComparisonFields').hidden = true;
   document.querySelector('#comparisonRange').value = '';
@@ -1014,7 +1077,7 @@ async function previewGoogleSelection() {
     method: 'POST', body: JSON.stringify({
       connectionId: activeGoogleConnection.id, spreadsheet: spreadsheetInput, sheetId,
       range: document.querySelector('#sheetRange').value.trim(), aggregation: document.querySelector('#sheetAggregation').value,
-      includeHeaders: document.querySelector('#sheetHasHeaders').checked, ...comparisonBuilderPayload()
+      includeHeaders: document.querySelector('#sheetHasHeaders').checked, displayType: activeDisplayType, ...comparisonBuilderPayload()
     })
   });
   builderPreview = payload.preview;
@@ -1023,6 +1086,7 @@ async function previewGoogleSelection() {
   document.querySelector('#previewFreshness').textContent = 'previewed just now';
   document.querySelector('#sheetPickerStatus').textContent = 'Preview healthy';
   document.querySelector('#sheetPreviewResult').textContent = `${formatKpiValue(builderPreview.value, document.querySelector('#kpiFormat').value)} · ${builderPreview.sourceRowCount} contributing cell${builderPreview.sourceRowCount === 1 ? '' : 's'}`;
+  renderStructuredPreview(builderPreview.displayPayload);
   renderComparisonPreview(builderPreview.comparison);
   return builderPreview;
 }
@@ -1034,7 +1098,8 @@ async function saveLiveKpi() {
       connectionId: activeGoogleConnection.id, spreadsheet: document.querySelector('#sheetFile').value.trim(),
       sheetId: Number(document.querySelector('#sheetTab').value), range: document.querySelector('#sheetRange').value.trim(),
       aggregation: document.querySelector('#sheetAggregation').value, includeHeaders: document.querySelector('#sheetHasHeaders').checked, name: kpiName.value.trim(),
-      displayFormat: document.querySelector('#kpiFormat').value, ...comparisonBuilderPayload()
+      displayFormat: document.querySelector('#kpiFormat').value, displayType: activeDisplayType,
+      periodGranularity: document.querySelector('#periodGranularity').value, ...comparisonBuilderPayload()
     })
   });
   closeKpiBuilder();
@@ -1047,6 +1112,12 @@ async function saveLiveKpi() {
 document.querySelector('#addKpiButton').addEventListener('click', (event) => openKpiBuilder('google', event.currentTarget));
 document.querySelectorAll('.build-source-kpi').forEach((button) => button.addEventListener('click', () => openKpiBuilder(button.dataset.source, button)));
 sourceChoices.forEach((choice) => choice.addEventListener('click', () => syncBuilderSource(choice.dataset.kpiSource)));
+document.querySelectorAll('[data-display-type]').forEach((button) => button.addEventListener('click', async () => {
+  selectDisplayType(button.dataset.displayType);
+  if (activeBuilderStep !== 3) return;
+  try { await previewGoogleSelection(); }
+  catch (error) { showToast('Display needs different data', error.message); }
+}));
 builderBack.addEventListener('click', () => showBuilderStep(activeBuilderStep - 1));
 builderNext.addEventListener('click', async () => {
   builderNext.disabled = true;
@@ -1090,6 +1161,7 @@ document.querySelector('#kpiFormat').addEventListener('change', () => {
     previewKpiValue.textContent = formatted;
     document.querySelector('#sheetPreviewResult').textContent = `${formatted} · ${builderPreview.sourceRowCount} contributing cell${builderPreview.sourceRowCount === 1 ? '' : 's'}`;
     renderComparisonPreview(builderPreview.comparison);
+    renderStructuredPreview(builderPreview.displayPayload);
   }
 });
 document.querySelector('#sheetFile').addEventListener('change', async () => {
@@ -1118,8 +1190,9 @@ document.querySelector('#sheetHasHeaders').addEventListener('change', () => {
 });
 document.querySelector('#rangePickerSheet').addEventListener('change', async () => {
   sheetGridState = null;
+  setSheetSelection({ row: 1, column: 1 });
   document.querySelector('#sheetGrid').scrollTo({ top: 0, left: 0 });
-  try { await revealSheetSelection(); }
+  try { await loadSheetGrid(1, 1); }
   catch (error) { showToast('Sheet preview could not load', error.message); }
 });
 document.querySelector('#rangePickerInput').addEventListener('input', () => {

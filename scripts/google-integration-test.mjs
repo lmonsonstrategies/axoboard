@@ -4,6 +4,23 @@ import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import pg from 'pg';
 import { createVault } from '../lib/crypto-vault.mjs';
+import { googleIntegrationInternals } from '../lib/google-integration.mjs';
+
+const repPayload = googleIntegrationInternals.displayPayload(
+  [['Andrew', 'Jacob'], ['10', '20'], ['5', '7']],
+  'sum', true, 'rep_cards', [['100', '200']], false
+);
+assert.deepEqual(repPayload, {
+  kind: 'rep_cards',
+  items: [
+    { label: 'Andrew', value: 15, comparisonValue: 100 },
+    { label: 'Jacob', value: 27, comparisonValue: 200 }
+  ]
+});
+assert.deepEqual(
+  googleIntegrationInternals.displayPayload([['Rep', 'Sales'], ['Andrew', '$10']], 'count', true, 'table'),
+  { kind: 'table', columns: ['Rep', 'Sales'], rows: [['Andrew', '$10']] }
+);
 
 if (!process.env.DATABASE_URL) {
   console.log('AxoBoard Google integration test skipped: DATABASE_URL is not configured.');
@@ -116,6 +133,12 @@ const fakeGoogle = createServer(async (req, res) => {
     if (requestedRange === "'Baseline'!E8:E10") {
       assert.equal(url.searchParams.get('valueRenderOption'), 'UNFORMATTED_VALUE');
       return json(200, { range: 'Baseline!E8:E10', majorDimension: 'ROWS', values: [['Prior'], [10], [15]] }, { 'x-request-id': `values-${valuesCalls}` });
+    }
+    if (requestedRange === "'Summary'!G1:J2") {
+      return json(200, { range: 'Summary!G1:J2', majorDimension: 'ROWS', values: [['Andrew', 'Jacob', 'Jaden', 'Xavier'], [46189, 13897, 64281, 21938]] }, { 'x-request-id': `values-${valuesCalls}` });
+    }
+    if (requestedRange === "'Baseline'!G3:J3") {
+      return json(200, { range: 'Baseline!G3:J3', majorDimension: 'ROWS', values: [[50000, 40000, 60000, 50000]] }, { 'x-request-id': `values-${valuesCalls}` });
     }
     assert.equal(requestedRange, "'Summary'!D8:D10");
     assert.equal(url.searchParams.get('valueRenderOption'), 'UNFORMATTED_VALUE');
@@ -279,6 +302,22 @@ try {
   assert.equal(JSON.parse(previewText).preview.comparison.value, 25);
   assert.equal(JSON.parse(previewText).preview.comparison.delta, 25);
   assert.equal(JSON.parse(previewText).preview.comparison.percentChange, 100);
+
+  const repCardsPreview = await api('/api/axoboard/kpis/google/preview', {
+    method: 'POST', cookie: first.cookie,
+    body: { ...selection, range: 'G1:J2', aggregation: 'sum', includeHeaders: true, displayType: 'rep_cards', comparisonRange: 'G3:J3', comparisonAggregation: 'sum', comparisonIncludeHeaders: false }
+  });
+  const repCardsPreviewText = await repCardsPreview.text();
+  assert.equal(repCardsPreview.status, 200, repCardsPreviewText);
+  assert.deepEqual(JSON.parse(repCardsPreviewText).preview.displayPayload, {
+    kind: 'rep_cards',
+    items: [
+      { label: 'Andrew', value: 46189, comparisonValue: 50000 },
+      { label: 'Jacob', value: 13897, comparisonValue: 40000 },
+      { label: 'Jaden', value: 64281, comparisonValue: 60000 },
+      { label: 'Xavier', value: 21938, comparisonValue: 50000 }
+    ]
+  });
 
   const ambiguousRange = await api('/api/axoboard/kpis/google/preview', {
     method: 'POST', cookie: first.cookie,
