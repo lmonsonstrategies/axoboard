@@ -414,6 +414,7 @@ let activeDisplayType = 'scorecard';
 let sheetGridState = null;
 let sheetGridRequest = 0;
 let sheetGridScrollTimer = null;
+let sheetSelectionFrame = null;
 let selectingSheetCells = false;
 let sheetSelection = { anchor: { row: 1, column: 1 }, focus: { row: 1, column: 1 } };
 let rangePickerTarget = 'primary';
@@ -490,16 +491,30 @@ function renderStructuredPreview(payload = builderPreview?.displayPayload) {
   const items = payload.kind === 'table'
     ? payload.rows.slice(0, 3).map((row, index) => ({ label: row[0] || `Row ${index + 1}`, value: row.slice(1).filter((value) => value !== '').join(' · ') || '—' }))
     : payload.kind === 'activity_feed'
-      ? payload.entries.slice(0, 4).map((entry) => ({ label: `${entry.timestamp} ${entry.label}`.trim(), value: entry.detail || entry.value || 'Event' }))
+      ? payload.entries.slice(0, 4).map((entry) => ({ label: `${entry.timestamp} ${entry.label}`.trim(), value: [entry.detail, entry.value].filter((value) => value !== '' && value !== null && value !== undefined).join(' · ') || 'Event' }))
       : payload.kind === 'heatmap'
         ? payload.yLabels.slice(0, 4).map((label, index) => ({ label, value: payload.cells[index].map((value) => formatKpiValue(value, document.querySelector('#kpiFormat').value)).join(' · ') }))
         : structuredItems.slice(0, 5);
-  preview.replaceChildren(...items.map((item) => {
+  const rows = items.map((item) => {
     const row = document.createElement('div');
-    const value = payload.kind === 'table' ? item.value : formatKpiValue(item.value, document.querySelector('#kpiFormat').value);
+    const value = ['table', 'activity_feed', 'heatmap'].includes(payload.kind) ? item.value : formatKpiValue(item.value, document.querySelector('#kpiFormat').value);
     row.innerHTML = `<span>${escapeHtml(item.label)}</span><strong>${escapeHtml(value)}</strong>`;
     return row;
-  }));
+  });
+  const headerLabels = payload.kind === 'table'
+    ? payload.columns?.slice(0, 2)
+    : payload.kind === 'activity_feed'
+      ? payload.columns?.slice(0, 2)
+      : payload.kind === 'heatmap'
+        ? [payload.cornerLabel || 'Row', payload.xLabels?.join(' · ') || 'Values']
+        : payload.headers ? [payload.headers.label, payload.headers.value] : null;
+  if (headerLabels?.length) {
+    const header = document.createElement('div');
+    header.className = 'structured-preview-head';
+    header.innerHTML = `<span>${escapeHtml(headerLabels[0] || 'Label')}</span><strong>${escapeHtml(headerLabels[1] || 'Value')}</strong>`;
+    rows.unshift(header);
+  }
+  preview.replaceChildren(...rows);
   preview.hidden = false;
   previewKpiValue.hidden = true;
 }
@@ -663,13 +678,23 @@ function syncSheetSelection() {
     const row = Number(cell.dataset.row);
     const column = Number(cell.dataset.column);
     const selected = row >= bounds.minRow && row <= bounds.maxRow && column >= bounds.minColumn && column <= bounds.maxColumn;
-    cell.classList.toggle('is-selected', selected);
-    cell.classList.toggle('is-selection-edge', selected && (row === bounds.minRow || row === bounds.maxRow || column === bounds.minColumn || column === bounds.maxColumn));
-    cell.classList.toggle('is-header-cell', selected && includesHeaders && row === bounds.minRow);
-    cell.setAttribute('aria-selected', String(selected));
+    const edge = selected && (row === bounds.minRow || row === bounds.maxRow || column === bounds.minColumn || column === bounds.maxColumn);
+    const header = selected && includesHeaders && row === bounds.minRow;
+    if (cell.classList.contains('is-selected') !== selected) cell.classList.toggle('is-selected', selected);
+    if (cell.classList.contains('is-selection-edge') !== edge) cell.classList.toggle('is-selection-edge', edge);
+    if (cell.classList.contains('is-header-cell') !== header) cell.classList.toggle('is-header-cell', header);
+    if (cell.getAttribute('aria-selected') !== String(selected)) cell.setAttribute('aria-selected', String(selected));
   });
   const cellCount = sheetSelectionCellCount();
   document.querySelector('#rangePickerSelectionSummary').textContent = `${sheetSelectionA1()} · ${cellCount} selected cell${cellCount === 1 ? '' : 's'}${includesHeaders ? ' · first row treated as headers' : ''}`;
+}
+
+function scheduleSheetSelectionSync() {
+  if (sheetSelectionFrame !== null) return;
+  sheetSelectionFrame = window.requestAnimationFrame(() => {
+    sheetSelectionFrame = null;
+    syncSheetSelection();
+  });
 }
 
 function setSheetSelection(anchor, focus = anchor, { writeInput = true } = {}) {
@@ -677,7 +702,7 @@ function setSheetSelection(anchor, focus = anchor, { writeInput = true } = {}) {
   if (writeInput) document.querySelector('#rangePickerInput').value = sheetSelectionA1();
   builderPreview = null;
   document.querySelector('#rangePickerPreviewResult').textContent = 'Ready to apply';
-  syncSheetSelection();
+  scheduleSheetSelectionSync();
 }
 
 function updateSheetGridOverlays() {
@@ -746,6 +771,7 @@ function renderSheetGrid() {
       const cell = document.createElement('button');
       const address = `${sheetColumnLabel(column)}${row}`;
       cell.type = 'button';
+      cell.dataset.interactionStatus = 'working';
       cell.dataset.sheetCell = address;
       cell.dataset.row = row;
       cell.dataset.column = column;
@@ -887,10 +913,11 @@ async function openRangePicker(target, trigger = document.activeElement) {
   const modal = document.querySelector('#rangePickerModal');
   modal.classList.add('is-visible');
   modal.setAttribute('aria-hidden', 'false');
+  document.querySelector('#sheetPickerStatus').textContent = 'Loading cells…';
+  document.querySelector('#rangePickerInput').focus();
   await loadSheetGrid(1, 1);
   document.querySelector('#sheetGrid').scrollTo({ top: 0, left: 0, behavior: 'auto' });
   updateSheetGridOverlays();
-  document.querySelector('#rangePickerInput').focus();
 }
 
 function closeRangePicker() {
@@ -898,6 +925,8 @@ function closeRangePicker() {
   modal.classList.remove('is-visible');
   modal.setAttribute('aria-hidden', 'true');
   selectingSheetCells = false;
+  if (sheetSelectionFrame !== null) window.cancelAnimationFrame(sheetSelectionFrame);
+  sheetSelectionFrame = null;
   rangePickerReturnFocus?.focus?.();
 }
 
@@ -979,12 +1008,18 @@ function renderActivityFeed(payload) {
 function renderHeatmap(payload, displayFormat) {
   const range = Number(payload.max) - Number(payload.min) || 1;
   const columns = Math.max(1, payload.xLabels?.length || 1);
-  const header = `<span></span>${(payload.xLabels || []).map((label) => `<strong title="${escapeHtml(label)}">${escapeHtml(label)}</strong>`).join('')}`;
+  const header = `<span title="${escapeHtml(payload.cornerLabel || '')}">${escapeHtml(payload.cornerLabel || '')}</span>${(payload.xLabels || []).map((label) => `<strong title="${escapeHtml(label)}">${escapeHtml(label)}</strong>`).join('')}`;
   const rows = (payload.yLabels || []).map((label, rowIndex) => `<b title="${escapeHtml(label)}">${escapeHtml(label)}</b>${(payload.cells[rowIndex] || []).map((value) => {
     const intensity = 0.16 + ((Number(value) - Number(payload.min)) / range) * 0.78;
     return `<i style="--heat:${intensity.toFixed(3)}" title="${escapeHtml(label)} · ${escapeHtml(formatKpiValue(value, displayFormat))}">${escapeHtml(formatKpiValue(value, displayFormat))}</i>`;
   }).join('')}`).join('');
   return `<div class="heatmap-scroll"><div class="heatmap-visual" style="--heatmap-columns:${columns}"><header>${header}</header>${rows}</div></div>`;
+}
+
+function pairedDataLabel(payload, fallback) {
+  const label = String(payload?.headers?.label || 'Label');
+  const value = String(payload?.headers?.value || fallback || 'Value');
+  return `${value} by ${label}`;
 }
 
 function renderLiveKpis() {
@@ -1005,7 +1040,7 @@ function renderLiveKpis() {
   dashboardKpiGrid.replaceChildren(...orderedKpis.map((kpi) => {
     const card = document.createElement('article');
     const displayType = kpi.displayType || 'scorecard';
-    const structured = Boolean(kpi.displayPayload);
+    const structured = Boolean(kpi.displayPayload) && !scalarDisplayTypes.has(displayType);
     card.className = `surface kpi-card kpi-card-${displayType}${structured ? ' kpi-card-structured' : ''}`;
     card.dataset.liveKpi = kpi.id;
     card.dataset.cardKey = kpi.id;
@@ -1035,18 +1070,20 @@ function renderLiveKpis() {
         const progress = !target ? null : Math.max(0, Math.min(100, (Number(item.value) / Number(target)) * 100));
         return `<article class="period-rep-card"><small>${escapeHtml(item.label)}</small><strong>${escapeHtml(formatKpiValue(item.value, kpi.displayFormat))}</strong><span>${progress === null ? `${period} value` : `${progress.toFixed(0)}% of ${formatKpiValue(target, kpi.displayFormat)}`}</span><i><b style="width:${progress ?? 100}%"></b></i></article>`;
       }).join('');
-      card.innerHTML = `${header}<div class="structured-kpi-title"><p>${escapeHtml(period)} rep cards</p><strong>${escapeHtml(kpi.name)}</strong></div><div class="rep-card-grid">${cards}</div>`;
+      card.innerHTML = `${header}<div class="structured-kpi-title"><p>${escapeHtml(period)} · ${escapeHtml(pairedDataLabel(kpi.displayPayload, 'Value'))}</p><strong>${escapeHtml(kpi.name)}</strong></div><div class="rep-card-grid">${cards}</div>`;
     } else if (kpi.displayType === 'leaderboard') {
       const rows = [...(kpi.displayPayload.items || [])].sort((a, b) => Number(b.value) - Number(a.value)).map((item, index) => `<div class="leaderboard-row"><b>${index + 1}</b><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(formatKpiValue(item.value, kpi.displayFormat))}</strong></div>`).join('');
-      card.innerHTML = `${header}<div class="structured-kpi-title"><p>Leaderboard</p><strong>${escapeHtml(kpi.name)}</strong></div><div class="leaderboard-list">${rows}</div>`;
+      const labelHeader = kpi.displayPayload.headers?.label || 'Rank';
+      const valueHeader = kpi.displayPayload.headers?.value || 'Value';
+      card.innerHTML = `${header}<div class="structured-kpi-title"><p>Leaderboard · ${escapeHtml(valueHeader)}</p><strong>${escapeHtml(kpi.name)}</strong></div><div class="leaderboard-list"><div class="leaderboard-row leaderboard-head"><b>#</b><span>${escapeHtml(labelHeader)}</span><strong>${escapeHtml(valueHeader)}</strong></div>${rows}</div>`;
     } else if (displayType === 'trend') {
-      card.innerHTML = `${header}<div class="structured-kpi-title"><p>Trend</p><strong>${escapeHtml(kpi.name)}</strong></div>${renderTrendChart(kpi.displayPayload.items, kpi.displayFormat)}`;
+      card.innerHTML = `${header}<div class="structured-kpi-title"><p>${escapeHtml(pairedDataLabel(kpi.displayPayload, 'Trend'))}</p><strong>${escapeHtml(kpi.name)}</strong></div>${renderTrendChart(kpi.displayPayload.items, kpi.displayFormat)}`;
     } else if (displayType === 'category_bar') {
-      card.innerHTML = `${header}<div class="structured-kpi-title"><p>Category comparison</p><strong>${escapeHtml(kpi.name)}</strong></div>${renderCategoryBars(kpi.displayPayload.items, kpi.displayFormat)}`;
+      card.innerHTML = `${header}<div class="structured-kpi-title"><p>${escapeHtml(pairedDataLabel(kpi.displayPayload, 'Category value'))}</p><strong>${escapeHtml(kpi.name)}</strong></div>${renderCategoryBars(kpi.displayPayload.items, kpi.displayFormat)}`;
     } else if (displayType === 'funnel' || displayType === 'pipeline') {
-      card.innerHTML = `${header}<div class="structured-kpi-title"><p>${displayType === 'funnel' ? 'Conversion funnel' : 'Stage pipeline'}</p><strong>${escapeHtml(kpi.name)}</strong></div>${renderFlow(kpi.displayPayload.items, kpi.displayFormat, displayType)}`;
+      card.innerHTML = `${header}<div class="structured-kpi-title"><p>${escapeHtml(pairedDataLabel(kpi.displayPayload, displayType === 'funnel' ? 'Conversion' : 'Pipeline'))}</p><strong>${escapeHtml(kpi.name)}</strong></div>${renderFlow(kpi.displayPayload.items, kpi.displayFormat, displayType)}`;
     } else if (displayType === 'activity_feed') {
-      card.innerHTML = `${header}<div class="structured-kpi-title"><p>Latest activity</p><strong>${escapeHtml(kpi.name)}</strong></div>${renderActivityFeed(kpi.displayPayload)}`;
+      card.innerHTML = `${header}<div class="structured-kpi-title"><p>${escapeHtml(kpi.displayPayload.columns?.slice(0, 2).join(' · ') || 'Latest activity')}</p><strong>${escapeHtml(kpi.name)}</strong></div>${renderActivityFeed(kpi.displayPayload)}`;
     } else if (displayType === 'heatmap') {
       card.innerHTML = `${header}<div class="structured-kpi-title"><p>Heatmap</p><strong>${escapeHtml(kpi.name)}</strong></div>${renderHeatmap(kpi.displayPayload, kpi.displayFormat)}`;
     } else {
@@ -1124,9 +1161,8 @@ function renderLiveConnections() {
 
 async function loadLiveData() {
   try {
-    const [session, connectionPayload, kpiPayload, dashboardPayload] = await Promise.all([
-      apiJson('/api/auth/session'), apiJson('/api/axoboard/integrations/connections'), apiJson('/api/axoboard/kpis'), apiJson('/api/axoboard/dashboard')
-    ]);
+    const bootstrap = await apiJson('/api/axoboard/bootstrap');
+    const { session, connections: connectionPayload, kpis: kpiPayload, dashboard: dashboardPayload } = bootstrap;
     liveConnections = connectionPayload.connections || [];
     liveKpis = kpiPayload.kpis || [];
     if (session.user?.workspace_name) {

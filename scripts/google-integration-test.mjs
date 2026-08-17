@@ -12,11 +12,29 @@ const repPayload = googleIntegrationInternals.displayPayload(
 );
 assert.deepEqual(repPayload, {
   kind: 'rep_cards',
+  orientation: 'columns',
+  headers: { label: 'Rep', value: 'Sales' },
   items: [
     { label: 'Andrew', value: 10, comparisonValue: 100 },
     { label: 'Jacob', value: 20, comparisonValue: 200 }
   ]
 });
+assert.deepEqual(
+  googleIntegrationInternals.displayPayload([['Rep', 'Sales'], ['Andrew', 10], ['Jacob', 20]], 'sum', true, 'leaderboard'),
+  {
+    kind: 'leaderboard', orientation: 'columns', headers: { label: 'Rep', value: 'Sales' },
+    items: [{ label: 'Andrew', value: 10, comparisonValue: null }, { label: 'Jacob', value: 20, comparisonValue: null }]
+  },
+  'leaderboards preserve both source headers for card rendering'
+);
+assert.deepEqual(
+  googleIntegrationInternals.displayPayload([['Andrew', 'Jacob', 'Jaden'], [10, 20, 30]], 'sum', true, 'leaderboard'),
+  {
+    kind: 'leaderboard', orientation: 'rows', headers: { label: 'Label', value: 'Value' },
+    items: [{ label: 'Andrew', value: 10, comparisonValue: null }, { label: 'Jacob', value: 20, comparisonValue: null }, { label: 'Jaden', value: 30, comparisonValue: null }]
+  },
+  'two-row leaderboards preserve their orientation and all prepared values'
+);
 assert.throws(
   () => googleIntegrationInternals.displayPayload([['Andrew', 10]], 'sum', false, 'leaderboard'),
   /Use first row as headers/,
@@ -31,6 +49,11 @@ assert.equal(
   null,
   'goal pace uses the prepared scalar value and optional goal'
 );
+assert.deepEqual(
+  googleIntegrationInternals.displayPayload([['Revenue'], [82]], 'single_value', true, 'scorecard', [['Prior revenue'], [75]], true),
+  { kind: 'scorecard', headers: { value: 'Revenue', comparison: 'Prior revenue' } },
+  'scalar displays retain source and comparison headers without changing their prepared value contract'
+);
 assert.equal(
   googleIntegrationInternals.displayPayload([[82]], 'single_value', false, 'gauge'),
   null,
@@ -39,7 +62,7 @@ assert.equal(
 for (const displayType of ['trend', 'category_bar', 'funnel', 'pipeline']) {
   assert.deepEqual(
     googleIntegrationInternals.displayPayload([['Period', 'Value'], ['Mon', 10], ['Tue', 20]], 'sum', true, displayType),
-    { kind: displayType, items: [{ label: 'Mon', value: 10, comparisonValue: null }, { label: 'Tue', value: 20, comparisonValue: null }] },
+    { kind: displayType, orientation: 'columns', headers: { label: 'Period', value: 'Value' }, items: [{ label: 'Mon', value: 10, comparisonValue: null }, { label: 'Tue', value: 20, comparisonValue: null }] },
     `${displayType} preserves ordered labels and prepared values`
   );
 }
@@ -61,12 +84,17 @@ assert.deepEqual(
     [['Rep', 'Mon', 'Tue'], ['Andrew', 2, 5], ['Jacob', 8, 4]],
     'sum', true, 'heatmap'
   ),
-  { kind: 'heatmap', xLabels: ['Mon', 'Tue'], yLabels: ['Andrew', 'Jacob'], cells: [[2, 5], [8, 4]], min: 2, max: 8 }
+  { kind: 'heatmap', cornerLabel: 'Rep', xLabels: ['Mon', 'Tue'], yLabels: ['Andrew', 'Jacob'], cells: [[2, 5], [8, 4]], min: 2, max: 8 }
 );
 assert.throws(
   () => googleIntegrationInternals.displayPayload([['Time'], ['09:00']], 'sum', true, 'activity_feed'),
   /2–4 columns/,
   'activity feeds require a useful event shape'
+);
+assert.throws(
+  () => googleIntegrationInternals.displayPayload([['Rep', 'Sales'], ['Andrew', 10], ['Jacob', 20]], 'sum', true, 'leaderboard', [[9]], false),
+  /2 value rows/,
+  'paired comparisons must contain one prepared value for every displayed label'
 );
 
 if (!process.env.DATABASE_URL) {
@@ -325,6 +353,7 @@ try {
   assert.equal(metadataBody.spreadsheet.title, 'Revenue Scoreboard');
   assert.deepEqual(metadataBody.spreadsheet.sheets.map((sheet) => sheet.title), ['Summary', 'Baseline']);
 
+  const metadataBeforeGridBrowsing = metadataCalls;
   const grid = await api(`/api/axoboard/integrations/google/grid?connectionId=${connection.id}&spreadsheet=sheet_test_123456789&sheetId=12345&row=1&column=1`, { cookie: first.cookie });
   const gridText = await grid.text();
   assert.equal(grid.status, 200, gridText);
@@ -342,6 +371,7 @@ try {
   assert.equal(scrollGridPreview.range, 'A1:L24');
   assert.equal(scrollGridPreview.values.length, 24);
   assert.equal(scrollGridPreview.values[23].length, 12, 'virtual-scroll windows are padded to their requested shape');
+  assert.equal(metadataCalls, metadataBeforeGridBrowsing, 'scrolling reuses bounded spreadsheet metadata instead of making a second provider request per window');
 
   const selection = { connectionId: connection.id, spreadsheet: 'sheet_test_123456789', sheetId: 12345, range: 'D8:D9', includeHeaders: true, goalValue: 100, comparisonSheetId: 0, comparisonRange: 'E8:E9', comparisonIncludeHeaders: true };
   const preview = await api('/api/axoboard/kpis/google/preview', { method: 'POST', cookie: first.cookie, body: selection });
@@ -353,6 +383,7 @@ try {
   assert.equal(JSON.parse(previewText).preview.comparison.value, 10);
   assert.equal(JSON.parse(previewText).preview.comparison.delta, 10);
   assert.equal(JSON.parse(previewText).preview.comparison.percentChange, 100);
+  assert.deepEqual(JSON.parse(previewText).preview.displayPayload, { kind: 'scorecard', headers: { value: 'Revenue', comparison: 'Prior' } });
 
   const repCardsPreview = await api('/api/axoboard/kpis/google/preview', {
     method: 'POST', cookie: first.cookie,
@@ -362,6 +393,8 @@ try {
   assert.equal(repCardsPreview.status, 200, repCardsPreviewText);
   assert.deepEqual(JSON.parse(repCardsPreviewText).preview.displayPayload, {
     kind: 'rep_cards',
+    orientation: 'rows',
+    headers: { label: 'Label', value: 'Value' },
     items: [
       { label: 'Andrew', value: 46189, comparisonValue: 50000 },
       { label: 'Jacob', value: 13897, comparisonValue: 40000 },
@@ -415,6 +448,15 @@ try {
   assert.equal(kpis[0].comparisonSheetTitle, 'Baseline');
   assert.equal(kpis[0].comparisonValue, 10);
   assert.equal(kpis[0].comparisonDelta, 10);
+  assert.deepEqual(kpis[0].displayPayload, { kind: 'scorecard', headers: { value: 'Revenue', comparison: 'Prior' } });
+
+  const bootstrap = await api('/api/axoboard/bootstrap', { cookie: first.cookie });
+  const bootstrapBody = await bootstrap.json();
+  assert.equal(bootstrap.status, 200);
+  assert.equal(bootstrapBody.session.user.workspace_id, first.workspaceId);
+  assert.equal(bootstrapBody.connections.connections.length, 1);
+  assert.equal(bootstrapBody.kpis.kpis.length, 1);
+  assert.deepEqual(bootstrapBody.dashboard.dashboard.layout.kpiOrder, [createdKpi.id]);
 
   const initialDashboard = await api('/api/axoboard/dashboard', { cookie: first.cookie });
   assert.equal(initialDashboard.status, 200);

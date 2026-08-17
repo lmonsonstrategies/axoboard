@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from
 import { createServer } from 'node:http';
 import { extname, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { constants as zlibConstants, createGzip } from 'node:zlib';
 import pg from 'pg';
 import Stripe from 'stripe';
 import { createVault } from './lib/crypto-vault.mjs';
@@ -565,11 +566,17 @@ const server = createServer(async (req, res) => {
     const stat = statSync(filePath);
     const isHtml = extname(filePath).toLowerCase() === '.html';
     const isProductFile = productFiles.has(url.pathname);
+    const extension = extname(filePath).toLowerCase();
+    const compressible = new Set(['.css', '.html', '.js', '.json', '.svg', '.txt', '.xml']).has(extension);
+    const useGzip = compressible && /(?:^|,)\s*gzip\s*(?:,|$)/i.test(String(req.headers['accept-encoding'] || ''));
+    const etag = `W/"${stat.size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`;
     const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0];
-    res.writeHead(200, {
-      'Content-Type': contentTypes.get(extname(filePath).toLowerCase()) || 'application/octet-stream', 'Content-Length': stat.size,
-      'Cache-Control': isProductFile ? 'private, no-store' : (isHtml ? 'no-store' : 'public, max-age=300'),
-      ...(isProductFile ? { Vary: 'Cookie' } : {}),
+    const responseHeaders = {
+      'Content-Type': contentTypes.get(extension) || 'application/octet-stream',
+      'Cache-Control': isProductFile ? (isHtml ? 'private, no-store' : 'private, max-age=0, must-revalidate') : (isHtml ? 'no-store' : 'public, max-age=300'),
+      ETag: etag,
+      ...(useGzip ? { 'Content-Encoding': 'gzip' } : { 'Content-Length': stat.size }),
+      Vary: [...(isProductFile ? ['Cookie'] : []), ...(compressible ? ['Accept-Encoding'] : [])].join(', '),
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'SAMEORIGIN', 'Referrer-Policy': 'strict-origin-when-cross-origin',
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
@@ -577,9 +584,17 @@ const server = createServer(async (req, res) => {
       'Cross-Origin-Opener-Policy': 'same-origin',
       'X-Permitted-Cross-Domain-Policies': 'none',
       ...(forwardedProto === 'https' ? { 'Strict-Transport-Security': 'max-age=31536000; includeSubDomains' } : {})
-    });
+    };
+    if (req.headers['if-none-match'] === etag) {
+      delete responseHeaders['Content-Encoding'];
+      delete responseHeaders['Content-Length'];
+      res.writeHead(304, responseHeaders);
+      return res.end();
+    }
+    res.writeHead(200, responseHeaders);
     if (req.method === 'HEAD') return res.end();
-    return createReadStream(filePath).pipe(res);
+    const stream = createReadStream(filePath);
+    return useGzip ? stream.pipe(createGzip({ level: zlibConstants.Z_BEST_SPEED })).pipe(res) : stream.pipe(res);
   } catch (error) {
     if (error?.message === 'payload_too_large') return sendJson(res, 413, { error: 'Request is too large.' });
     if (error?.message === 'invalid_json') return sendJson(res, 400, { error: 'Request body must be valid JSON.' });

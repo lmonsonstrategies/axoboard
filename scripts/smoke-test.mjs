@@ -54,8 +54,11 @@ async function assertPaidGate(cookie, status, appStatus = 302) {
     const response = await fetch(`${baseUrl}${path}`, { headers: { Cookie: cookie }, redirect: 'manual' });
     assert.equal(response.status, appStatus === 200 ? 200 : 404, `${path} with ${status}`);
     if (appStatus === 200) {
-      assert.match(response.headers.get('cache-control') || '', /private, no-store/, `${path} cache policy`);
+      assert.match(response.headers.get('cache-control') || '', /private, max-age=0, must-revalidate/, `${path} cache policy`);
       assert.match(response.headers.get('vary') || '', /Cookie/i, `${path} varies on session`);
+      assert.ok(response.headers.get('etag'), `${path} has a revalidation tag`);
+      const revalidated = await fetch(`${baseUrl}${path}`, { headers: { Cookie: cookie, 'If-None-Match': response.headers.get('etag') }, redirect: 'manual' });
+      assert.equal(revalidated.status, 304, `${path} revalidates without retransferring its body`);
     }
   }
   const session = await fetch(`${baseUrl}/api/auth/session`, { headers: { Cookie: cookie } });
