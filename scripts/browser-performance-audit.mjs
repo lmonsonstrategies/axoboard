@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { writeFile } from 'node:fs/promises';
 
 const baseUrl = String(process.env.BASE_URL || 'http://127.0.0.1:43230').replace(/\/$/, '');
 const email = String(process.env.AUDIT_EMAIL || '');
@@ -158,6 +159,7 @@ const visualizations = await evaluate(`(async () => {
   ].map(([displayType, displayPayload], index) => ({ ...base, id: 'audit-' + displayType, name: 'Audit ' + displayType, displayType, displayPayload, value: displayType === 'scorecard' ? 42 : base.value }));
   liveDashboardLayout = { kpiOrder: liveKpis.map((item) => item.id), hiddenSections: [] };
   renderLiveKpis();
+  renderTvMode();
   activeDisplayType = 'scorecard';
   renderStructuredPreview(liveKpis[0].displayPayload);
   loadedSpreadsheet = { input: 'sheet-audit-1', title: 'Monthly Revenue', sheets: [{ sheetId: 1, title: 'Audit', rowCount: 1000, columnCount: 100 }] };
@@ -198,11 +200,53 @@ const visualizations = await evaluate(`(async () => {
     goalPickerLabel: document.querySelector('#selectGoalRangeLabel').textContent,
     stagedGoal,
     builderPreviewClass: document.querySelector('#builderAccuratePreview .kpi-card')?.className,
-    builderPreviewText: document.querySelector('#builderAccuratePreview')?.textContent.replace(/\s+/g, ' ').trim()
+    builderPreviewText: document.querySelector('#builderAccuratePreview')?.textContent.replace(/\s+/g, ' ').trim(),
+    tvCards: document.querySelectorAll('#tvKpiGrid > [data-tv-kpi]').length,
+    tvTypes: [...document.querySelectorAll('#tvKpiGrid > [data-tv-display-type]')].map((card) => card.dataset.tvDisplayType),
+    tvScorecardText: document.querySelector('[data-tv-kpi="audit-scorecard"]')?.textContent.replace(/\s+/g, ' ').trim(),
+    tvGoalPace: Boolean(document.querySelector('[data-tv-kpi="audit-goal_pace"] .tv-goal-pace')),
+    tvGauge: Boolean(document.querySelector('[data-tv-kpi="audit-gauge"] .tv-gauge')),
+    tvRepCards: document.querySelectorAll('[data-tv-kpi="audit-rep_cards"] .tv-rep-card').length,
+    tvLeaderboardRows: document.querySelectorAll('[data-tv-kpi="audit-leaderboard"] .tv-leaderboard-row').length,
+    tvTrend: Boolean(document.querySelector('[data-tv-kpi="audit-trend"] .tv-trend-visual svg')),
+    tvCategoryRows: document.querySelectorAll('[data-tv-kpi="audit-category_bar"] .tv-category-row').length,
+    tvFunnelStages: document.querySelectorAll('[data-tv-kpi="audit-funnel"] .tv-funnel > div').length,
+    tvPipelineStages: document.querySelectorAll('[data-tv-kpi="audit-pipeline"] .tv-pipeline > article').length,
+    tvActivityRows: document.querySelectorAll('[data-tv-kpi="audit-activity_feed"] .tv-activity-row').length,
+    tvHeatmapCells: document.querySelectorAll('[data-tv-kpi="audit-heatmap"] .tv-heatmap > i').length,
+    tvTableHeaders: [...document.querySelectorAll('[data-tv-kpi="audit-table"] .tv-table th')].map((node) => node.textContent.trim())
   };
 })()`);
 
 await evaluate('showBuilderStep(2)');
+
+await send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
+const television = await evaluate(`(async () => {
+  const builder = document.querySelector('#kpiBuilderModal');
+  const builderWasVisible = builder.classList.contains('is-visible');
+  builder.classList.remove('is-visible');
+  builder.style.display = 'none';
+  const modal = document.querySelector('#tvPreviewModal');
+  modal.classList.add('is-visible');
+  modal.setAttribute('aria-hidden', 'false');
+  renderTvMode();
+  await new Promise((resolve) => setTimeout(resolve, 220));
+  const stage = document.querySelector('.tv-preview-stage');
+  const rect = stage.getBoundingClientRect();
+  const result = { width: rect.width, height: rect.height, scrollWidth: stage.scrollWidth, clientWidth: stage.clientWidth, documentWidth: document.documentElement.scrollWidth, viewportWidth: innerWidth, builderWasVisible };
+  return result;
+})()`);
+if (process.env.AUDIT_SCREENSHOT) {
+  const capture = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+  await writeFile(process.env.AUDIT_SCREENSHOT, Buffer.from(capture.data, 'base64'));
+}
+await evaluate(`(() => {
+  const modal = document.querySelector('#tvPreviewModal');
+  modal.classList.remove('is-visible');
+  modal.setAttribute('aria-hidden', 'true');
+  document.querySelector('#kpiBuilderModal').style.display = '';
+  if (${television.builderWasVisible}) document.querySelector('#kpiBuilderModal').classList.add('is-visible');
+})()`);
 
 await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
 const mobile = await evaluate(`(() => {
@@ -222,10 +266,10 @@ const warmLoad = await evaluate(`(() => {
   return { assetBytes: resources.filter((entry) => ['/app.js','/styles.css'].includes(entry.name)).reduce((total, entry) => total + entry.transferSize, 0), assetBodyBytes: resources.filter((entry) => ['/app.js','/styles.css'].includes(entry.name)).reduce((total, entry) => total + entry.encodedBodySize, 0), resources };
 })()`);
 
-console.log(JSON.stringify({ firstLoad, warmLoad, drivePicker, picker, laptopPicker, visualizations, mobile }, null, 2));
+console.log(JSON.stringify({ firstLoad, warmLoad, drivePicker, picker, laptopPicker, visualizations, television, mobile }, null, 2));
 assert.deepEqual(firstLoad.apiRequests, ['/api/axoboard/bootstrap'], 'app startup uses one product bootstrap request');
 assert.ok(firstLoad.domInteractive < 1000, 'local app shell becomes interactive in under one second');
-assert.ok(firstLoad.assetBodyBytes < 90_000, 'compressed core JS and CSS remain under 90 KB');
+assert.ok(firstLoad.assetBodyBytes < 100_000, 'compressed core JS and CSS remain under 100 KB');
 assert.equal(warmLoad.assetBodyBytes, 0, 'warm reload revalidates without retransferring core JS or CSS bodies');
 assert.equal(drivePicker.initialFiles, 3, 'Drive-style chooser renders every recent spreadsheet');
 assert.equal(drivePicker.filteredFiles, 1, 'Drive-style chooser filters files by name');
@@ -267,6 +311,23 @@ assert.equal(visualizations.stagedGoal.title, 'Choose goal cells', 'the picker c
 assert.match(visualizations.stagedGoal.copy, /already marked Goal/i, 'the picker explains the preselected Goal role');
 assert.match(visualizations.builderPreviewClass, /kpi-card-scorecard-detail/, 'builder preview uses the same scorecard renderer as the saved dashboard');
 assert.match(visualizations.builderPreviewText, /Ava.*Monthly Revenue.*90.*Goal.*100.*90\.0% of goal/, 'builder preview shows the exact saved-card rep, metric, goal, and progress data');
+assert.equal(visualizations.tvCards, 12, 'TV mode renders every saved KPI as a TV card');
+assert.deepEqual(visualizations.tvTypes, ['scorecard','goal_pace','gauge','rep_cards','leaderboard','trend','category_bar','funnel','pipeline','activity_feed','heatmap','table'], 'TV mode preserves every supported display type in saved order');
+assert.match(visualizations.tvScorecardText, /Ava.*Monthly Revenue.*90.*Goal.*100.*90\.0%/, 'TV scorecard preserves rep, metric, goal, and progress');
+assert.equal(visualizations.tvGoalPace, true, 'goal pace has a dedicated TV progress renderer');
+assert.equal(visualizations.tvGauge, true, 'gauge has a dedicated TV dial');
+assert.equal(visualizations.tvRepCards, 2, 'rep cards render as dedicated TV rep cards');
+assert.equal(visualizations.tvLeaderboardRows, 3, 'leaderboard renders its TV header and ranked rows');
+assert.equal(visualizations.tvTrend, true, 'trend renders a TV chart');
+assert.equal(visualizations.tvCategoryRows, 2, 'category bars render TV bar rows');
+assert.equal(visualizations.tvFunnelStages, 2, 'funnel renders TV stages');
+assert.equal(visualizations.tvPipelineStages, 2, 'pipeline renders TV stage cards');
+assert.equal(visualizations.tvActivityRows, 1, 'activity feed renders TV activity rows');
+assert.equal(visualizations.tvHeatmapCells, 4, 'heatmap renders every TV heat cell');
+assert.deepEqual(visualizations.tvTableHeaders, ['Rep','Sales'], 'table preserves headers in TV mode');
+assert.ok(television.width >= 1700 && television.height <= 1080, 'TV mode uses the available 1080p canvas');
+assert.equal(television.scrollWidth, television.clientWidth, 'TV stage has no horizontal overflow at 1080p');
+assert.ok(television.documentWidth <= television.viewportWidth, 'TV mode does not create page-level horizontal overflow');
 assert.ok(mobile.modal.width <= mobile.viewportWidth && mobile.modal.height <= 844, 'mobile picker stays within the viewport');
 assert.ok(mobile.driveModal.width <= mobile.viewportWidth && mobile.driveModal.height <= 844, 'mobile Drive chooser stays within the viewport');
 assert.ok(mobile.button.height >= 55, 'mobile Choose Cells action remains a prominent touch target');

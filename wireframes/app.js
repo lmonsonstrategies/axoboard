@@ -2126,6 +2126,145 @@ function tvKpiContext(kpi) {
   return `${kpi.status === 'active' ? 'Live' : 'Needs attention'} · ${timeAgo(kpi.fetchedAt)}`;
 }
 
+function tvKpiMeta(kpi) {
+  return `<footer class="tv-kpi-meta"><span>${escapeHtml(kpi.sheetTitle || 'Google Sheets')}</span><em>${escapeHtml(kpi.sourceRange || kpi.range || '')}</em><b>${escapeHtml(timeAgo(kpi.fetchedAt))}</b></footer>`;
+}
+
+function renderTvTrend(items, displayFormat) {
+  const points = (items || []).filter((item) => Number.isFinite(Number(item.value)));
+  if (!points.length) return '<div class="tv-visual-empty">No numeric trend points</div>';
+  const values = points.flatMap((item) => [Number(item.value), Number(item.comparisonValue)].filter(Number.isFinite));
+  let minimum = Math.min(...values);
+  let maximum = Math.max(...values);
+  if (minimum === maximum) { minimum -= 1; maximum += 1; }
+  const coordinates = (key) => points.map((item, index) => {
+    const value = Number(item[key]);
+    if (!Number.isFinite(value)) return null;
+    const x = points.length === 1 ? 320 : 20 + (index / (points.length - 1)) * 600;
+    const y = 210 - ((value - minimum) / (maximum - minimum)) * 170;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).filter(Boolean).join(' ');
+  const comparison = points.some((item) => Number.isFinite(Number(item.comparisonValue)))
+    ? `<polyline class="tv-trend-comparison" points="${coordinates('comparisonValue')}" />`
+    : '';
+  const labels = points.length <= 8 ? points : [points[0], points.at(-1)];
+  return `<div class="tv-trend-visual" role="img" aria-label="Trend from ${escapeHtml(points[0].label)} ${escapeHtml(formatKpiValue(points[0].value, displayFormat))} to ${escapeHtml(points.at(-1).label)} ${escapeHtml(formatKpiValue(points.at(-1).value, displayFormat))}"><svg viewBox="0 0 640 230" preserveAspectRatio="none" aria-hidden="true"><line x1="20" y1="210" x2="620" y2="210" />${comparison}<polyline class="tv-trend-current" points="${coordinates('value')}" /></svg><div>${labels.map((item) => `<span>${escapeHtml(item.label)}</span>`).join('')}</div></div>`;
+}
+
+function renderTvKpiCard(card, kpi) {
+  const displayType = kpi.displayType || 'scorecard';
+  const payload = kpi.displayPayload || {};
+  const compositeScorecard = displayType === 'scorecard' && payload.layout === 'rep_metric_goal';
+  const wideTypes = new Set(['rep_cards', 'leaderboard', 'trend', 'category_bar', 'funnel', 'pipeline', 'activity_feed', 'heatmap', 'table']);
+  card.className = `tv-kpi-card tv-kpi-card-${displayType}${wideTypes.has(displayType) ? ' tv-kpi-card-wide' : ''}${compositeScorecard ? ' tv-kpi-card-composite' : ''}`;
+  card.dataset.tvKpi = kpi.id;
+  card.dataset.tvDisplayType = displayType;
+  const title = `<header class="tv-kpi-heading"><div><small>${escapeHtml(displayType.replaceAll('_', ' '))}</small><h3>${escapeHtml(kpi.name)}</h3></div><span class="tv-live-chip">● Live</span></header>`;
+  const meta = tvKpiMeta(kpi);
+
+  if (displayType === 'goal_pace') {
+    const target = Number(kpi.goalValue);
+    const hasGoal = Number.isFinite(target) && target !== 0;
+    const progress = hasGoal ? clampPercent((Number(kpi.value) / target) * 100) : 0;
+    const remaining = hasGoal ? Math.max(0, target - Number(kpi.value)) : null;
+    card.innerHTML = `${title}<div class="tv-goal-pace"><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><span>${hasGoal ? `${progress.toFixed(1)}% of ${formatKpiValue(target, kpi.displayFormat)}` : 'Add a goal to calculate pace'}</span><div><i style="width:${progress}%"></i><em style="left:${progress}%"></em></div><b>${remaining === null ? 'Target needed' : remaining === 0 ? 'Goal reached' : `${formatKpiValue(remaining, kpi.displayFormat)} remaining`}</b></div>${meta}`;
+    return;
+  }
+
+  if (displayType === 'gauge') {
+    const value = Number(kpi.value);
+    const configuredMax = Number(kpi.goalValue);
+    const maximum = Number.isFinite(configuredMax) && configuredMax > 0 ? configuredMax : Math.max(10, 10 ** Math.ceil(Math.log10(Math.max(1, Math.abs(value)))));
+    const progress = clampPercent((value / maximum) * 100);
+    card.innerHTML = `${title}<div class="tv-gauge" style="--tv-gauge-turn:${(progress / 100).toFixed(4)}turn"><div><strong>${escapeHtml(formatKpiValue(value, kpi.displayFormat))}</strong><span>${progress.toFixed(1)}%</span><small>of ${escapeHtml(formatKpiValue(maximum, kpi.displayFormat))}</small></div></div>${meta}`;
+    return;
+  }
+
+  if (compositeScorecard) {
+    const progress = payload.goal.value === 0 ? null : clampPercent((Number(payload.metric.value) / Number(payload.goal.value)) * 100);
+    card.innerHTML = `${title}<div class="tv-scorecard-rep"><small>${escapeHtml(payload.rep.label)}</small><strong>${escapeHtml(payload.rep.value)}</strong></div><div class="tv-scorecard-metric"><span>${escapeHtml(payload.metric.label === 'Metric' ? kpi.name : payload.metric.label)}</span><strong>${escapeHtml(formatKpiValue(payload.metric.value, kpi.displayFormat))}</strong></div><div class="tv-scorecard-goal"><span><small>${escapeHtml(payload.goal.label)}</small><b>${escapeHtml(formatKpiValue(payload.goal.value, kpi.displayFormat))}</b></span><strong>${progress === null ? 'Goal unavailable' : `${progress.toFixed(1)}%`}</strong></div><div class="tv-progress-track"><i style="width:${progress ?? 0}%"></i></div>${meta}`;
+    return;
+  }
+
+  if (displayType === 'scorecard' || !payload.kind) {
+    const progress = kpi.goalValue ? clampPercent((Number(kpi.value) / Number(kpi.goalValue)) * 100) : null;
+    card.innerHTML = `${title}<div class="tv-scorecard-value"><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><span>${escapeHtml(tvKpiContext(kpi))}</span>${progress === null ? '' : `<div class="tv-progress-track"><i style="width:${progress}%"></i></div>`}</div>${meta}`;
+    return;
+  }
+
+  if (displayType === 'rep_cards') {
+    const period = periodLabels[kpi.periodGranularity] || 'Monthly';
+    const cards = (payload.items || []).slice(0, 8).map((item) => {
+      const target = item.goalValue ?? item.comparisonValue ?? kpi.goalValue;
+      const progress = !target ? null : clampPercent((Number(item.value) / Number(target)) * 100);
+      return `<article class="tv-rep-card"><small>${escapeHtml(item.label)}</small><strong>${escapeHtml(formatKpiValue(item.value, kpi.displayFormat))}</strong><span>${progress === null ? `${period} value` : `${progress.toFixed(0)}% of ${formatKpiValue(target, kpi.displayFormat)}`}</span><i><b style="width:${progress ?? 100}%"></b></i></article>`;
+    }).join('');
+    card.innerHTML = `${title}<div class="tv-card-subtitle">${escapeHtml(period)} · ${escapeHtml(pairedDataLabel(payload, 'Value'))}</div><div class="tv-rep-card-grid">${cards}</div>${meta}`;
+    return;
+  }
+
+  if (displayType === 'leaderboard') {
+    const labelHeader = payload.headers?.label || 'Rank';
+    const valueHeader = payload.headers?.value || 'Value';
+    const rows = [...(payload.items || [])].sort((a, b) => Number(b.value) - Number(a.value)).slice(0, 10).map((item, index) => `<div class="tv-leaderboard-row"><b>${index + 1}</b><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(formatKpiValue(item.value, kpi.displayFormat))}</strong></div>`).join('');
+    card.innerHTML = `${title}<div class="tv-leaderboard"><div class="tv-leaderboard-row tv-leaderboard-head"><b>#</b><span>${escapeHtml(labelHeader)}</span><strong>${escapeHtml(valueHeader)}</strong></div>${rows}</div>${meta}`;
+    return;
+  }
+
+  if (displayType === 'trend') {
+    card.innerHTML = `${title}<div class="tv-card-subtitle">${escapeHtml(pairedDataLabel(payload, 'Trend'))}</div>${renderTvTrend(payload.items, kpi.displayFormat)}${meta}`;
+    return;
+  }
+
+  if (displayType === 'category_bar') {
+    const maximum = Math.max(1, ...(payload.items || []).map((item) => Math.abs(Number(item.value))).filter(Number.isFinite));
+    const rows = (payload.items || []).slice(0, 10).map((item) => `<div class="tv-category-row"><span>${escapeHtml(item.label)}</span><i><b style="width:${clampPercent((Math.abs(Number(item.value)) / maximum) * 100)}%"></b></i><strong>${escapeHtml(formatKpiValue(item.value, kpi.displayFormat))}</strong></div>`).join('');
+    card.innerHTML = `${title}<div class="tv-card-subtitle">${escapeHtml(pairedDataLabel(payload, 'Category value'))}</div><div class="tv-category-bars">${rows}</div>${meta}`;
+    return;
+  }
+
+  if (displayType === 'funnel') {
+    const stages = (payload.items || []).filter((item) => Number.isFinite(Number(item.value))).slice(0, 8);
+    const maximum = Math.max(1, ...stages.map((item) => Math.abs(Number(item.value))));
+    const rows = stages.map((item, index) => {
+      const previous = index ? Math.abs(Number(stages[index - 1].value)) : null;
+      const conversion = previous ? `${((Math.abs(Number(item.value)) / previous) * 100).toFixed(0)}%` : 'Start';
+      const width = 38 + (Math.abs(Number(item.value)) / maximum) * 62;
+      return `<div style="width:${width.toFixed(1)}%"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(formatKpiValue(item.value, kpi.displayFormat))}</strong><small>${conversion}</small></div>`;
+    }).join('');
+    card.innerHTML = `${title}<div class="tv-funnel">${rows}</div>${meta}`;
+    return;
+  }
+
+  if (displayType === 'pipeline') {
+    const stages = (payload.items || []).filter((item) => Number.isFinite(Number(item.value))).slice(0, 8).map((item, index) => `<article><small>${index + 1}</small><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(formatKpiValue(item.value, kpi.displayFormat))}</strong></article>`).join('');
+    card.innerHTML = `${title}<div class="tv-pipeline">${stages}</div>${meta}`;
+    return;
+  }
+
+  if (displayType === 'activity_feed') {
+    const entries = (payload.entries || []).slice(0, 8).map((entry) => `<div class="tv-activity-row"><time>${escapeHtml(entry.timestamp)}</time><span><strong>${escapeHtml(entry.label)}</strong>${entry.detail ? `<small>${escapeHtml(entry.detail)}</small>` : ''}</span>${entry.value !== null && entry.value !== '' ? `<b>${escapeHtml(entry.value)}</b>` : ''}</div>`).join('');
+    card.innerHTML = `${title}<div class="tv-activity-feed">${entries}</div>${meta}`;
+    return;
+  }
+
+  if (displayType === 'heatmap') {
+    const range = Number(payload.max) - Number(payload.min) || 1;
+    const columns = Math.max(1, payload.xLabels?.length || 1);
+    const heatmapHeader = `<span>${escapeHtml(payload.cornerLabel || '')}</span>${(payload.xLabels || []).map((label) => `<strong>${escapeHtml(label)}</strong>`).join('')}`;
+    const rows = (payload.yLabels || []).slice(0, 8).map((label, rowIndex) => `<b>${escapeHtml(label)}</b>${(payload.cells[rowIndex] || []).map((value) => {
+      const intensity = 0.2 + ((Number(value) - Number(payload.min)) / range) * 0.8;
+      return `<i style="--tv-heat:${intensity.toFixed(3)}">${escapeHtml(formatKpiValue(value, kpi.displayFormat))}</i>`;
+    }).join('')}`).join('');
+    card.innerHTML = `${title}<div class="tv-heatmap-scroll"><div class="tv-heatmap" style="--tv-heatmap-columns:${columns}"><header>${heatmapHeader}</header>${rows}</div></div>${meta}`;
+    return;
+  }
+
+  const columns = (payload.columns || []).map((column) => `<th>${escapeHtml(column)}</th>`).join('');
+  const rows = (payload.rows || []).slice(0, 10).map((row) => `<tr>${row.map((value) => `<td>${escapeHtml(value)}</td>`).join('')}</tr>`).join('');
+  card.innerHTML = `${title}<div class="tv-table-scroll"><table class="tv-table"><thead><tr>${columns}</tr></thead><tbody>${rows}</tbody></table></div>${meta}`;
+}
+
 function renderTvMode() {
   const grid = document.querySelector('#tvKpiGrid');
   if (!grid) return;
@@ -2143,10 +2282,7 @@ function renderTvMode() {
   }
   grid.replaceChildren(...visibleKpis.map((kpi) => {
     const card = document.createElement('article');
-    const composite = kpi.displayPayload?.layout === 'rep_metric_goal';
-    const title = composite ? `${kpi.displayPayload.rep.value} · ${kpi.displayPayload.metric.label === 'Metric' ? kpi.name : kpi.displayPayload.metric.label}` : kpi.name;
-    const value = composite ? kpi.displayPayload.metric.value : kpi.value;
-    card.innerHTML = `<small>${escapeHtml(title)}</small><strong>${escapeHtml(formatKpiValue(value, kpi.displayFormat))}</strong><span>${escapeHtml(tvKpiContext(kpi))}</span><em>${escapeHtml(kpi.sheetTitle)} · ${escapeHtml(kpi.sourceRange || kpi.range)}</em>`;
+    renderTvKpiCard(card, kpi);
     return card;
   }));
   const freshest = visibleKpis.reduce((latest, kpi) => !latest || new Date(kpi.fetchedAt) > new Date(latest.fetchedAt) ? kpi : latest, null);
