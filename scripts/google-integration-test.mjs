@@ -226,7 +226,9 @@ const fakeGoogle = createServer(async (req, res) => {
       ["'Summary'!C1:C2", [['Monthly Revenue'], [46189]]],
       ["'Summary'!F1:F2", [['Goal'], [50000]]],
       ["'Summary'!G1:J1", [['Andrew', 'Jacob', 'Jaden', 'Xavier']]],
-      ["'Summary'!G4:J4", [[46189, 13897, 64281, 21938]]]
+      ["'Summary'!G4:J4", [[46189, 13897, 64281, 21938]]],
+      ["'Summary'!G5:J5", [[50000, 40000, 60000, 50000]]],
+      ["'Summary'!D9", [[20]]]
     ]);
     assert.ok(ranges.every((range) => selectedValues.has(range)), `unexpected batch ranges: ${ranges.join(',')}`);
     return json(200, {
@@ -495,6 +497,34 @@ try {
     ['Andrew', 46189], ['Jacob', 13897], ['Jaden', 64281], ['Xavier', 21938]
   ], 'one header range aligns with a separate metrics range');
 
+  const sheetGoalPreview = await api('/api/axoboard/kpis/google/preview', {
+    method: 'POST', cookie: first.cookie,
+    body: {
+      ...selection, range: 'G1:J1,G4:J4,G5:J5', includeHeaders: false, displayType: 'rep_cards', comparisonRange: '', goalValue: '',
+      rangeRoles: [{ range: 'G1:J1', role: 'header' }, { range: 'G4:J4', role: 'metric' }, { range: 'G5:J5', role: 'goal' }]
+    }
+  });
+  const sheetGoalBody = await sheetGoalPreview.json();
+  assert.equal(sheetGoalPreview.status, 200, JSON.stringify(sheetGoalBody));
+  assert.equal(sheetGoalBody.preview.goalSource, 'google_sheets');
+  assert.equal(sheetGoalBody.preview.goalValue, null, 'a per-item goal range stays in the structured payload rather than collapsing to one scalar');
+  assert.deepEqual(sheetGoalBody.preview.displayPayload.items.map((item) => [item.label, item.value, item.goalValue]), [
+    ['Andrew', 46189, 50000], ['Jacob', 13897, 40000], ['Jaden', 64281, 60000], ['Xavier', 21938, 50000]
+  ], 'matching goal ranges attach one live goal to every rep card');
+
+  const scalarSheetGoal = await api('/api/axoboard/kpis/google/preview', {
+    method: 'POST', cookie: first.cookie,
+    body: {
+      ...selection, range: 'D9,F2', includeHeaders: false, displayType: 'goal_pace', comparisonRange: '', goalValue: '',
+      rangeRoles: [{ range: 'D9', role: 'metric' }, { range: 'F2', role: 'goal' }]
+    }
+  });
+  const scalarSheetGoalBody = await scalarSheetGoal.json();
+  assert.equal(scalarSheetGoal.status, 200, JSON.stringify(scalarSheetGoalBody));
+  assert.equal(scalarSheetGoalBody.preview.value, 20);
+  assert.equal(scalarSheetGoalBody.preview.goalValue, 50000);
+  assert.equal(scalarSheetGoalBody.preview.goalSource, 'google_sheets');
+
   const ambiguousRange = await api('/api/axoboard/kpis/google/preview', {
     method: 'POST', cookie: first.cookie,
     body: { ...selection, range: 'D8:D10', includeHeaders: false, comparisonRange: '' }
@@ -545,8 +575,8 @@ try {
   const createRoleKpi = await api('/api/axoboard/kpis', {
     method: 'POST', cookie: first.cookie,
     body: {
-      ...selection, range: 'G1:J1,G4:J4', includeHeaders: false, displayType: 'leaderboard', comparisonRange: '',
-      rangeRoles: [{ range: 'G1:J1', role: 'header' }, { range: 'G4:J4', role: 'metric' }],
+      ...selection, range: 'G1:J1,G4:J4,G5:J5', includeHeaders: false, displayType: 'leaderboard', comparisonRange: '',
+      rangeRoles: [{ range: 'G1:J1', role: 'header' }, { range: 'G4:J4', role: 'metric' }, { range: 'G5:J5', role: 'goal' }],
       name: 'Revenue leaderboard', displayFormat: 'currency'
     }
   });
@@ -556,8 +586,8 @@ try {
   const editRoleKpi = await api(`/api/axoboard/kpis/${roleKpi.id}`, {
     method: 'PUT', cookie: first.cookie,
     body: {
-      ...selection, range: 'G1:J1,G4:J4', includeHeaders: false, displayType: 'leaderboard', comparisonRange: '',
-      rangeRoles: [{ range: 'G1:J1', role: 'header' }, { range: 'G4:J4', role: 'metric' }],
+      ...selection, range: 'G1:J1,G4:J4,G5:J5', includeHeaders: false, displayType: 'leaderboard', comparisonRange: '',
+      rangeRoles: [{ range: 'G1:J1', role: 'header' }, { range: 'G4:J4', role: 'metric' }, { range: 'G5:J5', role: 'goal' }],
       name: 'Monthly revenue leaderboard', displayFormat: 'number'
     }
   });
@@ -568,7 +598,9 @@ try {
   assert.equal(editedRoleKpi.name, 'Monthly revenue leaderboard');
   assert.equal(editedRoleKpi.displayFormat, 'number');
   assert.equal(editedRoleKpi.spreadsheetId, 'sheet_test_123456789');
-  assert.deepEqual(editedRoleKpi.rangeRoles, [{ range: 'G1:J1', role: 'header' }, { range: 'G4:J4', role: 'metric' }]);
+  assert.deepEqual(editedRoleKpi.rangeRoles, [{ range: 'G1:J1', role: 'header' }, { range: 'G4:J4', role: 'metric' }, { range: 'G5:J5', role: 'goal' }]);
+  assert.equal(editedRoleKpi.goalSource, 'google_sheets');
+  assert.deepEqual(editedRoleKpi.displayPayload.items.map((item) => item.goalValue), [50000, 40000, 60000, 50000]);
   const crossTenantEdit = await api(`/api/axoboard/kpis/${roleKpi.id}`, { method: 'PUT', cookie: second.cookie, body: {} });
   assert.equal(crossTenantEdit.status, 404, 'another workspace cannot discover or edit the KPI');
   const deleteRoleKpi = await api(`/api/axoboard/kpis/${roleKpi.id}`, { method: 'DELETE', cookie: first.cookie });

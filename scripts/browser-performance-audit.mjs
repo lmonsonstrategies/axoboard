@@ -129,11 +129,12 @@ const picker = await evaluate(`(async () => {
   setSheetSelection({ row: 2, column: 1 });
   setSheetSelection({ row: 2, column: 3 }, undefined, { additive: true });
   setSheetSelection({ row: 2, column: 6 }, undefined, { additive: true });
-  sheetSelectionRoles = ['header', 'metric', 'metric'];
+  sheetSelectionRoles = ['header', 'metric', 'goal'];
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   const modal = document.querySelector('.range-picker-modal').getBoundingClientRect();
   const button = document.querySelector('#selectRangeButton').getBoundingClientRect();
-  return { renderMs, dragUpdateMs, batchedSelectionsMs: performance.now() - dragStart, cells: document.querySelectorAll('#sheetGrid [data-sheet-cell]').length, selectedCells: document.querySelectorAll('#sheetGrid [data-sheet-cell].is-selected').length, ranges: document.querySelector('#rangePickerInput').value, chips: document.querySelectorAll('#rangeSelectionChips > span').length, roleSelects: document.querySelectorAll('#rangeSelectionChips select').length, modal: { width: modal.width, height: modal.height }, button: { width: button.width, height: button.height } };
+  const roleSelects = [...document.querySelectorAll('#rangeSelectionChips select')];
+  return { renderMs, dragUpdateMs, batchedSelectionsMs: performance.now() - dragStart, cells: document.querySelectorAll('#sheetGrid [data-sheet-cell]').length, selectedCells: document.querySelectorAll('#sheetGrid [data-sheet-cell].is-selected').length, ranges: document.querySelector('#rangePickerInput').value, chips: document.querySelectorAll('#rangeSelectionChips > span').length, roleSelects: roleSelects.length, goalRoleAvailable: roleSelects.every((select) => [...select.options].some((option) => option.value === 'goal')), modal: { width: modal.width, height: modal.height }, button: { width: button.width, height: button.height } };
 })()`);
 
 await send('Emulation.setDeviceMetricsOverride', { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
@@ -166,6 +167,8 @@ const visualizations = await evaluate(`(async () => {
   editingKpiId = liveKpis[0].id;
   await hydrateKpiBuilder(liveKpis[0]);
   showBuilderStep(3);
+  builderPreview = { value: 90, goalValue: 100, goalSource: 'google_sheets', displayPayload: liveKpis[0].displayPayload, sourceRange: "'Audit'!A1:B4", range: 'A1:B4', sheet: { title: 'Audit' }, fetchedAt: new Date().toISOString(), comparison: null };
+  renderBuilderAccuratePreview();
   return {
     cards: document.querySelectorAll('[data-live-kpi]').length,
     editButtons: document.querySelectorAll('[data-edit-live-kpi]').length,
@@ -179,7 +182,9 @@ const visualizations = await evaluate(`(async () => {
     tableHeaders: [...document.querySelectorAll('[data-live-kpi="audit-table"] th')].map((node) => node.textContent.trim()),
     editName: document.querySelector('#kpiName').value,
     editRange: document.querySelector('#sheetRange').value,
-    editAction: document.querySelector('#builderNext').textContent
+    editAction: document.querySelector('#builderNext').textContent,
+    builderPreviewClass: document.querySelector('#builderAccuratePreview .kpi-card')?.className,
+    builderPreviewText: document.querySelector('#builderAccuratePreview')?.textContent.replace(/\s+/g, ' ').trim()
   };
 })()`);
 
@@ -218,7 +223,8 @@ assert.ok(picker.dragUpdateMs < 20, '80 drag updates complete synchronously in u
 assert.ok(picker.batchedSelectionsMs < 250, 'batched drag selection paints within the headless-browser frame budget');
 assert.equal(picker.ranges, 'A2,C2,F2', 'picker preserves ordered non-adjacent selections');
 assert.equal(picker.chips, 3, 'picker exposes each selected range as a removable chip');
-assert.equal(picker.roleSelects, 3, 'every selected range can be assigned as Headers or Metrics');
+assert.equal(picker.roleSelects, 3, 'every selected range can be assigned a data role');
+assert.equal(picker.goalRoleAvailable, true, 'every selected range can be assigned as a live Goal');
 assert.equal(picker.selectedCells, 3, 'non-adjacent selected cells remain visibly selected');
 assert.ok(picker.modal.width >= 1400, 'desktop picker uses the near-full-screen workspace');
 assert.ok(picker.button.height >= 55, 'Choose Cells action is a prominent touch target');
@@ -232,12 +238,14 @@ assert.equal(visualizations.heatmapCorner, 'Rep / Day', 'heatmap preserves its c
 assert.equal(visualizations.scalarStructured, false, 'scalar header metadata does not change scorecard rendering');
 assert.match(visualizations.compositeText, /Ava.*Monthly Revenue.*90.*Goal.*100.*90\.0% of goal/, 'scorecard renders rep, metric, goal, and progress together');
 assert.equal(visualizations.sheetsGoalDisabled, true, 'a Sheets-provided scorecard goal disables the redundant manual goal field');
-assert.match(visualizations.sheetsGoalHelp, /Goal cell selected in Google Sheets/, 'scorecard explains where its live goal comes from');
+assert.match(visualizations.sheetsGoalHelp, /live Goal cell or range selected in Google Sheets/i, 'scorecard explains where its live goal comes from');
 assert.equal(visualizations.comparisonHidden, true, 'a composite scorecard hides redundant comparison controls');
 assert.deepEqual(visualizations.tableHeaders, ['Rep', 'Sales'], 'table preserves source headers');
 assert.equal(visualizations.editName, 'Audit scorecard', 'editing hydrates the saved KPI name');
 assert.equal(visualizations.editRange, 'A1:B4', 'editing hydrates the saved Sheets range');
 assert.equal(visualizations.editAction, 'Save KPI changes', 'editing uses an explicit update action');
+assert.match(visualizations.builderPreviewClass, /kpi-card-scorecard-detail/, 'builder preview uses the same scorecard renderer as the saved dashboard');
+assert.match(visualizations.builderPreviewText, /Ava.*Monthly Revenue.*90.*Goal.*100.*90\.0% of goal/, 'builder preview shows the exact saved-card rep, metric, goal, and progress data');
 assert.ok(mobile.modal.width <= mobile.viewportWidth && mobile.modal.height <= 844, 'mobile picker stays within the viewport');
 assert.ok(mobile.driveModal.width <= mobile.viewportWidth && mobile.driveModal.height <= 844, 'mobile Drive chooser stays within the viewport');
 assert.ok(mobile.button.height >= 55, 'mobile Choose Cells action remains a prominent touch target');

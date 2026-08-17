@@ -487,15 +487,17 @@ const periodLabels = { day: 'Daily', week: 'Weekly', month: 'Monthly', year: 'Ye
 
 function syncCompositeScorecardControls(payload = null) {
   const composite = payload?.kind === 'scorecard' && payload?.layout === 'rep_metric_goal';
+  const sheetGoal = builderPreview?.goalSource === 'google_sheets' || primaryRangeRoles.some((item) => item.role === 'goal') || composite;
   const goalInput = document.querySelector('#kpiGoal');
   const goalHelp = document.querySelector('#kpiGoalHelp');
-  goalInput.disabled = composite;
-  goalInput.placeholder = composite ? 'From Google Sheets' : 'Optional';
-  goalHelp.textContent = composite
-    ? 'This scorecard uses the Goal cell selected in Google Sheets.'
+  goalInput.disabled = sheetGoal;
+  goalInput.placeholder = sheetGoal ? 'From Google Sheets' : 'Optional';
+  goalHelp.textContent = sheetGoal
+    ? 'This KPI uses the live Goal cell or range selected in Google Sheets.'
     : 'Adds progress-to-goal context to the KPI.';
-  if (!composite) return;
+  if (!sheetGoal) return;
   goalInput.value = '';
+  if (!composite) return;
   document.querySelector('#kpiComparisonMode').value = 'none';
   document.querySelector('#kpiComparisonFields').hidden = true;
   document.querySelector('#comparisonModeField').hidden = true;
@@ -560,7 +562,8 @@ function setBuilderPreviewStatus(status, message, lineage = '') {
   document.querySelector('#previewStructured').hidden = true;
   document.querySelector('#previewFreshness').textContent = message;
   document.querySelector('#previewLineage').textContent = lineage || document.querySelector('#sheetRange').value.trim() || 'No range selected';
-  document.querySelector('.kpi-preview-card .kpi-change').dataset.previewStatus = status;
+  document.querySelector('.builder-preview-panel').dataset.previewStatus = status;
+  if (status !== 'ready') renderBuilderAccuratePreview();
 }
 
 function selectDisplayType(type) {
@@ -600,6 +603,13 @@ function currentRangeShape() {
     const metricShape = combinedShape('metric');
     if (!headerShape || !metricShape || headerShape.rows !== 1 || headerShape.columns !== metricShape.columns) return { rows: 0, columns: 0, ranges: shapes.length, incompatible: true };
     return { rows: 1 + metricShape.rows, columns: metricShape.columns, ranges: shapes.length };
+  }
+  if (roles.some((item) => item.role === 'goal')) {
+    const metricShapes = shapes.filter((shape, index) => roles[index].role === 'metric');
+    if (!metricShapes.length) return null;
+    if (metricShapes.every((shape) => shape.rows === metricShapes[0].rows)) return { rows: metricShapes[0].rows, columns: metricShapes.reduce((total, shape) => total + shape.columns, 0), ranges: metricShapes.length };
+    if (metricShapes.every((shape) => shape.columns === metricShapes[0].columns)) return { rows: metricShapes.reduce((total, shape) => total + shape.rows, 0), columns: metricShapes[0].columns, ranges: metricShapes.length };
+    return { rows: 0, columns: 0, ranges: metricShapes.length, incompatible: true };
   }
   if (shapes.every((shape) => shape.rows === shapes[0].rows)) return { rows: shapes[0].rows, columns: shapes.reduce((total, shape) => total + shape.columns, 0), ranges: shapes.length };
   if (shapes.every((shape) => shape.columns === shapes[0].columns)) return { rows: shapes.reduce((total, shape) => total + shape.rows, 0), columns: shapes[0].columns, ranges: shapes.length };
@@ -737,7 +747,7 @@ function sheetSelectionsA1() {
 }
 
 function normalizedSelectionRoles(roles = sheetSelectionRoles) {
-  return sheetSelections.map((selection, index) => ({ range: sheetSelectionA1(selection), role: roles[index] === 'header' ? 'header' : 'metric' }));
+  return sheetSelections.map((selection, index) => ({ range: sheetSelectionA1(selection), role: ['header', 'goal'].includes(roles[index]) ? roles[index] : 'metric' }));
 }
 
 function primaryUsesHeaders() {
@@ -761,8 +771,8 @@ function renderRangeSelectionChips() {
   chips.replaceChildren(...sheetSelections.map((selection, index) => {
     const chip = document.createElement('span');
     chip.className = index === activeSheetSelectionIndex ? 'is-active' : '';
-    const role = sheetSelectionRoles[index] === 'header' ? 'header' : 'metric';
-    chip.innerHTML = `<b>${index + 1}</b><strong>${escapeHtml(sheetSelectionA1(selection))}</strong><select data-range-role="${index}" aria-label="Role for ${escapeHtml(sheetSelectionA1(selection))}"><option value="metric"${role === 'metric' ? ' selected' : ''}>Metrics</option><option value="header"${role === 'header' ? ' selected' : ''}>Headers</option></select>${sheetSelections.length > 1 ? `<button type="button" data-remove-range="${index}" aria-label="Remove ${escapeHtml(sheetSelectionA1(selection))}">×</button>` : ''}`;
+    const role = ['header', 'goal'].includes(sheetSelectionRoles[index]) ? sheetSelectionRoles[index] : 'metric';
+    chip.innerHTML = `<b>${index + 1}</b><strong>${escapeHtml(sheetSelectionA1(selection))}</strong><select data-range-role="${index}" aria-label="Role for ${escapeHtml(sheetSelectionA1(selection))}"><option value="metric"${role === 'metric' ? ' selected' : ''}>Metrics</option><option value="header"${role === 'header' ? ' selected' : ''}>Headers</option><option value="goal"${role === 'goal' ? ' selected' : ''}>Goal</option></select>${sheetSelections.length > 1 ? `<button type="button" data-remove-range="${index}" aria-label="Remove ${escapeHtml(sheetSelectionA1(selection))}">×</button>` : ''}`;
     return chip;
   }));
 }
@@ -785,7 +795,8 @@ function syncSheetSelection() {
   });
   const cellCount = sheetSelectionCellCount();
   const explicitHeaders = sheetSelectionRoles.filter((role) => role === 'header').length;
-  document.querySelector('#rangePickerSelectionSummary').textContent = `${sheetSelections.length} range${sheetSelections.length === 1 ? '' : 's'} · ${cellCount} selected cell${cellCount === 1 ? '' : 's'}${explicitHeaders ? ` · ${explicitHeaders} header range${explicitHeaders === 1 ? '' : 's'}` : includesHeaders ? ' · inline header rows' : ''}`;
+  const explicitGoals = sheetSelectionRoles.filter((role) => role === 'goal').length;
+  document.querySelector('#rangePickerSelectionSummary').textContent = `${sheetSelections.length} range${sheetSelections.length === 1 ? '' : 's'} · ${cellCount} selected cell${cellCount === 1 ? '' : 's'}${explicitHeaders ? ` · ${explicitHeaders} header range${explicitHeaders === 1 ? '' : 's'}` : includesHeaders ? ' · inline header rows' : ''}${explicitGoals ? ` · ${explicitGoals} goal range${explicitGoals === 1 ? '' : 's'}` : ''}`;
   renderRangeSelectionChips();
 }
 
@@ -1020,7 +1031,7 @@ async function openRangePicker(target, trigger = document.activeElement) {
   sheetSelections = parsed;
   const storedRoles = rangePickerTarget === 'comparison' ? comparisonRangeRoles : primaryRangeRoles;
   sheetSelectionRoles = storedRoles.length === parsed.length
-    ? storedRoles.map((item) => item.role === 'header' ? 'header' : 'metric')
+    ? storedRoles.map((item) => ['header', 'goal'].includes(item.role) ? item.role : 'metric')
     : parsed.map(() => 'metric');
   activeSheetSelectionIndex = 0;
   sheetSelection = sheetSelections[0];
@@ -1146,6 +1157,92 @@ function pairedDataLabel(payload, fallback) {
   return `${value} by ${label}`;
 }
 
+function renderKpiCard(card, kpi, { interactive = true } = {}) {
+  const displayType = kpi.displayType || 'scorecard';
+  const compositeScorecard = displayType === 'scorecard' && kpi.displayPayload?.layout === 'rep_metric_goal';
+  const structured = Boolean(kpi.displayPayload) && !scalarDisplayTypes.has(displayType);
+  card.className = `surface kpi-card kpi-card-${displayType}${structured ? ' kpi-card-structured' : ''}${compositeScorecard ? ' kpi-card-scorecard-detail' : ''}${interactive ? '' : ' kpi-card-builder-preview'}`;
+  const goalProgress = kpi.goalValue === null || kpi.goalValue === 0 ? null : clampPercent((kpi.value / kpi.goalValue) * 100);
+  const comparisonPercent = kpi.comparisonValue === null || kpi.comparisonValue === 0 ? null : (kpi.comparisonDelta / Math.abs(kpi.comparisonValue)) * 100;
+  const comparisonText = kpi.comparisonValue === null ? '' : `${kpi.comparisonDelta >= 0 ? '+' : ''}${formatKpiValue(kpi.comparisonDelta, kpi.displayFormat)}${comparisonPercent === null ? '' : ` (${comparisonPercent >= 0 ? '+' : ''}${comparisonPercent.toFixed(1)}%)`} vs ${kpi.comparisonSourceRange}`;
+  const contextText = comparisonText || (goalProgress === null ? (kpi.status === 'active' ? 'Live' : 'Needs attention') : `${goalProgress.toFixed(1)}% of ${formatKpiValue(kpi.goalValue, kpi.displayFormat)} goal`);
+  const actions = interactive ? `<span class="kpi-card-actions"><button type="button" data-edit-live-kpi="${escapeHtml(kpi.id)}" aria-label="Edit ${escapeHtml(kpi.name)}" title="Edit KPI">✎</button><button type="button" data-sync-live-kpi="${escapeHtml(kpi.id)}" aria-label="Refresh ${escapeHtml(kpi.name)}" title="Refresh KPI">↻</button><button class="kpi-delete-button" type="button" data-delete-live-kpi="${escapeHtml(kpi.id)}" aria-label="Delete ${escapeHtml(kpi.name)}" title="Delete KPI">×</button></span>` : '<span class="preview-live-pill">Preview</span>';
+  const header = `<header class="structured-kpi-head"><span class="source-mark google">G</span><small>Google Sheets · ${escapeHtml(kpi.sourceRange || `${kpi.sheetTitle}!${kpi.range}`)}</small>${actions}</header>`;
+  if (displayType === 'goal_pace') {
+    const target = Number(kpi.goalValue);
+    const hasGoal = Number.isFinite(target) && target !== 0;
+    const progress = hasGoal ? clampPercent((Number(kpi.value) / target) * 100) : 0;
+    const remaining = hasGoal ? Math.max(0, target - Number(kpi.value)) : null;
+    card.innerHTML = `${header}<p>${escapeHtml(kpi.name)}</p><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><div class="goal-pace-copy"><span>${hasGoal ? `${progress.toFixed(1)}% complete` : 'Add a goal to calculate pace'}</span><b>${remaining === null ? 'Target needed' : `${formatKpiValue(remaining, kpi.displayFormat)} remaining`}</b></div><div class="goal-pace-track"><i style="width:${progress}%"></i><em style="left:${progress}%"></em></div><footer><span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span><b>${hasGoal && progress >= 100 ? 'Goal reached' : 'In progress'}</b></footer>`;
+  } else if (displayType === 'gauge') {
+    const value = Number(kpi.value);
+    const configuredMax = Number(kpi.goalValue);
+    const maximum = Number.isFinite(configuredMax) && configuredMax > 0 ? configuredMax : Math.max(10, 10 ** Math.ceil(Math.log10(Math.max(1, Math.abs(value)))));
+    const progress = clampPercent((value / maximum) * 100);
+    card.innerHTML = `${header}<div class="structured-kpi-title"><p>Gauge · 0 to ${escapeHtml(formatKpiValue(maximum, kpi.displayFormat))}</p><strong>${escapeHtml(kpi.name)}</strong></div><div class="gauge-dial" style="--gauge-turn:${(progress / 100).toFixed(4)}turn"><div><strong>${escapeHtml(formatKpiValue(value, kpi.displayFormat))}</strong><span>${progress.toFixed(1)}%</span></div></div><footer><span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span><b>${Number.isFinite(configuredMax) && configuredMax > 0 ? 'Goal range' : 'Auto range'}</b></footer>`;
+  } else if (compositeScorecard) {
+    const payload = kpi.displayPayload;
+    const progress = payload.goal.value === 0 ? null : clampPercent((payload.metric.value / payload.goal.value) * 100);
+    card.innerHTML = `${header}<div class="scorecard-rep"><small>${escapeHtml(payload.rep.label)}</small><strong>${escapeHtml(payload.rep.value)}</strong></div><div class="scorecard-metric"><p>${escapeHtml(payload.metric.label === 'Metric' ? kpi.name : payload.metric.label)}</p><strong>${escapeHtml(formatKpiValue(payload.metric.value, kpi.displayFormat))}</strong></div><div class="scorecard-goal"><span><small>${escapeHtml(payload.goal.label)}</small><b>${escapeHtml(formatKpiValue(payload.goal.value, kpi.displayFormat))}</b></span><em>${progress === null ? 'Goal progress unavailable' : `${progress.toFixed(1)}% of goal`}</em></div><div class="goal-pace-track"><i style="width:${progress ?? 0}%"></i><em style="left:${progress ?? 0}%"></em></div><footer><span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span><b>Live rep scorecard</b></footer>`;
+  } else if (!structured) {
+    card.innerHTML = `${header}<p>${escapeHtml(kpi.name)}</p><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><div class="kpi-change ${kpi.status === 'active' ? 'positive' : 'neutral'}">● ${escapeHtml(contextText)} <span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span></div><div class="mini-progress"><i style="width:${goalProgress === null ? (kpi.status === 'active' ? '100' : '20') : goalProgress}%"></i></div><footer><span>${escapeHtml(kpi.aggregation.replaceAll('_', ' '))} · read only</span><b>${escapeHtml(kpi.status)}</b></footer>`;
+  } else if (displayType === 'rep_cards') {
+    const period = periodLabels[kpi.periodGranularity] || 'Monthly';
+    const cards = (kpi.displayPayload.items || []).map((item) => {
+      const target = item.goalValue ?? item.comparisonValue ?? kpi.goalValue;
+      const progress = !target ? null : clampPercent((Number(item.value) / Number(target)) * 100);
+      return `<article class="period-rep-card"><small>${escapeHtml(item.label)}</small><strong>${escapeHtml(formatKpiValue(item.value, kpi.displayFormat))}</strong><span>${progress === null ? `${period} value` : `${progress.toFixed(0)}% of ${formatKpiValue(target, kpi.displayFormat)}`}</span><i><b style="width:${progress ?? 100}%"></b></i></article>`;
+    }).join('');
+    card.innerHTML = `${header}<div class="structured-kpi-title"><p>${escapeHtml(period)} · ${escapeHtml(pairedDataLabel(kpi.displayPayload, 'Value'))}</p><strong>${escapeHtml(kpi.name)}</strong></div><div class="rep-card-grid">${cards}</div>`;
+  } else if (displayType === 'leaderboard') {
+    const rows = [...(kpi.displayPayload.items || [])].sort((a, b) => Number(b.value) - Number(a.value)).map((item, index) => `<div class="leaderboard-row"><b>${index + 1}</b><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(formatKpiValue(item.value, kpi.displayFormat))}</strong></div>`).join('');
+    const labelHeader = kpi.displayPayload.headers?.label || 'Rank';
+    const valueHeader = kpi.displayPayload.headers?.value || 'Value';
+    card.innerHTML = `${header}<div class="structured-kpi-title"><p>Leaderboard · ${escapeHtml(valueHeader)}</p><strong>${escapeHtml(kpi.name)}</strong></div><div class="leaderboard-list"><div class="leaderboard-row leaderboard-head"><b>#</b><span>${escapeHtml(labelHeader)}</span><strong>${escapeHtml(valueHeader)}</strong></div>${rows}</div>`;
+  } else if (displayType === 'trend') card.innerHTML = `${header}<div class="structured-kpi-title"><p>${escapeHtml(pairedDataLabel(kpi.displayPayload, 'Trend'))}</p><strong>${escapeHtml(kpi.name)}</strong></div>${renderTrendChart(kpi.displayPayload.items, kpi.displayFormat)}`;
+  else if (displayType === 'category_bar') card.innerHTML = `${header}<div class="structured-kpi-title"><p>${escapeHtml(pairedDataLabel(kpi.displayPayload, 'Category value'))}</p><strong>${escapeHtml(kpi.name)}</strong></div>${renderCategoryBars(kpi.displayPayload.items, kpi.displayFormat)}`;
+  else if (displayType === 'funnel' || displayType === 'pipeline') card.innerHTML = `${header}<div class="structured-kpi-title"><p>${escapeHtml(pairedDataLabel(kpi.displayPayload, displayType === 'funnel' ? 'Conversion' : 'Pipeline'))}</p><strong>${escapeHtml(kpi.name)}</strong></div>${renderFlow(kpi.displayPayload.items, kpi.displayFormat, displayType)}`;
+  else if (displayType === 'activity_feed') card.innerHTML = `${header}<div class="structured-kpi-title"><p>${escapeHtml(kpi.displayPayload.columns?.slice(0, 2).join(' · ') || 'Latest activity')}</p><strong>${escapeHtml(kpi.name)}</strong></div>${renderActivityFeed(kpi.displayPayload)}`;
+  else if (displayType === 'heatmap') card.innerHTML = `${header}<div class="structured-kpi-title"><p>Heatmap</p><strong>${escapeHtml(kpi.name)}</strong></div>${renderHeatmap(kpi.displayPayload, kpi.displayFormat)}`;
+  else {
+    const columns = (kpi.displayPayload.columns || []).map((column) => `<th>${escapeHtml(column)}</th>`).join('');
+    const rows = (kpi.displayPayload.rows || []).slice(0, 25).map((row) => `<tr>${row.map((value) => `<td>${escapeHtml(value)}</td>`).join('')}</tr>`).join('');
+    card.innerHTML = `${header}<div class="structured-kpi-title"><p>Data table</p><strong>${escapeHtml(kpi.name)}</strong></div><div class="structured-table-scroll"><table class="structured-table"><thead><tr>${columns}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+}
+
+function renderBuilderAccuratePreview() {
+  const target = document.querySelector('#builderAccuratePreview');
+  if (!target) return;
+  if (!builderPreview) {
+    target.innerHTML = '<div class="builder-preview-empty"><span>▦</span><strong>Your finished card appears here</strong><small>Choose compatible Google Sheets cells to render real data.</small></div>';
+    return;
+  }
+  const manualGoal = Number(document.querySelector('#kpiGoal').value);
+  const comparison = builderPreview.comparison;
+  const card = document.createElement('article');
+  renderKpiCard(card, {
+    id: editingKpiId || 'preview',
+    name: kpiName.value.trim() || 'Untitled KPI',
+    displayType: activeDisplayType,
+    displayFormat: document.querySelector('#kpiFormat').value,
+    periodGranularity: document.querySelector('#periodGranularity').value,
+    displayPayload: builderPreview.displayPayload,
+    value: builderPreview.value,
+    goalValue: builderPreview.goalValue ?? (Number.isFinite(manualGoal) && document.querySelector('#kpiGoal').value !== '' ? manualGoal : null),
+    comparisonValue: comparison?.value ?? null,
+    comparisonDelta: comparison?.delta ?? null,
+    comparisonSourceRange: comparison?.sourceRange ?? null,
+    aggregation: scalarDisplayTypes.has(activeDisplayType) ? 'single_value' : 'sum',
+    sourceRange: builderPreview.sourceRange,
+    sheetTitle: builderPreview.sheet?.title || '',
+    range: builderPreview.range,
+    fetchedAt: builderPreview.fetchedAt,
+    status: 'active'
+  }, { interactive: false });
+  target.replaceChildren(card);
+}
+
 function renderLiveKpis() {
   document.body.dataset.liveKpis = liveKpis.length ? 'true' : 'false';
   if (!liveKpis.length) {
@@ -1163,6 +1260,8 @@ function renderLiveKpis() {
   const orderedKpis = [...liveKpis].sort((a, b) => (orderIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (orderIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER));
   dashboardKpiGrid.replaceChildren(...orderedKpis.map((kpi) => {
     const card = document.createElement('article');
+    renderKpiCard(card, kpi);
+    if (!card.innerHTML) {
     const displayType = kpi.displayType || 'scorecard';
     const compositeScorecard = displayType === 'scorecard' && kpi.displayPayload?.layout === 'rep_metric_goal';
     const structured = Boolean(kpi.displayPayload) && !scalarDisplayTypes.has(displayType);
@@ -1220,6 +1319,9 @@ function renderLiveKpis() {
       const rows = (kpi.displayPayload.rows || []).slice(0, 25).map((row) => `<tr>${row.map((value) => `<td>${escapeHtml(value)}</td>`).join('')}</tr>`).join('');
       card.innerHTML = `${header}<div class="structured-kpi-title"><p>Data table</p><strong>${escapeHtml(kpi.name)}</strong></div><div class="structured-table-scroll"><table class="structured-table"><thead><tr>${columns}</tr></thead><tbody>${rows}</tbody></table></div>`;
     }
+    }
+    card.dataset.liveKpi = kpi.id;
+    card.dataset.cardKey = kpi.id;
     const refresh = card.querySelector('[data-sync-live-kpi]');
     refresh.dataset.interactionStatus = 'working';
     refresh.addEventListener('click', async (event) => {
@@ -1453,7 +1555,7 @@ async function hydrateKpiBuilder(kpi) {
   document.querySelector('#sheetTab').value = String(kpi.sheetId);
   document.querySelector('#comparisonSheet').value = String(kpi.comparisonSheetId ?? kpi.sheetId);
   document.querySelector('#sheetRange').value = kpi.range;
-  primaryRangeRoles = Array.isArray(kpi.rangeRoles) ? kpi.rangeRoles.map((item) => ({ range: String(item.range).toUpperCase(), role: item.role === 'header' ? 'header' : 'metric' })) : [];
+  primaryRangeRoles = Array.isArray(kpi.rangeRoles) ? kpi.rangeRoles.map((item) => ({ range: String(item.range).toUpperCase(), role: ['header', 'goal'].includes(item.role) ? item.role : 'metric' })) : [];
   document.querySelector('#sheetHasHeaders').checked = Boolean(kpi.includeHeaders) && !primaryRangeRoles.some((item) => item.role === 'header');
   kpiName.value = kpi.name;
   previewKpiName.textContent = kpi.name;
@@ -1679,9 +1781,10 @@ async function previewGoogleSelection() {
   document.querySelector('#sheetPickerStatus').textContent = 'Preview healthy';
   document.querySelector('#sheetPreviewResult').textContent = `${formatKpiValue(builderPreview.value, document.querySelector('#kpiFormat').value)} · ${builderPreview.sourceRowCount} contributing cell${builderPreview.sourceRowCount === 1 ? '' : 's'}`;
   document.querySelector('#builderStatus').textContent = 'Live preview ready';
-  document.querySelector('.kpi-preview-card .kpi-change').dataset.previewStatus = 'ready';
+  document.querySelector('.builder-preview-panel').dataset.previewStatus = 'ready';
   renderStructuredPreview(builderPreview.displayPayload);
   renderComparisonPreview(builderPreview.comparison);
+  renderBuilderAccuratePreview();
   return builderPreview;
 }
 
@@ -1736,7 +1839,7 @@ builderNext.addEventListener('click', async () => {
 });
 document.querySelector('#closeKpiBuilder').addEventListener('click', closeKpiBuilder);
 kpiBuilderModal.addEventListener('click', (event) => { if (event.target === kpiBuilderModal) closeKpiBuilder(); });
-kpiName.addEventListener('input', () => { previewKpiName.textContent = kpiName.value || 'Untitled KPI'; });
+kpiName.addEventListener('input', () => { previewKpiName.textContent = kpiName.value || 'Untitled KPI'; renderBuilderAccuratePreview(); });
 document.querySelector('#kpiComparisonMode').addEventListener('change', (event) => {
   document.querySelector('#kpiComparisonFields').hidden = event.target.value !== 'range';
   builderPreview = null;
@@ -1768,8 +1871,11 @@ document.querySelector('#kpiFormat').addEventListener('change', () => {
     document.querySelector('#sheetPreviewResult').textContent = `${formatted} · ${builderPreview.sourceRowCount} contributing cell${builderPreview.sourceRowCount === 1 ? '' : 's'}`;
     renderComparisonPreview(builderPreview.comparison);
     renderStructuredPreview(builderPreview.displayPayload);
+    renderBuilderAccuratePreview();
   }
 });
+document.querySelector('#kpiGoal').addEventListener('input', renderBuilderAccuratePreview);
+document.querySelector('#periodGranularity').addEventListener('change', renderBuilderAccuratePreview);
 document.querySelector('#openSpreadsheetPicker').addEventListener('click', openSpreadsheetPicker);
 document.querySelector('#spreadsheetSearch').addEventListener('input', (event) => renderSpreadsheetFiles(event.currentTarget.value));
 document.querySelector('#spreadsheetFileList').addEventListener('click', (event) => {
@@ -1864,7 +1970,7 @@ document.querySelector('#rangeSelectionChips').addEventListener('click', (event)
 document.querySelector('#rangeSelectionChips').addEventListener('change', (event) => {
   const roleSelect = event.target.closest('[data-range-role]');
   if (!roleSelect) return;
-  sheetSelectionRoles[Number(roleSelect.dataset.rangeRole)] = roleSelect.value === 'header' ? 'header' : 'metric';
+  sheetSelectionRoles[Number(roleSelect.dataset.rangeRole)] = ['header', 'goal'].includes(roleSelect.value) ? roleSelect.value : 'metric';
   builderPreview = null;
   document.querySelector('#rangePickerPreviewResult').textContent = 'Ready to apply';
   syncSheetSelection();
@@ -2170,14 +2276,13 @@ const workflowDefinitions = {
   support: { eyebrow: 'CUSTOMER SUCCESS', title: 'Get AxoBoard support', description: 'Ask for help without exposing secrets, tokens, or unrelated customer data.', steps: ['Issue','Diagnostics','Contact'], primary: 'Prepare support request', canvas: '<h3>How can we help?</h3><p>A support bundle includes only approved workspace diagnostics.</p><div class="workflow-form"><label>Topic<select><option>Setup and onboarding</option><option>Data source or freshness</option><option>Dashboard or display</option><option>Automation or celebration</option><option>Billing and account</option></select></label><label>What happened?<textarea placeholder="Tell us what you expected and what you saw."></textarea></label><div class="workflow-checks"><label><input type="checkbox" checked /> Include connection health and recent error codes</label><label><input type="checkbox" checked /> Include browser and AxoBoard version</label><label><input type="checkbox" /> Include redacted automation run IDs</label></div></div>', context: '<h3>Privacy boundary</h3><p>Support bundles exclude OAuth tokens, raw credentials, private sound assets, and unrelated tenant records.</p><div class="workflow-summary"><div><small>RESPONSE TARGET</small><strong>Defined by plan</strong></div><div><small>STATUS PAGE</small><strong>All systems healthy</strong></div></div>' },
   guide: { eyebrow: 'SETUP GUIDE', title: 'Customer setup guide', description: 'A short, outcome-led path from workspace creation to launch.', steps: ['Brand','Connect','Build','Invite','Launch'], primary: 'Start guided setup', canvas: '<h3>Recommended launch path</h3><p>Each step has a success signal and a recovery path.</p><ul class="workflow-list"><li><span>1</span><div><strong>Make it recognizable</strong><small>Logo, colors, language, and mobile preview</small></div><button type="button">Open</button></li><li><span>2</span><div><strong>Connect one trusted source</strong><small>OAuth, mapping, freshness, and owner</small></div><button type="button">Open</button></li><li><span>3</span><div><strong>Publish the first outcome recipe</strong><small>Dashboard, goal, alert, celebration, and loop</small></div><button type="button">Open</button></li><li><span>4</span><div><strong>Invite the right people</strong><small>Viewer, editor, manager, and admin roles</small></div><button type="button">Open</button></li></ul>', context: '<h3>Launch definition</h3><p>The customer can explain AxoBoard in 60 seconds and operate it without babysitting.</p><div class="workflow-summary"><div><small>FIRST VALUE</small><strong>Published KPI</strong></div><div><small>TEAM MOMENT</small><strong>Tested celebration</strong></div></div>' },
   oauth: { eyebrow: 'FRESH OAUTH TEST', title: 'Authorize a new connection', description: 'Start from provider consent without importing or reusing any existing credential.', steps: ['Preflight','Consent','Callback','Verify'], primary: 'Review fresh consent', canvas: '<h3 data-oauth-heading>Fresh OAuth preflight</h3><p data-oauth-copy>No cached account or connection will be used.</p><div class="oauth-contract"><div><small>ATTEMPT</small><strong data-oauth-attempt>New session</strong></div><div><small>TENANT</small><strong>Current workspace only</strong></div><div><small>CREDENTIAL REUSE</small><strong>Blocked</strong></div><div><small>LIVE TOKEN</small><strong>Not stored in this prototype</strong></div></div><div class="workflow-checks"><label><input type="checkbox" checked disabled /> Generate a unique state value for callback validation</label><label><input type="checkbox" checked disabled /> Use AxoBoard-owned client credentials only</label><label><input type="checkbox" checked disabled /> Encrypt tenant-scoped tokens server-side in production</label><label><input type="checkbox" checked disabled /> Expose disconnect, revocation, expiry, and retry status</label></div>', context: '<h3>Prototype boundary</h3><p data-oauth-boundary>This validates the onboarding contract, not a real provider token exchange.</p><div class="credential-boundary compact"><b>No credential import</b><span>Existing service accounts, portal tokens, browser sessions, and prior OAuth grants are never read or copied into a new workspace.</span></div><div class="workflow-summary"><div><small>CALLBACK</small><strong>/api/oauth/{provider}/callback</strong></div><div><small>STATUS</small><strong>Provider app registration required</strong></div></div>' },
-  generic: { eyebrow: 'FEATURE WIREFRAME', title: 'Feature setup', description: 'This control now has a defined next state and production requirements.', steps: ['Configure','Review','Save'], primary: 'Save draft', canvas: '<h3>Configuration</h3><p>This workflow is captured for the implementation backlog.</p><div class="workflow-form"><label>Name<input value="New configuration" /></label><label>Notes<textarea>Define the final data contract, permissions, failure states, and success signal.</textarea></label><div class="workflow-checks"><label><input type="checkbox" checked /> Mobile-compatible</label><label><input type="checkbox" checked /> Audit changes</label></div></div>', context: '<h3>Definition of done</h3><p>Runs end-to-end, exposes errors, supports rollback, and has no silent controls.</p>' }
 };
 
 let activeWorkflow = null;
 let workflowStep = 0;
 
 function renderWorkflow() {
-  const definition = workflowDefinitions[activeWorkflow] || workflowDefinitions.generic;
+  const definition = workflowDefinitions[activeWorkflow];
   document.querySelector('#workflowEyebrow').textContent = definition.eyebrow;
   document.querySelector('#workflowTitle').textContent = definition.title;
   document.querySelector('#workflowDescription').textContent = definition.description;
@@ -2228,7 +2333,7 @@ function renderWorkflow() {
 }
 
 function updateWorkflowProgress() {
-  const definition = workflowDefinitions[activeWorkflow] || workflowDefinitions.generic;
+  const definition = workflowDefinitions[activeWorkflow];
   document.querySelector('#workflowProgress').innerHTML = definition.steps.map((step, index) => `${index ? '<i></i>' : ''}<span data-step="${index + 1}" class="${index === workflowStep ? 'is-active' : ''}">${step}</span>`).join('');
   const isFinalStep = workflowStep === definition.steps.length - 1;
   document.querySelector('#workflowPrimary').textContent = activeWorkflow === 'layout' && isFinalStep ? 'Save layout' : isFinalStep ? 'Save draft' : definition.primary;
@@ -2236,12 +2341,13 @@ function updateWorkflowProgress() {
 }
 
 function openWorkflow(type, trigger = document.activeElement, titleOverride = '') {
+  if (!workflowDefinitions[type]) return;
   if (activeFeatureModal && activeFeatureModal.id !== 'workflowModal') {
     activeFeatureModal.classList.remove('is-visible');
     activeFeatureModal.setAttribute('aria-hidden', 'true');
     activeFeatureModal = null;
   }
-  activeWorkflow = workflowDefinitions[type] ? type : 'generic';
+  activeWorkflow = type;
   if (activeWorkflow === 'layout') {
     const currentLayout = liveWorkspaceId ? liveDashboardLayout : betaState.dashboardLayout;
     layoutEditSnapshot = cloneDashboardLayout(currentLayout);
@@ -2291,7 +2397,7 @@ function openFreshOAuth(provider, trigger) {
 
 document.querySelector('#workflowCancel').addEventListener('click', () => closeFeatureModal(document.querySelector('#workflowModal')));
 document.querySelector('#workflowPrimary').addEventListener('click', async () => {
-  const definition = workflowDefinitions[activeWorkflow] || workflowDefinitions.generic;
+  const definition = workflowDefinitions[activeWorkflow];
   if (workflowStep < definition.steps.length - 1) {
     workflowStep += 1;
     updateWorkflowProgress();
@@ -2413,9 +2519,7 @@ document.querySelectorAll('button').forEach((button) => {
   const known = button.matches('[data-screen], [data-plan-cycle], [data-plan-action], [data-fresh-oauth], [data-load-demo], [data-reset-sample], [data-empty-workflow], [data-close-feature], [data-share-tab], [data-celebration-style], [data-display-type], .use-template, .source-choice, [data-visual], #sheetGrid button, #addKpiButton, #builderBack, #builderNext, #closeKpiBuilder, #closeRangePicker, #cancelRangePicker, #applyRangePicker, #jumpToRangeButton, #previewComparisonButton, #closeWin, #replayWin, #celebrateButton, #previewCelebration, .replay-mini, .sound-row, #soundPreviewButton, #wavePlay, #saveSound, #uploadZone, #uploadSoundButton, #previewGame, #publishGame, #publishBrand, #templateGalleryButton, #shareDashboardButton, #openTvMode, #previewLoopButton, #pairScreenButton, #saveLoopButton, [data-move-loop], #copyShareLink, #createShareLink, #saveSnapshotSchedule, #openSourceButton, #selectRangeButton, #reconnectSource, .build-source-kpi, .destination-grid button, #workflowCancel, #workflowPrimary');
   if (button.dataset.workflowWired) { button.dataset.interactionStatus = 'wireframed'; return; }
   if (known) { button.dataset.interactionStatus = 'working'; return; }
-  button.dataset.workflowWired = 'generic';
-  button.dataset.interactionStatus = 'wireframed';
-  button.addEventListener('click', (event) => openWorkflow('generic', event.currentTarget, (button.textContent || button.getAttribute('aria-label') || 'Feature setup').trim().replace(/\s+/g, ' ')));
+  button.dataset.interactionStatus = 'unavailable';
 });
 
 new MutationObserver((mutations) => {
@@ -2428,7 +2532,11 @@ new MutationObserver((mutations) => {
         button.dataset.interactionStatus = 'working';
         return;
       }
-      const type = button.closest('.kpi-card') ? 'kpi' : button.closest('.rule-card') ? 'automation' : 'generic';
+      const type = button.closest('.kpi-card') ? 'kpi' : button.closest('.rule-card') ? 'automation' : null;
+      if (!type) {
+        button.dataset.interactionStatus = 'unavailable';
+        return;
+      }
       button.dataset.workflowWired = type;
       button.dataset.interactionStatus = 'wireframed';
       button.addEventListener('click', (event) => openWorkflow(type, event.currentTarget));
