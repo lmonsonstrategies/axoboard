@@ -9,6 +9,7 @@ import Stripe from 'stripe';
 import { createVault } from './lib/crypto-vault.mjs';
 import { createGoogleProvider } from './lib/google-provider.mjs';
 import { createGoogleIntegration } from './lib/google-integration.mjs';
+import { createDisplayRuntime } from './lib/display-runtime.mjs';
 
 const { Pool } = pg;
 const appRoot = resolve(fileURLToPath(new URL('.', import.meta.url)));
@@ -36,6 +37,10 @@ const googleProvider = createGoogleProvider();
 const googleIntegration = createGoogleIntegration({
   pool, vault: oauthVault, provider: googleProvider, env: process.env,
   sendJson, readJson, currentSession, sameOrigin
+});
+const displayRuntime = createDisplayRuntime({
+  pool, env: process.env, sendJson, readJson, sameOrigin, isRateLimited,
+  loadWorkspaceDisplay: googleIntegration.displaySnapshot
 });
 
 const contentTypes = new Map([
@@ -70,6 +75,11 @@ const productFiles = new Map([
   ['/styles.css', 'styles.css'],
   ['/assets/integrations/google-sheets.svg', 'assets/integrations/google-sheets.svg'],
   ['/assets/integrations/hubspot.svg', 'assets/integrations/hubspot.svg']
+]);
+const displayFiles = new Map([
+  ['/tv', 'tv.html'],
+  ['/tv.js', 'tv.js'],
+  ['/tv.css', 'tv.css']
 ]);
 const paidAccessRedirect = '/pricing?access=subscription_required';
 
@@ -510,8 +520,10 @@ async function initializeDatabase() {
 
 const server = createServer(async (req, res) => {
   try {
-    const rawPathname = String(req.url || '/').split('?')[0];
     const url = new URL(req.url || '/', 'http://localhost');
+    const hostname = String(req.headers.host || '').split(':')[0].toLowerCase();
+    if (hostname === 'tv.axoboard.io' && url.pathname === '/') url.pathname = '/tv';
+    const rawPathname = url.pathname;
     if (url.pathname === '/healthz' || url.pathname === '/api/health') {
       let database = 'not_configured';
       if (pool) {
@@ -527,6 +539,11 @@ const server = createServer(async (req, res) => {
     if (url.pathname === '/api/integrations/oauth/google/callback' && req.method === 'GET') return await googleIntegration.handleCallback(req, res, url);
     if (url.pathname.startsWith('/api/auth/')) return await handleAuth(req, res, url.pathname);
     if (url.pathname.startsWith('/api/billing/')) return await handleBilling(req, res, url.pathname);
+    if (url.pathname.startsWith('/api/display/')) {
+      const handled = await displayRuntime.handlePublic(req, res, url);
+      if (handled !== false) return handled;
+      return sendJson(res, 404, { error: 'Not found' });
+    }
     if (url.pathname === '/demo' || url.pathname === '/index.html') return sendJson(res, 404, { error: 'Not found' });
 
     let productSession = null;
@@ -544,6 +561,8 @@ const server = createServer(async (req, res) => {
         return sendJson(res, 404, { error: 'Not found' });
       }
       if (url.pathname.startsWith('/api/axoboard/')) {
+        const displayHandled = await displayRuntime.handleAdmin(req, res, url, productSession);
+        if (displayHandled !== false) return displayHandled;
         const handled = await googleIntegration.handleProductRequest(req, res, url, productSession);
         if (handled !== false) return handled;
         return sendJson(res, 404, { error: 'Not found' });
@@ -555,8 +574,8 @@ const server = createServer(async (req, res) => {
     }
 
     let resolved;
-    if (productFiles.has(url.pathname)) {
-      resolved = { filePath: resolve(publicRoot, productFiles.get(url.pathname)) };
+    if (productFiles.has(url.pathname) || displayFiles.has(url.pathname)) {
+      resolved = { filePath: resolve(publicRoot, productFiles.get(url.pathname) || displayFiles.get(url.pathname)) };
     } else {
       resolved = resolvePublicFile(rawPathname);
     }
@@ -565,7 +584,7 @@ const server = createServer(async (req, res) => {
     const filePath = resolved.filePath;
     const stat = statSync(filePath);
     const isHtml = extname(filePath).toLowerCase() === '.html';
-    const isProductFile = productFiles.has(url.pathname);
+    const isProductFile = productFiles.has(url.pathname) || displayFiles.has(url.pathname);
     const extension = extname(filePath).toLowerCase();
     const compressible = new Set(['.css', '.html', '.js', '.json', '.svg', '.txt', '.xml']).has(extension);
     const useGzip = compressible && /(?:^|,)\s*gzip\s*(?:,|$)/i.test(String(req.headers['accept-encoding'] || ''));

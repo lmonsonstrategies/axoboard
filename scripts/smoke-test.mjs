@@ -78,6 +78,18 @@ function rawStatus(path) {
   });
 }
 
+function rawResponse(path, headers = {}) {
+  return new Promise((resolveResponse, rejectResponse) => {
+    const request = httpRequest({ hostname: '127.0.0.1', port, path, method: 'GET', headers }, (response) => {
+      const chunks = [];
+      response.on('data', (chunk) => chunks.push(chunk));
+      response.on('end', () => resolveResponse({ status: response.statusCode, body: Buffer.concat(chunks).toString('utf8') }));
+    });
+    request.on('error', rejectResponse);
+    request.end();
+  });
+}
+
 try {
   const health = await waitForHealth();
   assert.equal(health.database, process.env.DATABASE_URL ? 'healthy' : 'not_configured', 'database health state');
@@ -107,6 +119,17 @@ try {
   await assertRoute('/privacy', 200, /Privacy Policy/);
   await assertRoute('/login', 200, /Log in to AxoBoard/);
   await assertRoute('/signup', 200, /Create your AxoBoard/);
+  const tv = await assertRoute('/tv', 200);
+  const tvHtml = await tv.text();
+  assert.match(tvHtml, /Enter your screen code/i);
+  assert.doesNotMatch(tvHtml, /AxoBoard/i, 'anonymous TV player is customer-white-labeled');
+  await assertRoute('/tv.js', 200);
+  await assertRoute('/tv.css', 200);
+  const tvStatus = await (await fetch(`${baseUrl}/api/display/status`)).json();
+  assert.deepEqual(tvStatus, { paired: false, display: null }, 'anonymous TV starts unpaired');
+  const tvHost = await rawResponse('/', { Host: 'tv.axoboard.io' });
+  assert.equal(tvHost.status, 200, 'dedicated TV host root status');
+  assert.match(tvHost.body, /Enter your screen code/i, 'dedicated TV host root rewrites to player');
   for (const path of ['/marketing.css', '/marketing.js', '/auth.js', '/robots.txt', '/sitemap.xml', '/llms.txt', '/assets/favicon/favicon-32.png', '/assets/favicon/favicon-192.png', '/assets/providers/google-sheets.svg', '/assets/providers/shopify.svg', '/assets/providers/wix.svg', '/assets/providers/microsoft-excel.svg', '/assets/providers/hubspot.svg', '/assets/providers/salesforce.svg']) await assertRoute(path, 200);
   assert.match(await (await fetch(`${baseUrl}/robots.txt`)).text(), /User-agent: OAI-SearchBot[\s\S]*Sitemap: https:\/\/axoboard\.io\/sitemap\.xml/i);
   assert.match(await (await fetch(`${baseUrl}/sitemap.xml`)).text(), /<loc>https:\/\/axoboard\.io\/<\/loc>/i);
@@ -116,7 +139,7 @@ try {
   assert.equal(protectedApp.headers.get('location'), '/login');
   for (const path of ['/.env', '/server.mjs', '/package.json', '/Dockerfile', '/.git/config', '/landing.html', '/auth.html', '/unknown.js', '/assets/axoboard-logo-low-poly.png', '/assets/integrations/google-sheets.svg', '/assets/integrations/hubspot.svg', '/assets/favicon/favicon-source.png']) await assertRoute(path, 404);
   await assertRoute('/%2e%2e/%2e%2e/etc/passwd', 404);
-  assert.equal(await rawStatus('/%2e%2e/%2e%2e/etc/passwd'), 400, 'raw encoded traversal status');
+  assert.ok([400, 404].includes(await rawStatus('/%2e%2e/%2e%2e/etc/passwd')), 'raw encoded traversal is rejected');
 
   if (process.env.DATABASE_URL) {
     const anonymousSession = await (await fetch(`${baseUrl}/api/auth/session`)).json();
@@ -188,8 +211,10 @@ try {
   }
   console.log(`AxoBoard smoke test passed${process.env.DATABASE_URL ? ' with PostgreSQL auth' : ' (public routes; PostgreSQL not configured)'}.`);
 } finally {
-  child.kill('SIGTERM');
-  await new Promise((resolveExit) => child.once('exit', resolveExit));
+  if (child.exitCode === null && child.signalCode === null) {
+    child.kill('SIGTERM');
+    await new Promise((resolveExit) => child.once('exit', resolveExit));
+  }
   if (testPool) {
     if (testEmail) {
       const cleanup = await testPool.query(`

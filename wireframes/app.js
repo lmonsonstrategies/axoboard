@@ -12,6 +12,7 @@ let oauthAttempt = 0;
 let activeOauthProvider = null;
 let layoutEditSnapshot = null;
 let layoutDraft = null;
+const dedicatedTvRuntime = location.pathname === '/tv';
 
 function currentDashboardCardKeys() {
   const cards = [...document.querySelectorAll('#dashboardKpiGrid .kpi-card')];
@@ -454,6 +455,7 @@ let activeKpiSource = 'google';
 let builderReturnFocus = null;
 let liveConnections = [];
 let liveKpis = [];
+let liveDisplays = [];
 let liveWorkspaceId = '';
 let liveWorkspaceName = '';
 let liveDashboardLayout = null;
@@ -1539,14 +1541,81 @@ function renderLiveEngagement() {
   }
 }
 
+function displayKpiOptions(container, selectedIds = []) {
+  const selected = new Set(selectedIds);
+  container.replaceChildren(...liveKpis.map((kpi) => {
+    const label = document.createElement('label');
+    label.innerHTML = `<input type="checkbox" value="${escapeHtml(kpi.id)}" ${selected.has(kpi.id) ? 'checked' : ''}/><span>${escapeHtml(kpi.name)}</span>`;
+    return label;
+  }));
+  if (!liveKpis.length) container.innerHTML = '<small>Add a KPI before assigning selected content.</small>';
+}
+
+function selectedDisplayKpis(container) {
+  return [...container.querySelectorAll('input:checked')].map((input) => input.value);
+}
+
+function renderLiveDisplays() {
+  const grid = document.querySelector('#liveDisplayGrid');
+  if (!grid) return;
+  const online = liveDisplays.filter((display) => display.online).length;
+  const summary = document.querySelector('.display-summary');
+  if (summary) {
+    summary.querySelector('strong').textContent = `${online} screen${online === 1 ? '' : 's'} online`;
+    summary.querySelector('small').textContent = liveDisplays.length ? `${liveDisplays.length} paired or pending` : 'Create the first pairing code';
+    const count = summary.querySelector('div:nth-child(2) b');
+    if (count) count.textContent = String(liveDisplays.filter((display) => display.status === 'active').length);
+  }
+  if (!liveDisplays.length) {
+    grid.innerHTML = '<article class="surface screen-device" data-live-display><div class="device-preview"><span>TV</span></div><div class="device-copy"><span class="connection-pill is-pending">○ Not paired</span><h3>Your first display</h3><p>Create a one-time code, then enter it at tv.axoboard.io.</p></div><footer><button type="button" data-create-first-display>Pair a screen</button></footer></article>';
+    grid.querySelector('button').addEventListener('click', openDisplayPairing);
+    return;
+  }
+  grid.replaceChildren(...liveDisplays.map((display) => {
+    const article = document.createElement('article');
+    article.className = `surface screen-device ${display.online ? 'is-online' : ''}`;
+    article.dataset.liveDisplay = display.id;
+    const statusClass = display.status === 'pending' ? 'is-pending' : display.online ? '' : 'is-offline';
+    const statusText = display.status === 'pending' ? '○ Waiting for code' : display.online ? '● Online' : '○ Offline';
+    const assignment = display.contentMode === 'selected_kpis' ? `${display.kpiIds.length} selected KPI${display.kpiIds.length === 1 ? '' : 's'}` : 'Entire dashboard';
+    article.innerHTML = `<div class="device-preview"><span>${escapeHtml((display.name || 'TV').slice(0,2).toUpperCase())}</span><i></i><i></i><i></i></div><div class="device-copy"><span class="connection-pill ${statusClass}">${statusText}</span><h3>${escapeHtml(display.name)}</h3><p>${escapeHtml(assignment)} · ${display.rotationSeconds}s rotation</p><dl><div><dt>Brand package</dt><dd>${escapeHtml(liveBrand?.name || liveWorkspaceName)} v${escapeHtml(liveBrand?.version || 1)}</dd></div><div><dt>Last heartbeat</dt><dd>${display.lastHeartbeatAt ? timeAgo(display.lastHeartbeatAt) : 'Not paired yet'}</dd></div><div><dt>Persistent session</dt><dd>${display.status === 'active' ? 'Active · revocable' : 'Waiting for TV'}</dd></div></dl></div><footer><button type="button">Manage screen</button></footer>`;
+    article.querySelector('button').addEventListener('click', () => openDisplayEditor(display));
+    return article;
+  }));
+}
+
+function openDisplayPairing() {
+  document.querySelector('#displayPairingForm').reset();
+  document.querySelector('#displayName').value = 'Sales floor TV';
+  document.querySelector('#displayPairingResult').hidden = true;
+  document.querySelector('#createDisplayPairing').hidden = false;
+  document.querySelector('#displayKpiSelection').hidden = true;
+  displayKpiOptions(document.querySelector('#displayKpiOptions'));
+  openFeatureModal('displayPairingModal', document.querySelector('#pairScreenButton'));
+}
+
+function openDisplayEditor(display) {
+  document.querySelector('#displayEditorId').value = display.id;
+  document.querySelector('#displayEditorName').value = display.name;
+  document.querySelector('#displayEditorMode').value = display.contentMode;
+  document.querySelector('#displayEditorRotation').value = String(display.rotationSeconds);
+  displayKpiOptions(document.querySelector('#displayEditorKpiOptions'), display.kpiIds);
+  document.querySelector('#displayEditorKpiSelection').hidden = display.contentMode !== 'selected_kpis';
+  openFeatureModal('displayEditorModal', document.querySelector(`[data-live-display="${display.id}"] button`));
+}
+
 async function loadLiveData() {
   try {
-    const bootstrap = await apiJson('/api/axoboard/bootstrap');
+    const [bootstrap, displayPayload] = await Promise.all([
+      apiJson('/api/axoboard/bootstrap'),
+      apiJson('/api/axoboard/displays').catch(() => ({ displays: [] }))
+    ]);
     const { session, connections: connectionPayload, kpis: kpiPayload, dashboard: dashboardPayload, engagement, brand } = bootstrap;
     liveConnections = connectionPayload.connections || [];
     liveKpis = kpiPayload.kpis || [];
     liveEngagement = engagement || { summary: {}, events: [] };
     liveBrand = brand || null;
+    liveDisplays = displayPayload.displays || [];
     if (session.user?.workspace_name) {
       liveWorkspaceId = session.user.workspace_id;
       liveWorkspaceName = session.user.workspace_name;
@@ -1565,8 +1634,16 @@ async function loadLiveData() {
     renderLiveConnections();
     renderLiveKpis();
     renderLiveEngagement();
+    renderLiveDisplays();
+    if (activeFeatureModal?.id === 'tvPreviewModal' || dedicatedTvRuntime) {
+      renderTvMode();
+      setTvConnectionState('live');
+    }
+    return true;
   } catch (error) {
     console.warn('[axoboard] live integration state unavailable', error.message);
+    if (activeFeatureModal?.id === 'tvPreviewModal' || dedicatedTvRuntime) setTvConnectionState('offline');
+    return false;
   }
 }
 
@@ -2232,6 +2309,11 @@ const sharePanels = [...document.querySelectorAll('[data-share-panel]')];
 let activeFeatureModal = null;
 let featureReturnFocus = null;
 let loopTimer = null;
+let tvPageIndex = 0;
+let tvRotationPaused = false;
+let tvRefreshSeconds = 45;
+let tvRotationSeconds = 15;
+const tvPageSize = 4;
 
 function tvKpiContext(kpi) {
   if (kpi.displayPayload?.layout === 'rep_metric_goal') {
@@ -2385,22 +2467,59 @@ function renderTvKpiCard(card, kpi) {
   card.innerHTML = `${title}<div class="tv-table-scroll"><table class="tv-table"><thead><tr>${columns}</tr></thead><tbody>${rows}</tbody></table></div>${meta}`;
 }
 
+function orderedTvKpis() {
+  const order = normalizeDashboardLayout(liveDashboardLayout || {}, liveKpis.map((kpi) => kpi.id)).kpiOrder;
+  const orderIndex = new Map(order.map((id, index) => [id, index]));
+  return [...liveKpis].sort((a, b) => (orderIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (orderIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+}
+
+function updateTvClock() {
+  const clock = document.querySelector('#tvClock');
+  if (clock) {
+    clock.dateTime = new Date().toISOString();
+    clock.textContent = new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit' }).format(new Date());
+  }
+}
+
+function setTvConnectionState(state) {
+  const status = document.querySelector('#tvConnectionState');
+  if (!status) return;
+  status.dataset.state = state;
+  status.textContent = state === 'live' ? '● Live' : state === 'offline' ? '● Last good view' : '● Connecting';
+  const modal = document.querySelector('#tvPreviewModal');
+  modal?.classList.toggle('is-offline', state === 'offline');
+}
+
+function renderTvPagination(pageCount) {
+  const dots = document.querySelector('#tvPageDots');
+  if (dots) dots.innerHTML = Array.from({ length: pageCount }, (_, index) => `<i class="${index === tvPageIndex ? 'is-active' : ''}" aria-hidden="true"></i>`).join('');
+  const previous = document.querySelector('#tvPreviousPage');
+  const next = document.querySelector('#tvNextPage');
+  if (previous) previous.disabled = pageCount <= 1;
+  if (next) next.disabled = pageCount <= 1;
+}
+
 function renderTvMode() {
   const grid = document.querySelector('#tvKpiGrid');
   if (!grid) return;
-  const order = normalizeDashboardLayout(liveDashboardLayout || {}, liveKpis.map((kpi) => kpi.id)).kpiOrder;
-  const orderIndex = new Map(order.map((id, index) => [id, index]));
-  const visibleKpis = [...liveKpis].sort((a, b) => (orderIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (orderIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+  const visibleKpis = orderedTvKpis();
+  const pageCount = Math.max(1, Math.ceil(visibleKpis.length / tvPageSize));
+  tvPageIndex = Math.min(tvPageIndex, pageCount - 1);
+  const pageKpis = visibleKpis.slice(tvPageIndex * tvPageSize, (tvPageIndex + 1) * tvPageSize);
   document.querySelector('#tvPreviewTitle').textContent = liveWorkspaceName ? `${liveWorkspaceName} dashboard` : 'Dashboard';
-  document.querySelector('#tvPreviewEyebrow').textContent = `${liveWorkspaceName || 'CURRENT WORKSPACE'} · ${visibleKpis.length} LIVE KPI${visibleKpis.length === 1 ? '' : 'S'}`.toUpperCase();
+  document.querySelector('#tvPreviewEyebrow').textContent = `${liveWorkspaceName || 'CURRENT WORKSPACE'} · ${visibleKpis.length} LIVE KPI${visibleKpis.length === 1 ? '' : 'S'} · PAGE ${tvPageIndex + 1}/${pageCount}`.toUpperCase();
+  const brandMark = document.querySelector('.tv-customer-logo');
+  if (brandMark) brandMark.textContent = (liveBrand?.name || liveWorkspaceName || 'W').trim().charAt(0).toUpperCase();
+  grid.dataset.pageItems = String(pageKpis.length);
+  renderTvPagination(pageCount);
   if (!visibleKpis.length) {
     grid.innerHTML = '<article class="tv-empty-card"><small>THIS WORKSPACE</small><strong>No KPIs yet</strong><span>Add a KPI to populate TV mode.</span></article>';
-    document.querySelector('#tvDashboardContext strong').textContent = 'Nothing from ACME or any sample workspace is shown here.';
+    document.querySelector('#tvDashboardContext strong').textContent = 'This display is connected only to the authenticated workspace.';
     document.querySelector('#tvDashboardContext .tv-source-summary').innerHTML = '<span>Tenant isolated</span><span>No sample data</span>';
     document.querySelector('#tvFreshness').textContent = 'Waiting for the first KPI';
     return;
   }
-  grid.replaceChildren(...visibleKpis.map((kpi) => {
+  grid.replaceChildren(...pageKpis.map((kpi) => {
     const card = document.createElement('article');
     renderTvKpiCard(card, kpi);
     return card;
@@ -2409,22 +2528,55 @@ function renderTvMode() {
   document.querySelector('#tvDashboardContext strong').textContent = `${visibleKpis.length} workspace KPI${visibleKpis.length === 1 ? '' : 's'} shown in the saved dashboard order`;
   document.querySelector('#tvDashboardContext .tv-source-summary').innerHTML = `<span>Google Sheets</span><span>${escapeHtml(liveWorkspaceName)}</span><span>${escapeHtml(freshest?.status || 'unknown')}</span>`;
   document.querySelector('#tvFreshness').textContent = `Live · freshest update ${timeAgo(freshest?.fetchedAt)}`;
+  updateTvClock();
 }
 
 function startLoopCountdown() {
   const countdown = document.querySelector('#loopCountdown');
-  let seconds = 45;
-  countdown.textContent = seconds;
+  tvRefreshSeconds = 45;
+  tvRotationSeconds = 15;
+  countdown.textContent = tvRefreshSeconds;
   window.clearInterval(loopTimer);
   loopTimer = window.setInterval(async () => {
-    seconds -= 1;
-    if (seconds <= 0) {
-      seconds = 45;
+    tvRefreshSeconds -= 1;
+    if (!tvRotationPaused && orderedTvKpis().length > tvPageSize) tvRotationSeconds -= 1;
+    if (tvRotationSeconds <= 0) {
+      const pages = Math.max(1, Math.ceil(orderedTvKpis().length / tvPageSize));
+      tvPageIndex = (tvPageIndex + 1) % pages;
+      tvRotationSeconds = 15;
+      renderTvMode();
+    }
+    if (tvRefreshSeconds <= 0) {
+      tvRefreshSeconds = 45;
       await loadLiveData();
       renderTvMode();
     }
-    countdown.textContent = seconds;
+    countdown.textContent = tvRefreshSeconds;
+    updateTvClock();
   }, 1000);
+}
+
+function moveTvPage(delta) {
+  const pages = Math.max(1, Math.ceil(orderedTvKpis().length / tvPageSize));
+  tvPageIndex = (tvPageIndex + delta + pages) % pages;
+  tvRotationSeconds = 15;
+  renderTvMode();
+}
+
+function toggleTvRotation() {
+  tvRotationPaused = !tvRotationPaused;
+  const button = document.querySelector('#tvPauseRotation');
+  button.setAttribute('aria-pressed', String(tvRotationPaused));
+  button.textContent = tvRotationPaused ? 'Resume' : 'Pause';
+}
+
+async function toggleTvFullscreen() {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen();
+  } catch (error) {
+    showToast('Fullscreen unavailable', error.message || 'The browser blocked fullscreen mode.');
+  }
 }
 
 function openFeatureModal(id, trigger = document.activeElement) {
@@ -2444,6 +2596,10 @@ function openFeatureModal(id, trigger = document.activeElement) {
 
 function closeFeatureModal(modal = activeFeatureModal) {
   if (!modal) return;
+  if (modal.id === 'tvPreviewModal' && dedicatedTvRuntime) {
+    location.assign('/app');
+    return;
+  }
   if (modal.id === 'workflowModal' && activeWorkflow === 'layout' && layoutEditSnapshot) {
     applyDashboardLayout(layoutEditSnapshot);
     layoutEditSnapshot = null;
@@ -2463,6 +2619,28 @@ document.querySelector('#templateGalleryButton').addEventListener('click', (even
 document.querySelector('#shareDashboardButton').addEventListener('click', (event) => openFeatureModal('shareModal', event.currentTarget));
 document.querySelector('#openTvMode').addEventListener('click', (event) => openFeatureModal('tvPreviewModal', event.currentTarget));
 document.querySelector('#previewLoopButton').addEventListener('click', (event) => openFeatureModal('tvPreviewModal', event.currentTarget));
+document.querySelector('#openDedicatedTv').addEventListener('click', () => {
+  if (dedicatedTvRuntime) location.assign('/app');
+  else window.open('/tv', '_blank', 'noopener');
+});
+document.querySelector('#tvFullscreen').addEventListener('click', toggleTvFullscreen);
+document.querySelector('#tvPreviousPage').addEventListener('click', () => moveTvPage(-1));
+document.querySelector('#tvNextPage').addEventListener('click', () => moveTvPage(1));
+document.querySelector('#tvPauseRotation').addEventListener('click', toggleTvRotation);
+document.addEventListener('fullscreenchange', () => {
+  const button = document.querySelector('#tvFullscreen');
+  button.textContent = document.fullscreenElement ? '↙' : '⛶';
+  button.setAttribute('aria-label', document.fullscreenElement ? 'Exit fullscreen' : 'Enter fullscreen');
+});
+window.addEventListener('online', () => { setTvConnectionState('loading'); loadLiveData(); });
+window.addEventListener('offline', () => setTvConnectionState('offline'));
+document.addEventListener('keydown', (event) => {
+  if (activeFeatureModal?.id !== 'tvPreviewModal') return;
+  if (event.key === 'ArrowRight') { event.preventDefault(); moveTvPage(1); }
+  else if (event.key === 'ArrowLeft') { event.preventDefault(); moveTvPage(-1); }
+  else if (event.key === ' ' || event.key.toLowerCase() === 'p') { event.preventDefault(); toggleTvRotation(); }
+  else if (event.key.toLowerCase() === 'f') { event.preventDefault(); toggleTvFullscreen(); }
+});
 document.querySelector('#previewRuntimeCompatibility').addEventListener('click', (event) => {
   openFeatureModal('tvPreviewModal', event.currentTarget);
   showToast('Compatibility preview ready', 'Customer branding, cached fallback, reduced motion, and silent captions are represented.');
@@ -2584,7 +2762,59 @@ document.querySelectorAll('[data-open-trust], #openMetricTrust').forEach((button
 }));
 document.querySelector('#openSourceButton').addEventListener('click', () => showToast('Source handoff ready', 'Production opens the exact permitted Sheet cell or HubSpot view.'));
 
-document.querySelector('#pairScreenButton').addEventListener('click', () => showToast('Pairing code: AXO-482', 'Enter this one-time code on the new display within 10 minutes.'));
+document.querySelector('#pairScreenButton').addEventListener('click', openDisplayPairing);
+document.querySelector('#displayContentMode').addEventListener('change', (event) => { document.querySelector('#displayKpiSelection').hidden = event.target.value !== 'selected_kpis'; });
+document.querySelector('#displayEditorMode').addEventListener('change', (event) => { document.querySelector('#displayEditorKpiSelection').hidden = event.target.value !== 'selected_kpis'; });
+document.querySelector('#displayPairingForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const button = document.querySelector('#createDisplayPairing');
+  button.disabled = true;
+  try {
+    const contentMode = document.querySelector('#displayContentMode').value;
+    const payload = await apiJson('/api/axoboard/displays/pairing-codes', { method: 'POST', body: JSON.stringify({
+      name: document.querySelector('#displayName').value,
+      contentMode,
+      kpiIds: contentMode === 'selected_kpis' ? selectedDisplayKpis(document.querySelector('#displayKpiOptions')) : [],
+      rotationSeconds: Number(document.querySelector('#displayRotationSeconds').value)
+    }) });
+    document.querySelector('#displayPairingCode').textContent = payload.pairing.code;
+    document.querySelector('#displayPairingExpiry').textContent = `Expires ${new Date(payload.pairing.expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · enter at tv.axoboard.io`;
+    document.querySelector('#displayPairingResult').hidden = false;
+    button.hidden = true;
+    liveDisplays = [payload.display, ...liveDisplays];
+    renderLiveDisplays();
+  } catch (error) { showToast('Could not create pairing code', error.message); }
+  finally { button.disabled = false; }
+});
+document.querySelector('#displayEditorForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const id = document.querySelector('#displayEditorId').value;
+  const mode = document.querySelector('#displayEditorMode').value;
+  try {
+    const payload = await apiJson(`/api/axoboard/displays/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({
+      name: document.querySelector('#displayEditorName').value,
+      contentMode: mode,
+      kpiIds: mode === 'selected_kpis' ? selectedDisplayKpis(document.querySelector('#displayEditorKpiOptions')) : [],
+      rotationSeconds: Number(document.querySelector('#displayEditorRotation').value)
+    }) });
+    liveDisplays = liveDisplays.map((display) => display.id === id ? payload.display : display);
+    renderLiveDisplays();
+    closeFeatureModal(document.querySelector('#displayEditorModal'));
+    showToast('Screen updated', `${payload.display.name} will load the new assignment on its next refresh.`);
+  } catch (error) { showToast('Could not update screen', error.message); }
+});
+document.querySelector('#revokeDisplay').addEventListener('click', async () => {
+  const id = document.querySelector('#displayEditorId').value;
+  const display = liveDisplays.find((item) => item.id === id);
+  if (!display || !window.confirm(`Revoke “${display.name}”?\n\nThe TV will return to the pairing screen and cannot access workspace data.`)) return;
+  try {
+    const payload = await apiJson(`/api/axoboard/displays/${encodeURIComponent(id)}/revoke`, { method: 'POST' });
+    liveDisplays = liveDisplays.map((item) => item.id === id ? payload.display : item);
+    renderLiveDisplays();
+    closeFeatureModal(document.querySelector('#displayEditorModal'));
+    showToast('Screen revoked', 'Its persistent display session can no longer load workspace data.');
+  } catch (error) { showToast('Could not revoke screen', error.message); }
+});
 document.querySelector('#saveLoopButton').addEventListener('click', () => showToast('Revenue pulse saved', 'Three views will rotate during active hours.'));
 document.querySelector('.add-loop-view').addEventListener('click', () => showToast('Content picker ready', 'Add any dashboard, celebration reel, or competition to this loop.'));
 document.querySelectorAll('[data-move-loop]').forEach((button) => button.addEventListener('click', () => {
@@ -2836,7 +3066,7 @@ const workflowBindings = [
   ['.workspace-switcher button, .mobile-workspace-switch', 'workspace'], ['.sidebar-user button', 'profile'],
   ['.dashboard-toolbar button:not(#openTvMode):not(#editLayoutButton)', 'dashboard'], ['#editLayoutButton', 'layout'], ['.kpi-card header button', 'kpi'], ['.attention-card li button', 'alert'], ['.attention-card > button', 'alert'],
   ['#browseIntegrations', 'connector'], ['.integration-catalog button', 'connector'], ['.connect-source', 'connection'],
-  ['#pairScreenButton, .display-summary button, .screen-device footer button:not(#manageRuntimeButton), .add-loop-view', 'screen'],
+  ['.display-summary button, .screen-device:not([data-live-display]) footer button:not(#manageRuntimeButton), .add-loop-view', 'screen'],
   ['.rule-card footer button, #newAutomationButton', 'automation'], ['#viewRunLogButton', 'runs'],
   ['.celebration-header .button-ghost, .performers-card .card-title button, .wins-card .card-title button, .momentum-banner button', 'celebration'],
   ['#uploadSoundButton, #uploadZone, .sounds-layout .add-chip, .sounds-layout .chips button, .favorite-button', 'sound'],
@@ -2927,5 +3157,12 @@ syncCelebrationPreview();
 const integrationResult = new URLSearchParams(location.search).get('status');
 if (integrationResult === 'connected') showToast('Google Sheets connected', 'Choose a spreadsheet and exact range to build the first live KPI.');
 else if (integrationResult && integrationResult !== 'connected') showToast('Google connection not completed', 'Start a new consent attempt from Integrations.');
-if (location.search) history.replaceState(null, '', `/app${location.hash || ''}`);
-loadLiveData();
+if (location.search && !dedicatedTvRuntime) history.replaceState(null, '', `/app${location.hash || ''}`);
+(async () => {
+  if (dedicatedTvRuntime) {
+    document.body.dataset.tvRuntime = 'true';
+    setTvConnectionState('loading');
+  }
+  await loadLiveData();
+  if (dedicatedTvRuntime) openFeatureModal('tvPreviewModal', document.querySelector('#tvFullscreen'));
+})();

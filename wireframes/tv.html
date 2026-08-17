@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#11182a" />
+  <title>TV Display</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/tv.css" />
+</head>
+<body>
+  <main class="pairing-shell" id="pairingShell">
+    <section class="pairing-card" aria-labelledby="pairingTitle">
+      <span class="pairing-mark" aria-hidden="true">TV</span>
+      <small>PAIR THIS DISPLAY</small>
+      <h1 id="pairingTitle">Enter your screen code</h1>
+      <p>Create a screen from TV &amp; Displays in your workspace, then enter its one-time code here.</p>
+      <form id="pairingForm"><label for="pairingCode">Eight-character code</label><input id="pairingCode" name="code" maxlength="8" inputmode="text" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" placeholder="ABCD2345" required /><button type="submit">Pair display</button><span id="pairingError" role="alert"></span></form>
+      <footer><span>Secure display pairing</span><b>Codes expire after 10 minutes</b></footer>
+    </section>
+  </main>
+
+  <main class="player-shell" id="playerShell" hidden>
+    <section class="tv-stage" id="tvStage" aria-label="Paired TV dashboard">
+      <header><div class="customer-identity"><span id="customerMark">W</span><div><small id="runtimeEyebrow">PAIRED DISPLAY</small><h1 id="runtimeTitle">Performance dashboard</h1></div></div><div class="runtime-status"><span id="runtimeConnection" data-state="loading">● Connecting</span><time id="runtimeClock">--:--</time></div></header>
+      <div class="tv-grid" id="runtimeGrid" aria-live="polite"></div>
+      <footer><div class="page-controls"><button id="previousPage" type="button" aria-label="Previous page">←</button><button id="pauseRotation" type="button" aria-pressed="false">Pause</button><button id="nextPage" type="button" aria-label="Next page">→</button><span id="pageDots"></span></div><div class="freshness"><span id="runtimeFreshness">Loading assigned content</span><i></i><span>Refresh in <b id="refreshCountdown">45</b>s</span></div><button id="fullscreenButton" type="button" aria-label="Enter fullscreen">⛶</button></footer>
+      <aside class="offline-banner" id="offlineBanner" hidden><b>Connection interrupted</b><span>Showing the last verified dashboard while this display reconnects.</span></aside>
+    </section>
+  </main>
+  <script src="/tv.js"></script>
+</body>
+</html>

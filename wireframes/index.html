@@ -126,7 +126,7 @@
               <footer><span>Admin chrome stays AxoBoard. The paired screen shows only the customer brand.</span><button id="previewRuntimeCompatibility" type="button">Preview compatibility</button></footer>
             </article>
             <h2 class="section-title">Screens</h2>
-            <div class="screen-grid">
+            <div class="screen-grid" id="liveDisplayGrid">
               <article class="surface screen-device is-online"><div class="device-preview sales-mini"><span>$55K</span><i></i><i></i><i></i></div><div class="device-copy"><span class="connection-pill">● Online</span><h3>Sales Floor TV</h3><p>Front office · 4K · Chrome</p><dl><div><dt>Brand package</dt><dd><span data-customer-brand-name>Customer workspace</span> v7</dd></div><div><dt>Loop</dt><dd>Revenue pulse · 3 views</dd></div><div><dt>Last heartbeat</dt><dd>18 seconds ago</dd></div><div><dt>Cached fallback</dt><dd>Ready · 2m old</dd></div></dl></div><footer><button id="manageRuntimeButton" type="button">Manage runtime</button><button type="button" aria-label="More display options">•••</button></footer></article>
               <article class="surface screen-device is-online"><div class="device-preview concierge-mini"><span>82.9%</span><i></i><i></i><i></i></div><div class="device-copy"><span class="connection-pill">● Online</span><h3>Concierge Wall</h3><p>Service bay · 1080p · Fire TV</p><dl><div><dt>Now showing</dt><dd>Concierge Pulse</dd></div><div><dt>Loop</dt><dd>Customer heartbeat · 2 views</dd></div><div><dt>Last heartbeat</dt><dd>31 seconds ago</dd></div></dl></div><footer><button type="button">Change content</button><button type="button">•••</button></footer></article>
               <article class="surface screen-device is-scheduled"><div class="device-preview executive-mini"><span>2.7×</span><i></i><i></i><i></i></div><div class="device-copy"><span class="schedule-pill">◷ Sleeping</span><h3>Executive Display</h3><p>Conference room · 4K · Apple TV</p><dl><div><dt>Next wake</dt><dd>Tomorrow · 7:00 AM</dd></div><div><dt>Loop</dt><dd>Executive daily · 4 views</dd></div><div><dt>Schedule</dt><dd>Mon–Fri · 7 AM–6 PM</dd></div></dl></div><footer><button type="button">Wake screen</button><button type="button">•••</button></footer></article>
@@ -491,7 +491,42 @@
   </div>
 
   <div class="feature-overlay tv-preview-overlay" id="tvPreviewModal" role="dialog" aria-modal="true" aria-labelledby="tvPreviewTitle" aria-hidden="true">
-    <div class="tv-preview-stage"><header><div><span class="customer-logo tv-customer-logo">N</span><span><small id="tvPreviewEyebrow">NORTHSTAR SALES · LIVE DASHBOARD</small><h2 id="tvPreviewTitle">Revenue pulse</h2></span></div><button data-close-feature="tvPreviewModal" type="button" aria-label="Close TV preview">×</button></header><div class="tv-kpis" id="tvKpiGrid"></div><div class="tv-chart tv-dashboard-context" id="tvDashboardContext"><div><small>DASHBOARD STATUS</small><strong>Loading this workspace’s KPI cards…</strong></div><div class="tv-source-summary"></div></div><footer><span class="live-dot"></span> <span id="tvFreshness">Loading live data</span> <i></i> Auto-refresh in <b id="loopCountdown">45</b>s</footer></div>
+    <div class="tv-preview-stage">
+      <header>
+        <div><span class="customer-logo tv-customer-logo">N</span><span><small id="tvPreviewEyebrow">CUSTOMER WORKSPACE · LIVE DASHBOARD</small><h2 id="tvPreviewTitle">Performance dashboard</h2></span></div>
+        <div class="tv-header-status"><span id="tvConnectionState" data-state="loading">● Connecting</span><time id="tvClock" aria-label="Current time">--:--</time></div>
+        <div class="tv-header-actions"><button id="openDedicatedTv" type="button" aria-label="Open dedicated TV player">↗</button><button id="tvFullscreen" type="button" aria-label="Enter fullscreen">⛶</button><button data-close-feature="tvPreviewModal" type="button" aria-label="Exit TV mode">×</button></div>
+      </header>
+      <div class="tv-kpis" id="tvKpiGrid" aria-live="polite"></div>
+      <div class="tv-chart tv-dashboard-context" id="tvDashboardContext"><div><small>DASHBOARD STATUS</small><strong>Loading this workspace’s KPI cards…</strong></div><div class="tv-source-summary"></div></div>
+      <footer><div class="tv-page-controls"><button id="tvPreviousPage" type="button" aria-label="Previous TV page">←</button><button id="tvPauseRotation" type="button" aria-pressed="false">Pause</button><button id="tvNextPage" type="button" aria-label="Next TV page">→</button><span id="tvPageDots" aria-label="TV page position"></span></div><span class="live-dot"></span><span id="tvFreshness">Loading live data</span><i></i><span id="tvRefreshLabel">Refresh in <b id="loopCountdown">45</b>s</span></footer>
+    </div>
+  </div>
+
+  <div class="feature-overlay" id="displayPairingModal" role="dialog" aria-modal="true" aria-labelledby="displayPairingTitle" aria-hidden="true">
+    <section class="feature-modal display-pairing-modal">
+      <header><div><small>TV DISPLAY</small><h2 id="displayPairingTitle">Pair a new screen</h2><p>Name the device and choose exactly what it should show.</p></div><button class="feature-close" data-close-feature="displayPairingModal" type="button" aria-label="Close display setup">×</button></header>
+      <form id="displayPairingForm">
+        <label>Screen name<input id="displayName" maxlength="80" value="Sales floor TV" required /></label>
+        <div class="display-form-row"><label>Content<select id="displayContentMode"><option value="full_dashboard">Entire dashboard</option><option value="selected_kpis">Selected KPIs</option></select></label><label>Rotate pages every<select id="displayRotationSeconds"><option value="10">10 seconds</option><option value="15" selected>15 seconds</option><option value="30">30 seconds</option><option value="60">60 seconds</option></select></label></div>
+        <fieldset id="displayKpiSelection" hidden><legend>KPIs shown on this screen</legend><div id="displayKpiOptions"></div></fieldset>
+        <div class="pairing-code-result" id="displayPairingResult" hidden><small>ENTER ON TV.AXOBOARD.IO</small><strong id="displayPairingCode">—</strong><span id="displayPairingExpiry">Expires in 10 minutes</span></div>
+        <footer><button class="button button-ghost" type="button" data-close-feature="displayPairingModal">Cancel</button><button class="button button-primary" id="createDisplayPairing" type="submit">Create pairing code</button></footer>
+      </form>
+    </section>
+  </div>
+
+  <div class="feature-overlay" id="displayEditorModal" role="dialog" aria-modal="true" aria-labelledby="displayEditorTitle" aria-hidden="true">
+    <section class="feature-modal display-pairing-modal">
+      <header><div><small>PAIRED DISPLAY</small><h2 id="displayEditorTitle">Manage screen</h2><p>Rename this TV or change its assigned dashboard content remotely.</p></div><button class="feature-close" data-close-feature="displayEditorModal" type="button" aria-label="Close display editor">×</button></header>
+      <form id="displayEditorForm">
+        <input id="displayEditorId" type="hidden" />
+        <label>Screen name<input id="displayEditorName" maxlength="80" required /></label>
+        <div class="display-form-row"><label>Content<select id="displayEditorMode"><option value="full_dashboard">Entire dashboard</option><option value="selected_kpis">Selected KPIs</option></select></label><label>Rotate pages every<select id="displayEditorRotation"><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option><option value="60">60 seconds</option></select></label></div>
+        <fieldset id="displayEditorKpiSelection"><legend>KPIs shown on this screen</legend><div id="displayEditorKpiOptions"></div></fieldset>
+        <footer><button class="button display-revoke-button" id="revokeDisplay" type="button">Revoke screen</button><span></span><button class="button button-primary" type="submit">Save screen</button></footer>
+      </form>
+    </section>
   </div>
 
   <div class="builder-overlay" id="kpiBuilderModal" role="dialog" aria-modal="true" aria-labelledby="kpiBuilderTitle" aria-hidden="true">
