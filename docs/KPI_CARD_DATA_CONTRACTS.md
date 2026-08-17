@@ -4,7 +4,7 @@ Every Google Sheets card stores a bounded, display-ready snapshot. Dashboard ren
 
 | Card | Required selection | Headers retained | Snapshot data |
 | --- | --- | --- | --- |
-| Scorecard | One numeric cell, or one header above one numeric cell | Value and comparison headers when selected | Scalar value, optional comparison |
+| Scorecard | One numeric cell; one header/value pair; or three ordered fields (`rep`, `metric`, `goal`) | Value/comparison headers, or labels for rep/metric/goal | Scalar value, optional comparison, or a live rep-metric-goal payload |
 | Goal pace | Scorecard shape plus optional goal | Value and comparison headers | Scalar value, goal, optional comparison |
 | Gauge | Scorecard shape plus optional maximum goal | Value and comparison headers | Scalar value, maximum, optional comparison |
 | Rep cards | Two columns (`label`, `value`) with a header row, or two horizontal value rows | Label/value headers and orientation | Ordered labels, values, optional aligned comparisons |
@@ -20,6 +20,8 @@ Every Google Sheets card stores a bounded, display-ready snapshot. Dashboard ren
 ## Guardrails
 
 - Structured ranges are limited to 200 rows and 40 columns.
+- Up to 12 non-adjacent ranges may be selected from one sheet. Equal-height ranges combine as logical columns; equal-width ranges combine as logical rows. Other shapes fail explicitly.
+- A rep scorecard uses three fields in selection order: rep name, prepared metric, and prepared goal. The fields can be non-adjacent and refresh together through one Google batch request.
 - Paired comparisons must supply exactly one value per primary label; labeled comparisons must keep the same labels and order.
 - Scalar cards accept exactly one prepared numeric value. Formulas and totals belong in Google Sheets.
 - Blank or non-numeric required values fail validation instead of silently changing the card.

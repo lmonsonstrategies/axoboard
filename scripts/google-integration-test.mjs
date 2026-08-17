@@ -10,6 +10,32 @@ const repPayload = googleIntegrationInternals.displayPayload(
   [['Rep', 'Sales'], ['Andrew', '10'], ['Jacob', '20']],
   'sum', true, 'rep_cards', [['100'], ['200']], false
 );
+assert.deepEqual(googleIntegrationInternals.normalizeRanges('A2, C2, F2'), ['A2', 'C2', 'F2']);
+assert.throws(() => googleIntegrationInternals.normalizeRanges('A2,A2'), /must be different/, 'duplicate ranges are rejected before calling Google');
+assert.throws(() => googleIntegrationInternals.normalizeRanges(Array.from({ length: 13 }, (_, index) => `A${index + 1}`).join(',')), /between 1 and 12/, 'multi-range selections have a bounded request count');
+assert.deepEqual(
+  googleIntegrationInternals.combineSelectedValues(['A2', 'C2', 'F2'], [{ values: [['Andrew']] }, { values: [[46189]] }, { values: [[50000]] }]),
+  [['Andrew', 46189, 50000]],
+  'non-adjacent one-cell ranges preserve selection order as one logical row'
+);
+assert.deepEqual(
+  googleIntegrationInternals.combineSelectedValues(['A1:A2', 'C1:C2', 'F1:F2'], [
+    { values: [['Rep'], ['Andrew']] }, { values: [['Monthly Revenue'], [46189]] }, { values: [['Goal'], [50000]] }
+  ]),
+  [['Rep', 'Monthly Revenue', 'Goal'], ['Andrew', 46189, 50000]],
+  'equal-height ranges combine as logical columns'
+);
+assert.throws(() => googleIntegrationInternals.combineSelectedValues(['A1:A2', 'C1:D3'], [{ values: [] }, { values: [] }]), /same number of rows or the same number of columns/);
+assert.deepEqual(
+  googleIntegrationInternals.displayPayload([['Rep', 'Monthly Revenue', 'Goal'], ['Andrew', 46189, 50000]], 'single_value', true, 'scorecard'),
+  {
+    kind: 'scorecard', layout: 'rep_metric_goal',
+    rep: { label: 'Rep', value: 'Andrew' },
+    metric: { label: 'Monthly Revenue', value: 46189 },
+    goal: { label: 'Goal', value: 50000 }
+  },
+  'scorecards retain a rep, prepared metric, and live goal from separate logical fields'
+);
 assert.deepEqual(repPayload, {
   kind: 'rep_cards',
   orientation: 'columns',
@@ -186,6 +212,25 @@ const fakeGoogle = createServer(async (req, res) => {
         { properties: { sheetId: 0, title: 'Baseline', index: 1, sheetType: 'GRID', gridProperties: { rowCount: 100, columnCount: 12 } } }
       ]
     }, { 'x-request-id': `metadata-${metadataCalls}` });
+  }
+  if (url.pathname === '/sheets/v4/spreadsheets/sheet_test_123456789/values:batchGet' && req.method === 'GET') {
+    assert.match(String(req.headers.authorization), /^Bearer google_access_(initial|refreshed)$/);
+    const ranges = url.searchParams.getAll('ranges');
+    valuesCalls += 1;
+    assert.equal(url.searchParams.get('valueRenderOption'), 'UNFORMATTED_VALUE');
+    const selectedValues = new Map([
+      ["'Summary'!A2", [['Andrew']]],
+      ["'Summary'!C2", [[46189]]],
+      ["'Summary'!F2", [[50000]]],
+      ["'Summary'!A1:A2", [['Rep'], ['Andrew']]],
+      ["'Summary'!C1:C2", [['Monthly Revenue'], [46189]]],
+      ["'Summary'!F1:F2", [['Goal'], [50000]]]
+    ]);
+    assert.ok(ranges.every((range) => selectedValues.has(range)), `unexpected batch ranges: ${ranges.join(',')}`);
+    return json(200, {
+      spreadsheetId: 'sheet_test_123456789',
+      valueRanges: ranges.map((range) => ({ range, majorDimension: 'ROWS', values: selectedValues.get(range) }))
+    }, { 'x-request-id': `values-${valuesCalls}` });
   }
   if (url.pathname.startsWith('/sheets/v4/spreadsheets/sheet_test_123456789/values/') && req.method === 'GET') {
     assert.match(String(req.headers.authorization), /^Bearer google_access_(initial|refreshed)$/);
@@ -403,6 +448,35 @@ try {
     ]
   });
 
+  const compositeScorecard = await api('/api/axoboard/kpis/google/preview', {
+    method: 'POST', cookie: first.cookie,
+    body: { ...selection, range: 'A2,C2,F2', includeHeaders: false, displayType: 'scorecard', comparisonRange: '' }
+  });
+  const compositeScorecardText = await compositeScorecard.text();
+  assert.equal(compositeScorecard.status, 200, compositeScorecardText);
+  const compositePreview = JSON.parse(compositeScorecardText).preview;
+  assert.equal(compositePreview.value, 46189);
+  assert.equal(compositePreview.sourceRowCount, 3);
+  assert.equal(compositePreview.range, 'A2,C2,F2');
+  assert.equal(compositePreview.sourceRange, "'Summary'!A2, 'Summary'!C2, 'Summary'!F2");
+  assert.deepEqual(compositePreview.displayPayload, {
+    kind: 'scorecard', layout: 'rep_metric_goal',
+    rep: { label: 'Rep', value: 'Andrew' }, metric: { label: 'Metric', value: 46189 }, goal: { label: 'Goal', value: 50000 }
+  });
+
+  const valuesBeforeHeaderComposite = valuesCalls;
+  const headerCompositeScorecard = await api('/api/axoboard/kpis/google/preview', {
+    method: 'POST', cookie: first.cookie,
+    body: { ...selection, range: 'A1:A2,C1:C2,F1:F2', includeHeaders: true, displayType: 'scorecard', comparisonRange: '' }
+  });
+  const headerCompositeText = await headerCompositeScorecard.text();
+  assert.equal(headerCompositeScorecard.status, 200, headerCompositeText);
+  assert.equal(valuesCalls, valuesBeforeHeaderComposite + 1, 'separate scorecard fields use one Sheets batch request');
+  assert.deepEqual(JSON.parse(headerCompositeText).preview.displayPayload, {
+    kind: 'scorecard', layout: 'rep_metric_goal',
+    rep: { label: 'Rep', value: 'Andrew' }, metric: { label: 'Monthly Revenue', value: 46189 }, goal: { label: 'Goal', value: 50000 }
+  }, 'scorecard headers provide the rep, metric, and goal labels shown on the card');
+
   const ambiguousRange = await api('/api/axoboard/kpis/google/preview', {
     method: 'POST', cookie: first.cookie,
     body: { ...selection, range: 'D8:D10', includeHeaders: false, comparisonRange: '' }
@@ -430,6 +504,25 @@ try {
   const rejectedCreateBody = await rejectedCreate.json();
   assert.equal(rejectedCreate.status, 422, 'creation remains strict when preview validation fails');
   assert.equal(rejectedCreateBody.code, 'single_value_requires_one_cell');
+
+  const createComposite = await api('/api/axoboard/kpis', {
+    method: 'POST', cookie: first.cookie,
+    body: { ...selection, range: 'A2,C2,F2', includeHeaders: false, comparisonRange: '', name: 'Andrew monthly revenue', displayFormat: 'currency', displayType: 'scorecard' }
+  });
+  const createCompositeText = await createComposite.text();
+  assert.equal(createComposite.status, 201, createCompositeText);
+  const compositeKpi = JSON.parse(createCompositeText).kpi;
+  const compositeList = await api('/api/axoboard/kpis', { cookie: first.cookie });
+  const persistedComposite = (await compositeList.json()).kpis.find((kpi) => kpi.id === compositeKpi.id);
+  assert.equal(persistedComposite.range, 'A2,C2,F2');
+  assert.equal(persistedComposite.value, 46189);
+  assert.equal(persistedComposite.displayPayload.layout, 'rep_metric_goal');
+  assert.equal(persistedComposite.displayPayload.rep.value, 'Andrew');
+  assert.equal(persistedComposite.displayPayload.goal.value, 50000);
+  const syncComposite = await api(`/api/axoboard/kpis/${compositeKpi.id}/sync`, { method: 'POST', cookie: first.cookie });
+  assert.equal(syncComposite.status, 200, await syncComposite.text());
+  const deleteComposite = await api(`/api/axoboard/kpis/${compositeKpi.id}`, { method: 'DELETE', cookie: first.cookie });
+  assert.equal(deleteComposite.status, 200);
 
   const create = await api('/api/axoboard/kpis', { method: 'POST', cookie: first.cookie, body: { ...selection, name: 'Qualified pipeline', displayFormat: 'currency' } });
   const createText = await create.text();
@@ -526,7 +619,7 @@ try {
   const emptyList = await api('/api/axoboard/kpis', { cookie: first.cookie });
   assert.deepEqual((await emptyList.json()).kpis, [], 'soft-deleted KPIs no longer render on the workspace dashboard');
 
-  console.log('AxoBoard Google integration test passed: OAuth, recent-first discovery, virtual-scroll grid preview, header-aware KPI and comparison ranges, workspace layout, delete, sync, disconnect, and tenant isolation.');
+  console.log('AxoBoard Google integration test passed: OAuth, recent-first discovery, virtual-scroll grid preview, non-adjacent ranges, rep-metric-goal scorecards, header-aware comparisons, workspace layout, delete, sync, disconnect, and tenant isolation.');
 } finally {
   app.kill('SIGTERM');
   await new Promise((resolveExit) => app.once('exit', resolveExit));

@@ -407,6 +407,7 @@ let liveWorkspaceName = '';
 let liveDashboardLayout = null;
 let activeGoogleConnection = null;
 let availableSpreadsheets = [];
+let spreadsheetPickerSelection = '';
 let loadedSpreadsheet = null;
 let builderPreview = null;
 let builderPreviewRequest = 0;
@@ -417,6 +418,9 @@ let sheetGridScrollTimer = null;
 let sheetSelectionFrame = null;
 let selectingSheetCells = false;
 let sheetSelection = { anchor: { row: 1, column: 1 }, focus: { row: 1, column: 1 } };
+let sheetSelections = [sheetSelection];
+let activeSheetSelectionIndex = 0;
+let addingSeparateRange = false;
 let rangePickerTarget = 'primary';
 let rangePickerReturnFocus = null;
 const sheetCellWidth = 110;
@@ -456,7 +460,7 @@ function formatKpiValue(value, format = 'number') {
 }
 
 const displayTypeHelp = {
-  scorecard: 'Best for one number already calculated in Google Sheets.',
+  scorecard: 'Use one calculated value, or select Rep, Metric, and Goal cells—even when they are not touching.',
   goal_pace: 'Shows one prepared value against an optional goal, including remaining distance.',
   gauge: 'Shows one prepared value within a zero-to-goal range, or an automatically sized range.',
   rep_cards: 'Select two columns: a label column and one calculated value column. Include the header row.',
@@ -477,12 +481,39 @@ const headerRequiredDisplayTypes = new Set([...pairedDisplayTypes, 'activity_fee
 
 const periodLabels = { day: 'Daily', week: 'Weekly', month: 'Monthly', year: 'Yearly' };
 
+function syncCompositeScorecardControls(payload = null) {
+  const composite = payload?.kind === 'scorecard' && payload?.layout === 'rep_metric_goal';
+  const goalInput = document.querySelector('#kpiGoal');
+  const goalHelp = document.querySelector('#kpiGoalHelp');
+  goalInput.disabled = composite;
+  goalInput.placeholder = composite ? 'From Google Sheets' : 'Optional';
+  goalHelp.textContent = composite
+    ? 'This scorecard uses the Goal cell selected in Google Sheets.'
+    : 'Adds progress-to-goal context to the KPI.';
+  if (!composite) return;
+  goalInput.value = '';
+  document.querySelector('#kpiComparisonMode').value = 'none';
+  document.querySelector('#kpiComparisonFields').hidden = true;
+  document.querySelector('#comparisonModeField').hidden = true;
+}
+
 function renderStructuredPreview(payload = builderPreview?.displayPayload) {
   const preview = document.querySelector('#previewStructured');
-  if (!payload || scalarDisplayTypes.has(activeDisplayType)) {
+  const compositeScorecard = payload?.kind === 'scorecard' && payload?.layout === 'rep_metric_goal';
+  syncCompositeScorecardControls(payload);
+  if (!compositeScorecard) document.querySelector('#comparisonModeField').hidden = comparisonDisabledDisplayTypes.has(activeDisplayType);
+  if (!payload || (scalarDisplayTypes.has(activeDisplayType) && !compositeScorecard)) {
     preview.hidden = true;
     preview.replaceChildren();
     previewKpiValue.hidden = false;
+    return;
+  }
+  if (compositeScorecard) {
+    const format = document.querySelector('#kpiFormat').value;
+    const progress = payload.goal.value === 0 ? null : clampPercent((payload.metric.value / payload.goal.value) * 100);
+    preview.innerHTML = `<div class="structured-preview-head"><span>${escapeHtml(payload.rep.label)}</span><strong>${escapeHtml(payload.rep.value)}</strong></div><div><span>${escapeHtml(payload.metric.label)}</span><strong>${escapeHtml(formatKpiValue(payload.metric.value, format))}</strong></div><div><span>${escapeHtml(payload.goal.label)}</span><strong>${escapeHtml(formatKpiValue(payload.goal.value, format))}</strong></div>${progress === null ? '' : `<div><span>Progress</span><strong>${progress.toFixed(1)}%</strong></div>`}`;
+    preview.hidden = false;
+    previewKpiValue.hidden = true;
     return;
   }
   const structuredItems = payload.kind === 'leaderboard'
@@ -548,12 +579,12 @@ function selectDisplayType(type) {
 }
 
 function currentRangeShape() {
-  const parsed = parseSheetRange(document.querySelector('#sheetRange').value);
+  const parsed = parseSheetRanges(document.querySelector('#sheetRange').value);
   if (!parsed) return null;
-  return {
-    rows: Math.abs(parsed.focus.row - parsed.anchor.row) + 1,
-    columns: Math.abs(parsed.focus.column - parsed.anchor.column) + 1
-  };
+  const shapes = parsed.map((range) => ({ rows: Math.abs(range.focus.row - range.anchor.row) + 1, columns: Math.abs(range.focus.column - range.anchor.column) + 1 }));
+  if (shapes.every((shape) => shape.rows === shapes[0].rows)) return { rows: shapes[0].rows, columns: shapes.reduce((total, shape) => total + shape.columns, 0), ranges: shapes.length };
+  if (shapes.every((shape) => shape.columns === shapes[0].columns)) return { rows: shapes.reduce((total, shape) => total + shape.rows, 0), columns: shapes[0].columns, ranges: shapes.length };
+  return { rows: 0, columns: 0, ranges: shapes.length, incompatible: true };
 }
 
 function updateDisplayRequirement() {
@@ -561,11 +592,20 @@ function updateDisplayRequirement() {
   const headers = document.querySelector('#sheetHasHeaders').checked;
   const shape = currentRangeShape();
   note.classList.remove('is-warning');
+  if (activeDisplayType === 'scorecard') {
+    note.hidden = false;
+    const composite = shape && ((headers && shape.rows === 2 && shape.columns === 3) || (!headers && shape.rows === 1 && shape.columns === 3));
+    note.textContent = composite
+      ? 'Rep scorecard ready: first field is the rep, second is the metric, and third is the goal.'
+      : headers
+        ? 'Choose one header + value, or three matching header/value ranges for Rep, Metric, and Goal.'
+        : 'Choose one numeric cell, or three cells in order: Rep, Metric, Goal. They can be separate ranges.';
+    if (shape && !composite && ((headers && shape.rows * shape.columns !== 2) || (!headers && shape.rows * shape.columns !== 1))) note.classList.add('is-warning');
+    return;
+  }
   if (scalarDisplayTypes.has(activeDisplayType)) {
     note.hidden = false;
-    note.textContent = headers
-      ? 'This display expects one header cell and one calculated value cell beneath it.'
-      : 'This display expects exactly one calculated numeric cell.';
+    note.textContent = headers ? 'This display expects one header cell and one calculated value cell beneath it.' : 'This display expects exactly one calculated numeric cell.';
     if (shape && ((headers && shape.rows * shape.columns !== 2) || (!headers && shape.rows * shape.columns !== 1))) note.classList.add('is-warning');
     return;
   }
@@ -651,42 +691,67 @@ function parseSheetRange(value = '') {
   };
 }
 
-function sheetSelectionBounds() {
-  const { anchor, focus } = sheetSelection;
+function parseSheetRanges(value = '') {
+  const ranges = String(value).split(',').map((range) => range.trim()).filter(Boolean);
+  if (!ranges.length || ranges.length > 12) return null;
+  const parsed = ranges.map(parseSheetRange);
+  return parsed.every(Boolean) ? parsed : null;
+}
+
+function sheetSelectionBounds(selection = sheetSelection) {
+  const { anchor, focus } = selection;
   return {
     minRow: Math.min(anchor.row, focus.row), maxRow: Math.max(anchor.row, focus.row),
     minColumn: Math.min(anchor.column, focus.column), maxColumn: Math.max(anchor.column, focus.column)
   };
 }
 
-function sheetSelectionA1() {
-  const bounds = sheetSelectionBounds();
+function sheetSelectionA1(selection = sheetSelection) {
+  const bounds = sheetSelectionBounds(selection);
   const first = `${sheetColumnLabel(bounds.minColumn)}${bounds.minRow}`;
   const last = `${sheetColumnLabel(bounds.maxColumn)}${bounds.maxRow}`;
   return first === last ? first : `${first}:${last}`;
 }
 
+function sheetSelectionsA1() {
+  return sheetSelections.map(sheetSelectionA1).join(',');
+}
+
 function sheetSelectionCellCount() {
-  const bounds = sheetSelectionBounds();
-  return (bounds.maxRow - bounds.minRow + 1) * (bounds.maxColumn - bounds.minColumn + 1);
+  return sheetSelections.reduce((total, selection) => {
+    const bounds = sheetSelectionBounds(selection);
+    return total + ((bounds.maxRow - bounds.minRow + 1) * (bounds.maxColumn - bounds.minColumn + 1));
+  }, 0);
+}
+
+function renderRangeSelectionChips() {
+  const chips = document.querySelector('#rangeSelectionChips');
+  chips.replaceChildren(...sheetSelections.map((selection, index) => {
+    const chip = document.createElement('span');
+    chip.className = index === activeSheetSelectionIndex ? 'is-active' : '';
+    chip.innerHTML = `<b>${index + 1}</b><strong>${escapeHtml(sheetSelectionA1(selection))}</strong>${sheetSelections.length > 1 ? `<button type="button" data-remove-range="${index}" aria-label="Remove ${escapeHtml(sheetSelectionA1(selection))}">×</button>` : ''}`;
+    return chip;
+  }));
 }
 
 function syncSheetSelection() {
-  const bounds = sheetSelectionBounds();
+  const selectionBounds = sheetSelections.map(sheetSelectionBounds);
   const includesHeaders = document.querySelector('#rangePickerHasHeaders').checked;
   document.querySelectorAll('#sheetGrid [data-sheet-cell]').forEach((cell) => {
     const row = Number(cell.dataset.row);
     const column = Number(cell.dataset.column);
-    const selected = row >= bounds.minRow && row <= bounds.maxRow && column >= bounds.minColumn && column <= bounds.maxColumn;
-    const edge = selected && (row === bounds.minRow || row === bounds.maxRow || column === bounds.minColumn || column === bounds.maxColumn);
-    const header = selected && includesHeaders && row === bounds.minRow;
+    const containing = selectionBounds.find((bounds) => row >= bounds.minRow && row <= bounds.maxRow && column >= bounds.minColumn && column <= bounds.maxColumn);
+    const selected = Boolean(containing);
+    const edge = selected && (row === containing.minRow || row === containing.maxRow || column === containing.minColumn || column === containing.maxColumn);
+    const header = selected && includesHeaders && row === containing.minRow;
     if (cell.classList.contains('is-selected') !== selected) cell.classList.toggle('is-selected', selected);
     if (cell.classList.contains('is-selection-edge') !== edge) cell.classList.toggle('is-selection-edge', edge);
     if (cell.classList.contains('is-header-cell') !== header) cell.classList.toggle('is-header-cell', header);
     if (cell.getAttribute('aria-selected') !== String(selected)) cell.setAttribute('aria-selected', String(selected));
   });
   const cellCount = sheetSelectionCellCount();
-  document.querySelector('#rangePickerSelectionSummary').textContent = `${sheetSelectionA1()} · ${cellCount} selected cell${cellCount === 1 ? '' : 's'}${includesHeaders ? ' · first row treated as headers' : ''}`;
+  document.querySelector('#rangePickerSelectionSummary').textContent = `${sheetSelections.length} range${sheetSelections.length === 1 ? '' : 's'} · ${cellCount} selected cell${cellCount === 1 ? '' : 's'}${includesHeaders ? ' · first row of each range treated as headers' : ''}`;
+  renderRangeSelectionChips();
 }
 
 function scheduleSheetSelectionSync() {
@@ -697,9 +762,20 @@ function scheduleSheetSelectionSync() {
   });
 }
 
-function setSheetSelection(anchor, focus = anchor, { writeInput = true } = {}) {
-  sheetSelection = { anchor: { ...anchor }, focus: { ...focus } };
-  if (writeInput) document.querySelector('#rangePickerInput').value = sheetSelectionA1();
+function setSheetSelection(anchor, focus = anchor, { writeInput = true, additive = false, selectionIndex = null } = {}) {
+  const next = { anchor: { ...anchor }, focus: { ...focus } };
+  if (additive) {
+    sheetSelections = [...sheetSelections, next];
+    activeSheetSelectionIndex = sheetSelections.length - 1;
+  } else if (Number.isInteger(selectionIndex) && sheetSelections[selectionIndex]) {
+    sheetSelections = sheetSelections.map((selection, index) => index === selectionIndex ? next : selection);
+    activeSheetSelectionIndex = selectionIndex;
+  } else {
+    sheetSelections = [next];
+    activeSheetSelectionIndex = 0;
+  }
+  sheetSelection = sheetSelections[activeSheetSelectionIndex];
+  if (writeInput) document.querySelector('#rangePickerInput').value = sheetSelectionsA1();
   builderPreview = null;
   document.querySelector('#rangePickerPreviewResult').textContent = 'Ready to apply';
   scheduleSheetSelectionSync();
@@ -873,16 +949,14 @@ function selectedSheetTitle(sheetId) {
 }
 
 function updatePrimaryRangeSummary() {
-  const parsed = parseSheetRange(document.querySelector('#sheetRange').value);
+  const parsed = parseSheetRanges(document.querySelector('#sheetRange').value);
   if (!parsed) {
-    document.querySelector('#sheetSelectionSummary').textContent = 'Enter a valid A1 range';
-    document.querySelector('#sheetPreviewResult').textContent = 'Examples: D8 or B2:E14';
+    document.querySelector('#sheetSelectionSummary').textContent = 'Enter valid A1 ranges';
+    document.querySelector('#sheetPreviewResult').textContent = 'Examples: D8, B2:E14, or A2,C2,F2';
     return;
   }
-  const rows = Math.abs(parsed.focus.row - parsed.anchor.row) + 1;
-  const columns = Math.abs(parsed.focus.column - parsed.anchor.column) + 1;
-  const count = rows * columns;
-  document.querySelector('#sheetSelectionSummary').textContent = `${document.querySelector('#sheetRange').value.trim().toUpperCase()} · ${count} cell${count === 1 ? '' : 's'}`;
+  const count = parsed.reduce((total, range) => total + ((Math.abs(range.focus.row - range.anchor.row) + 1) * (Math.abs(range.focus.column - range.anchor.column) + 1)), 0);
+  document.querySelector('#sheetSelectionSummary').textContent = `${parsed.length} range${parsed.length === 1 ? '' : 's'} · ${count} cell${count === 1 ? '' : 's'}`;
   document.querySelector('#sheetPreviewResult').textContent = document.querySelector('#sheetHasHeaders').checked ? 'First row will be used as headers' : 'Ready to choose a display';
   updateDisplayRequirement();
 }
@@ -901,14 +975,18 @@ async function openRangePicker(target, trigger = document.activeElement) {
   document.querySelector('#rangePickerHasHeaders').checked = rangePickerTarget === 'comparison'
     ? document.querySelector('#comparisonHasHeaders').checked
     : document.querySelector('#sheetHasHeaders').checked;
-  const parsed = parseSheetRange(sourceRange);
-  if (!parsed) throw new Error('Use a cell or range such as D8 or D8:D20.');
-  sheetSelection = parsed;
-  document.querySelector('#rangePickerInput').value = sheetSelectionA1();
+  const parsed = parseSheetRanges(sourceRange);
+  if (!parsed) throw new Error('Use ranges such as D8, D8:D20, or A2,C2,F2.');
+  sheetSelections = parsed;
+  activeSheetSelectionIndex = 0;
+  sheetSelection = sheetSelections[0];
+  addingSeparateRange = false;
+  document.querySelector('#addRangeSelection').setAttribute('aria-pressed', 'false');
+  document.querySelector('#rangePickerInput').value = sheetSelectionsA1();
   document.querySelector('#rangePickerTitle').textContent = rangePickerTarget === 'comparison' ? 'Choose comparison cells' : 'Choose KPI cells';
   document.querySelector('#rangePickerCopy').textContent = rangePickerTarget === 'comparison'
     ? 'Pick the cells this KPI should compare against.'
-    : 'Scroll in any direction, then click and drag to select a range.';
+    : 'Drag to select, then add separate ranges for cells that are not touching.';
   document.querySelector('#rangePickerPreviewResult').textContent = 'Selection not applied';
   const modal = document.querySelector('#rangePickerModal');
   modal.classList.add('is-visible');
@@ -931,7 +1009,7 @@ function closeRangePicker() {
 }
 
 function applyRangePickerSelection() {
-  const range = sheetSelectionA1();
+  const range = sheetSelectionsA1();
   const cellCount = sheetSelectionCellCount();
   const pickerSheet = document.querySelector('#rangePickerSheet').value;
   const includesHeaders = document.querySelector('#rangePickerHasHeaders').checked;
@@ -1040,8 +1118,9 @@ function renderLiveKpis() {
   dashboardKpiGrid.replaceChildren(...orderedKpis.map((kpi) => {
     const card = document.createElement('article');
     const displayType = kpi.displayType || 'scorecard';
+    const compositeScorecard = displayType === 'scorecard' && kpi.displayPayload?.layout === 'rep_metric_goal';
     const structured = Boolean(kpi.displayPayload) && !scalarDisplayTypes.has(displayType);
-    card.className = `surface kpi-card kpi-card-${displayType}${structured ? ' kpi-card-structured' : ''}`;
+    card.className = `surface kpi-card kpi-card-${displayType}${structured ? ' kpi-card-structured' : ''}${compositeScorecard ? ' kpi-card-scorecard-detail' : ''}`;
     card.dataset.liveKpi = kpi.id;
     card.dataset.cardKey = kpi.id;
     const goalProgress = kpi.goalValue === null || kpi.goalValue === 0 ? null : Math.max(0, Math.min(100, (kpi.value / kpi.goalValue) * 100));
@@ -1061,6 +1140,10 @@ function renderLiveKpis() {
       const maximum = Number.isFinite(configuredMax) && configuredMax > 0 ? configuredMax : Math.max(10, 10 ** Math.ceil(Math.log10(Math.max(1, Math.abs(value)))));
       const progress = clampPercent((value / maximum) * 100);
       card.innerHTML = `${header}<div class="structured-kpi-title"><p>Gauge · 0 to ${escapeHtml(formatKpiValue(maximum, kpi.displayFormat))}</p><strong>${escapeHtml(kpi.name)}</strong></div><div class="gauge-dial" style="--gauge-turn:${(progress / 100).toFixed(4)}turn"><div><strong>${escapeHtml(formatKpiValue(value, kpi.displayFormat))}</strong><span>${progress.toFixed(1)}%</span></div></div><footer><span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span><b>${Number.isFinite(configuredMax) && configuredMax > 0 ? 'Goal range' : 'Auto range'}</b></footer>`;
+    } else if (compositeScorecard) {
+      const payload = kpi.displayPayload;
+      const progress = payload.goal.value === 0 ? null : clampPercent((payload.metric.value / payload.goal.value) * 100);
+      card.innerHTML = `${header}<div class="scorecard-rep"><small>${escapeHtml(payload.rep.label)}</small><strong>${escapeHtml(payload.rep.value)}</strong></div><div class="scorecard-metric"><p>${escapeHtml(payload.metric.label === 'Metric' ? kpi.name : payload.metric.label)}</p><strong>${escapeHtml(formatKpiValue(payload.metric.value, kpi.displayFormat))}</strong></div><div class="scorecard-goal"><span><small>${escapeHtml(payload.goal.label)}</small><b>${escapeHtml(formatKpiValue(payload.goal.value, kpi.displayFormat))}</b></span><em>${progress === null ? 'Goal progress unavailable' : `${progress.toFixed(1)}% of goal`}</em></div><div class="goal-pace-track"><i style="width:${progress ?? 0}%"></i><em style="left:${progress ?? 0}%"></em></div><footer><span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span><b>Live rep scorecard</b></footer>`;
     } else if (!structured) {
       card.innerHTML = `${header}<p>${escapeHtml(kpi.name)}</p><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><div class="kpi-change ${kpi.status === 'active' ? 'positive' : 'neutral'}">● ${escapeHtml(contextText)} <span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span></div><div class="mini-progress"><i style="width:${goalProgress === null ? (kpi.status === 'active' ? '100' : '20') : goalProgress}%"></i></div><footer><span>${escapeHtml(kpi.aggregation.replaceAll('_', ' '))} · read only</span><b>${escapeHtml(kpi.status)}</b></footer>`;
     } else if (kpi.displayType === 'rep_cards') {
@@ -1194,7 +1277,7 @@ function syncBuilderSource(source) {
   const isGoogle = activeKpiSource === 'google';
   document.querySelector('#dataStepTitle').textContent = isGoogle ? 'Choose cells to watch' : 'Choose CRM properties';
   document.querySelector('#dataStepCopy').textContent = isGoogle
-    ? 'Select a spreadsheet, sheet, and exact A1 range.'
+    ? 'Select a spreadsheet, sheet, and one or more cell ranges.'
     : 'Select an object, standard or custom property, filters, and aggregation.';
   previewSourceMark.textContent = isGoogle ? 'G' : 'H';
   previewSourceMark.classList.toggle('google', isGoogle);
@@ -1224,13 +1307,15 @@ function validateSelectedData() {
   const selectedSheet = document.querySelector('#sheetTab').value;
   if (!selectedSheet || !Number.isSafeInteger(Number(selectedSheet))) throw new Error('Choose a sheet.');
   const shape = currentRangeShape();
-  if (!shape) throw new Error('Use a valid range such as D8 or A1:B12.');
+  if (!shape) throw new Error('Use valid ranges such as D8, A1:B12, or A2,C2,F2.');
   return shape;
 }
 
 function recommendDisplayForSelection(shape) {
+  const headers = document.querySelector('#sheetHasHeaders').checked;
+  if ((headers && shape.rows === 2 && shape.columns === 3) || (!headers && shape.rows === 1 && shape.columns === 3)) return 'scorecard';
   if (shape.rows * shape.columns === 1) return 'scorecard';
-  if (document.querySelector('#sheetHasHeaders').checked && ((shape.columns === 2 && shape.rows >= 2) || (shape.rows === 2 && shape.columns >= 2))) return 'leaderboard';
+  if (headers && ((shape.columns === 2 && shape.rows >= 2) || (shape.rows === 2 && shape.columns >= 2))) return 'leaderboard';
   return 'table';
 }
 
@@ -1254,6 +1339,9 @@ function openKpiBuilder(source = 'google', trigger = document.activeElement) {
   window.clearTimeout(sheetGridScrollTimer);
   document.querySelector('#sheetRange').value = 'A1';
   sheetSelection = parseSheetRange('A1');
+  sheetSelections = [sheetSelection];
+  activeSheetSelectionIndex = 0;
+  addingSeparateRange = false;
   document.querySelector('#sheetHasHeaders').checked = false;
   document.querySelector('#kpiGoal').value = '';
   document.querySelector('#periodGranularity').value = 'month';
@@ -1269,6 +1357,10 @@ function openKpiBuilder(source = 'google', trigger = document.activeElement) {
   document.querySelector('#sheetSelectionSummary').textContent = 'A1 · 1 cell';
   document.querySelector('#sheetFile').innerHTML = '<option value="">Loading your spreadsheets…</option>';
   document.querySelector('#sheetFile').disabled = true;
+  document.querySelector('#openSpreadsheetPicker').disabled = true;
+  document.querySelector('#selectedSpreadsheetName').textContent = 'Loading spreadsheets…';
+  document.querySelector('#selectedSpreadsheetMeta').textContent = 'Google Drive';
+  document.querySelector('#spreadsheetFileList').innerHTML = '<p>Loading spreadsheets…</p>';
   document.querySelector('#sheetTab').innerHTML = '<option value="">Choose a spreadsheet first</option>';
   document.querySelector('#sheetTab').disabled = true;
   document.querySelector('#sheetPickerTitle').textContent = 'Loading spreadsheets';
@@ -1285,11 +1377,14 @@ function openKpiBuilder(source = 'google', trigger = document.activeElement) {
     document.querySelector('#sheetPickerTitle').textContent = 'Spreadsheet list unavailable';
     document.querySelector('#sheetPickerSubtitle').textContent = error.message;
     document.querySelector('#sheetFile').innerHTML = '<option value="">Reconnect Google Sheets</option>';
+    document.querySelector('#selectedSpreadsheetName').textContent = 'Reconnect Google Sheets';
+    document.querySelector('#selectedSpreadsheetMeta').textContent = error.message;
     showToast('Reconnect Google Sheets', error.message);
   });
 }
 
 function closeKpiBuilder() {
+  if (document.querySelector('#spreadsheetPickerModal').classList.contains('is-visible')) closeSpreadsheetPicker();
   if (document.querySelector('#rangePickerModal').classList.contains('is-visible')) closeRangePicker();
   kpiBuilderModal.classList.remove('is-visible');
   kpiBuilderModal.setAttribute('aria-hidden', 'true');
@@ -1302,6 +1397,62 @@ function spreadsheetModifiedLabel(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Modified date unavailable';
   return `Updated ${timeAgo(date.toISOString())}`;
+}
+
+function syncSpreadsheetTrigger() {
+  const selected = availableSpreadsheets.find((spreadsheet) => spreadsheet.spreadsheetId === document.querySelector('#sheetFile').value);
+  document.querySelector('#selectedSpreadsheetName').textContent = selected?.title || (availableSpreadsheets.length ? 'Select a spreadsheet' : 'No spreadsheets found');
+  document.querySelector('#selectedSpreadsheetMeta').textContent = selected ? spreadsheetModifiedLabel(selected.modifiedTime) : 'Google Drive';
+}
+
+function renderSpreadsheetFiles(query = '') {
+  const normalizedQuery = String(query).trim().toLowerCase();
+  const visible = availableSpreadsheets.filter((spreadsheet) => !normalizedQuery || spreadsheet.title.toLowerCase().includes(normalizedQuery));
+  const list = document.querySelector('#spreadsheetFileList');
+  if (!visible.length) {
+    list.innerHTML = '<p>No spreadsheets match this search.</p>';
+  } else {
+    list.replaceChildren(...visible.map((spreadsheet) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'drive-file-card';
+      button.dataset.spreadsheetId = spreadsheet.spreadsheetId;
+      button.setAttribute('role', 'option');
+      button.setAttribute('aria-selected', String(spreadsheet.spreadsheetId === spreadsheetPickerSelection));
+      button.innerHTML = `<span aria-hidden="true">▦</span><div><strong>${escapeHtml(spreadsheet.title)}</strong><small>${escapeHtml(spreadsheetModifiedLabel(spreadsheet.modifiedTime))}</small></div>`;
+      return button;
+    }));
+  }
+  document.querySelector('#spreadsheetPickerCount').textContent = `${visible.length} spreadsheet${visible.length === 1 ? '' : 's'}`;
+  document.querySelector('#applySpreadsheetPicker').disabled = !spreadsheetPickerSelection;
+}
+
+function openSpreadsheetPicker() {
+  if (!availableSpreadsheets.length) return;
+  spreadsheetPickerSelection = document.querySelector('#sheetFile').value || availableSpreadsheets[0].spreadsheetId;
+  document.querySelector('#spreadsheetSearch').value = '';
+  renderSpreadsheetFiles();
+  const modal = document.querySelector('#spreadsheetPickerModal');
+  modal.classList.add('is-visible');
+  modal.setAttribute('aria-hidden', 'false');
+  document.querySelector('#spreadsheetSearch').focus();
+}
+
+function closeSpreadsheetPicker() {
+  const modal = document.querySelector('#spreadsheetPickerModal');
+  modal.classList.remove('is-visible');
+  modal.setAttribute('aria-hidden', 'true');
+  document.querySelector('#openSpreadsheetPicker').focus();
+}
+
+function applySpreadsheetPicker() {
+  if (!spreadsheetPickerSelection) return;
+  const select = document.querySelector('#sheetFile');
+  const changed = select.value !== spreadsheetPickerSelection;
+  select.value = spreadsheetPickerSelection;
+  syncSpreadsheetTrigger();
+  closeSpreadsheetPicker();
+  if (changed) select.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 async function loadSpreadsheetList() {
@@ -1327,6 +1478,8 @@ async function loadSpreadsheetList() {
     document.querySelector('#sheetPickerTitle').textContent = 'No spreadsheets found';
     document.querySelector('#sheetPickerSubtitle').textContent = 'Create or share a Google spreadsheet with this account, then reconnect.';
     document.querySelector('#spreadsheetPickerHelp').textContent = 'No files available';
+    document.querySelector('#openSpreadsheetPicker').disabled = true;
+    syncSpreadsheetTrigger();
     return [];
   }
   select.replaceChildren(...availableSpreadsheets.map((spreadsheet) => {
@@ -1336,6 +1489,10 @@ async function loadSpreadsheetList() {
     return option;
   }));
   select.disabled = false;
+  spreadsheetPickerSelection = select.value;
+  document.querySelector('#openSpreadsheetPicker').disabled = false;
+  syncSpreadsheetTrigger();
+  renderSpreadsheetFiles();
   document.querySelector('#spreadsheetPickerHelp').textContent = `${availableSpreadsheets.length} spreadsheet${availableSpreadsheets.length === 1 ? '' : 's'} · newest first${incompleteSearch ? ' · Google reported an incomplete search' : ''}`;
   await loadSpreadsheetMetadata();
   return availableSpreadsheets;
@@ -1383,7 +1540,7 @@ async function previewGoogleSelection() {
   const selectedSheet = document.querySelector('#sheetTab').value;
   const sheetId = Number(selectedSheet);
   if (!selectedSheet || !Number.isSafeInteger(sheetId)) throw new Error('Choose a sheet.');
-  if (!parseSheetRange(document.querySelector('#sheetRange').value)) throw new Error('Use a valid KPI range such as D8 or B2:E14.');
+  if (!parseSheetRanges(document.querySelector('#sheetRange').value)) throw new Error('Use valid KPI ranges such as D8, B2:E14, or A2,C2,F2.');
   if (document.querySelector('#kpiComparisonMode').value === 'range' && !document.querySelector('#comparisonRange').value) {
     throw new Error('Choose comparison cells from the sheet preview.');
   }
@@ -1518,7 +1675,27 @@ document.querySelector('#kpiFormat').addEventListener('change', () => {
     renderStructuredPreview(builderPreview.displayPayload);
   }
 });
+document.querySelector('#openSpreadsheetPicker').addEventListener('click', openSpreadsheetPicker);
+document.querySelector('#spreadsheetSearch').addEventListener('input', (event) => renderSpreadsheetFiles(event.currentTarget.value));
+document.querySelector('#spreadsheetFileList').addEventListener('click', (event) => {
+  const file = event.target.closest('[data-spreadsheet-id]');
+  if (!file) return;
+  spreadsheetPickerSelection = file.dataset.spreadsheetId;
+  renderSpreadsheetFiles(document.querySelector('#spreadsheetSearch').value);
+  document.querySelector(`[data-spreadsheet-id="${CSS.escape(spreadsheetPickerSelection)}"]`)?.focus();
+});
+document.querySelector('#spreadsheetFileList').addEventListener('dblclick', (event) => {
+  const file = event.target.closest('[data-spreadsheet-id]');
+  if (!file) return;
+  spreadsheetPickerSelection = file.dataset.spreadsheetId;
+  applySpreadsheetPicker();
+});
+document.querySelector('#applySpreadsheetPicker').addEventListener('click', applySpreadsheetPicker);
+document.querySelector('#cancelSpreadsheetPicker').addEventListener('click', closeSpreadsheetPicker);
+document.querySelector('#closeSpreadsheetPicker').addEventListener('click', closeSpreadsheetPicker);
+document.querySelector('#spreadsheetPickerModal').addEventListener('click', (event) => { if (event.target === event.currentTarget) closeSpreadsheetPicker(); });
 document.querySelector('#sheetFile').addEventListener('change', async () => {
+  syncSpreadsheetTrigger();
   loadedSpreadsheet = null;
   builderPreview = null;
   sheetGridState = null;
@@ -1549,18 +1726,39 @@ document.querySelector('#rangePickerSheet').addEventListener('change', async () 
   catch (error) { showToast('Sheet preview could not load', error.message); }
 });
 document.querySelector('#rangePickerInput').addEventListener('input', () => {
-  const parsed = parseSheetRange(document.querySelector('#rangePickerInput').value);
+  const parsed = parseSheetRanges(document.querySelector('#rangePickerInput').value);
   document.querySelector('#jumpToRangeButton').disabled = !parsed;
   document.querySelector('#applyRangePicker').disabled = !parsed;
 });
 document.querySelector('#jumpToRangeButton').addEventListener('click', async () => {
-  const parsed = parseSheetRange(document.querySelector('#rangePickerInput').value);
-  if (!parsed) return showToast('Range needs attention', 'Use a cell or range such as D8 or B2:E14.');
-  setSheetSelection(parsed.anchor, parsed.focus, { writeInput: false });
+  const parsed = parseSheetRanges(document.querySelector('#rangePickerInput').value);
+  if (!parsed) return showToast('Ranges need attention', 'Use ranges such as D8, B2:E14, or A2,C2,F2.');
+  sheetSelections = parsed;
+  activeSheetSelectionIndex = 0;
+  sheetSelection = sheetSelections[0];
+  scheduleSheetSelectionSync();
   try { await revealSheetSelection(); }
   catch (error) { showToast('Range could not load', error.message); }
 });
 document.querySelector('#rangePickerHasHeaders').addEventListener('change', () => {
+  document.querySelector('#rangePickerPreviewResult').textContent = 'Ready to apply';
+  syncSheetSelection();
+});
+document.querySelector('#addRangeSelection').addEventListener('click', (event) => {
+  addingSeparateRange = !addingSeparateRange;
+  event.currentTarget.setAttribute('aria-pressed', String(addingSeparateRange));
+  document.querySelector('#sheetPickerStatus').textContent = addingSeparateRange ? 'Click or drag the next separate range' : 'Drag to select';
+  if (addingSeparateRange) document.querySelector('#sheetGrid').focus();
+});
+document.querySelector('#rangeSelectionChips').addEventListener('click', (event) => {
+  const remove = event.target.closest('[data-remove-range]');
+  if (!remove) return;
+  const index = Number(remove.dataset.removeRange);
+  sheetSelections = sheetSelections.filter((selection, selectionIndex) => selectionIndex !== index);
+  activeSheetSelectionIndex = Math.max(0, Math.min(activeSheetSelectionIndex, sheetSelections.length - 1));
+  sheetSelection = sheetSelections[activeSheetSelectionIndex];
+  document.querySelector('#rangePickerInput').value = sheetSelectionsA1();
+  builderPreview = null;
   document.querySelector('#rangePickerPreviewResult').textContent = 'Ready to apply';
   syncSheetSelection();
 });
@@ -1573,14 +1771,17 @@ document.querySelector('#sheetGrid').addEventListener('pointerdown', (event) => 
   if (!cell) return;
   event.preventDefault();
   const coordinate = { row: Number(cell.dataset.row), column: Number(cell.dataset.column) };
+  const additive = addingSeparateRange || event.ctrlKey || event.metaKey;
   selectingSheetCells = true;
-  setSheetSelection(event.shiftKey ? sheetSelection.anchor : coordinate, coordinate);
+  setSheetSelection(event.shiftKey && !additive ? sheetSelection.anchor : coordinate, coordinate, { additive });
+  addingSeparateRange = false;
+  document.querySelector('#addRangeSelection').setAttribute('aria-pressed', 'false');
   cell.focus();
 });
 document.querySelector('#sheetGrid').addEventListener('pointerover', (event) => {
   if (!selectingSheetCells) return;
   const cell = event.target.closest('[data-sheet-cell]');
-  if (cell) setSheetSelection(sheetSelection.anchor, { row: Number(cell.dataset.row), column: Number(cell.dataset.column) });
+  if (cell) setSheetSelection(sheetSelection.anchor, { row: Number(cell.dataset.row), column: Number(cell.dataset.column) }, { selectionIndex: activeSheetSelectionIndex, writeInput: false });
 });
 document.querySelector('#sheetGrid').addEventListener('pointermove', (event) => {
   if (!selectingSheetCells) return;
@@ -1600,10 +1801,14 @@ document.querySelector('#sheetGrid').addEventListener('keydown', (event) => {
   const next = document.querySelector(`#sheetGrid [data-row="${row}"][data-column="${column}"]`);
   if (!next) return;
   const coordinate = { row, column };
-  setSheetSelection(event.shiftKey ? sheetSelection.anchor : coordinate, coordinate);
+  const additive = event.ctrlKey || event.metaKey;
+  setSheetSelection(event.shiftKey && !additive ? sheetSelection.anchor : coordinate, coordinate, { additive });
   next.focus();
 });
-document.addEventListener('pointerup', () => { selectingSheetCells = false; });
+document.addEventListener('pointerup', () => {
+  if (selectingSheetCells) document.querySelector('#rangePickerInput').value = sheetSelectionsA1();
+  selectingSheetCells = false;
+});
 document.querySelector('#sheetGrid').addEventListener('scroll', scheduleSheetGridLoad, { passive: true });
 document.querySelector('#reconnectSource').addEventListener('click', (event) => openFreshOAuth('google', event.currentTarget));
 document.querySelectorAll('.connect-source').forEach((button) => button.addEventListener('click', (event) => openFreshOAuth('google', event.currentTarget)));
@@ -1611,7 +1816,8 @@ document.querySelector('#browseIntegrations').addEventListener('click', (event) 
 document.querySelectorAll('.integration-catalog button').forEach((button) => button.addEventListener('click', () => showToast(button.querySelector('b').textContent, button.querySelector('i').textContent === 'Suggest' ? 'Request captured in this prototype.' : 'This connector is queued for a later phase.')));
 document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return;
-  if (document.querySelector('#rangePickerModal').classList.contains('is-visible')) closeRangePicker();
+  if (document.querySelector('#spreadsheetPickerModal').classList.contains('is-visible')) closeSpreadsheetPicker();
+  else if (document.querySelector('#rangePickerModal').classList.contains('is-visible')) closeRangePicker();
   else if (kpiBuilderModal.classList.contains('is-visible')) closeKpiBuilder();
 });
 
@@ -1623,6 +1829,10 @@ let featureReturnFocus = null;
 let loopTimer = null;
 
 function tvKpiContext(kpi) {
+  if (kpi.displayPayload?.layout === 'rep_metric_goal') {
+    const { metric, goal } = kpi.displayPayload;
+    return goal.value === 0 ? `${goal.label} ${formatKpiValue(goal.value, kpi.displayFormat)}` : `${((metric.value / goal.value) * 100).toFixed(0)}% of ${formatKpiValue(goal.value, kpi.displayFormat)} goal`;
+  }
   if (kpi.comparisonValue !== null && kpi.comparisonValue !== undefined) {
     const percent = kpi.comparisonValue === 0 ? null : (kpi.comparisonDelta / Math.abs(kpi.comparisonValue)) * 100;
     return `${kpi.comparisonDelta >= 0 ? '+' : ''}${formatKpiValue(kpi.comparisonDelta, kpi.displayFormat)}${percent === null ? '' : ` · ${percent >= 0 ? '+' : ''}${percent.toFixed(1)}%`}`;
@@ -1648,7 +1858,10 @@ function renderTvMode() {
   }
   grid.replaceChildren(...visibleKpis.map((kpi) => {
     const card = document.createElement('article');
-    card.innerHTML = `<small>${escapeHtml(kpi.name)}</small><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><span>${escapeHtml(tvKpiContext(kpi))}</span><em>${escapeHtml(kpi.sheetTitle)} · ${escapeHtml(kpi.sourceRange || kpi.range)}</em>`;
+    const composite = kpi.displayPayload?.layout === 'rep_metric_goal';
+    const title = composite ? `${kpi.displayPayload.rep.value} · ${kpi.displayPayload.metric.label === 'Metric' ? kpi.name : kpi.displayPayload.metric.label}` : kpi.name;
+    const value = composite ? kpi.displayPayload.metric.value : kpi.value;
+    card.innerHTML = `<small>${escapeHtml(title)}</small><strong>${escapeHtml(formatKpiValue(value, kpi.displayFormat))}</strong><span>${escapeHtml(tvKpiContext(kpi))}</span><em>${escapeHtml(kpi.sheetTitle)} · ${escapeHtml(kpi.sourceRange || kpi.range)}</em>`;
     return card;
   }));
   const freshest = visibleKpis.reduce((latest, kpi) => !latest || new Date(kpi.fetchedAt) > new Date(latest.fetchedAt) ? kpi : latest, null);
