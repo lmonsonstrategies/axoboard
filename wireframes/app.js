@@ -457,6 +457,8 @@ let liveKpis = [];
 let liveWorkspaceId = '';
 let liveWorkspaceName = '';
 let liveDashboardLayout = null;
+let liveEngagement = { summary: {}, events: [] };
+let liveBrand = null;
 let activeGoogleConnection = null;
 let availableSpreadsheets = [];
 let spreadsheetPickerSelection = '';
@@ -626,7 +628,7 @@ function selectDisplayType(type) {
   activeDisplayType = displayTypeHelp[type] ? type : 'scorecard';
   document.querySelectorAll('[data-display-type]').forEach((button) => button.classList.toggle('is-selected', button.dataset.displayType === activeDisplayType));
   document.querySelector('#displayTypeHelp').textContent = displayTypeHelp[activeDisplayType];
-  document.querySelector('#periodGranularityField').hidden = activeDisplayType !== 'rep_cards';
+  document.querySelector('#periodGranularityField').hidden = !['rep_cards','goal_pace','gauge'].includes(activeDisplayType);
   document.querySelector('#comparisonModeField').hidden = comparisonDisabledDisplayTypes.has(activeDisplayType);
   document.querySelector('#goalIntelligenceConfig').hidden = !['goal_pace', 'gauge'].includes(activeDisplayType);
   if (comparisonDisabledDisplayTypes.has(activeDisplayType)) {
@@ -1256,19 +1258,23 @@ function renderKpiCard(card, kpi, { interactive = true } = {}) {
   const comparisonText = kpi.comparisonValue === null ? '' : `${kpi.comparisonDelta >= 0 ? '+' : ''}${formatKpiValue(kpi.comparisonDelta, kpi.displayFormat)}${comparisonPercent === null ? '' : ` (${comparisonPercent >= 0 ? '+' : ''}${comparisonPercent.toFixed(1)}%)`} vs ${kpi.comparisonSourceRange}`;
   const contextText = comparisonText || (goalProgress === null ? (kpi.status === 'active' ? 'Live' : 'Needs attention') : `${goalProgress.toFixed(1)}% of ${formatKpiValue(kpi.goalValue, kpi.displayFormat)} goal`);
   const actions = interactive ? `<span class="kpi-card-actions"><button type="button" data-edit-live-kpi="${escapeHtml(kpi.id)}" aria-label="Edit ${escapeHtml(kpi.name)}" title="Edit KPI">✎</button><button type="button" data-sync-live-kpi="${escapeHtml(kpi.id)}" aria-label="Refresh ${escapeHtml(kpi.name)}" title="Refresh KPI">↻</button><button class="kpi-delete-button" type="button" data-delete-live-kpi="${escapeHtml(kpi.id)}" aria-label="Delete ${escapeHtml(kpi.name)}" title="Delete KPI">×</button></span>` : '<span class="preview-live-pill">Preview</span>';
-  const header = `<header class="structured-kpi-head"><span class="source-mark google">G</span><small>Google Sheets · ${escapeHtml(kpi.sourceRange || `${kpi.sheetTitle}!${kpi.range}`)}</small>${actions}</header>`;
+  const certified = kpi.certification?.status === 'certified' ? `<button class="certified-chip" type="button" data-live-trust="${escapeHtml(kpi.id)}">✓ Certified</button>` : '';
+  const header = `<header class="structured-kpi-head"><span class="source-mark google">G</span><small>Google Sheets · ${escapeHtml(kpi.sourceRange || `${kpi.sheetTitle}!${kpi.range}`)}</small>${certified}${actions}</header>`;
   if (displayType === 'goal_pace') {
     const target = Number(kpi.goalValue);
     const hasGoal = Number.isFinite(target) && target !== 0;
     const progress = hasGoal ? clampPercent((Number(kpi.value) / target) * 100) : 0;
     const remaining = hasGoal ? Math.max(0, target - Number(kpi.value)) : null;
-    card.innerHTML = `${header}<p>${escapeHtml(kpi.name)}</p><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><div class="goal-pace-copy"><span>${hasGoal ? `${progress.toFixed(1)}% complete` : 'Add a goal to calculate pace'}</span><b>${remaining === null ? 'Target needed' : `${formatKpiValue(remaining, kpi.displayFormat)} remaining`}</b></div><div class="goal-pace-track"><i style="width:${progress}%"></i><em style="left:${progress}%"></em></div><footer><span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span><b>${hasGoal && progress >= 100 ? 'Goal reached' : 'In progress'}</b></footer>`;
+    const intelligence = kpi.intelligence;
+    const paceCopy = intelligence ? `${formatKpiValue(intelligence.requiredPerDay, kpi.displayFormat)}/day required` : (remaining === null ? 'Target needed' : `${formatKpiValue(remaining, kpi.displayFormat)} remaining`);
+    const projection = intelligence ? `Projected ${formatKpiValue(intelligence.projectedFinish, kpi.displayFormat)}` : (hasGoal ? `${progress.toFixed(1)}% complete` : 'Add a goal to calculate pace');
+    card.innerHTML = `${header}<p>${escapeHtml(kpi.name)}</p><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><div class="goal-pace-copy"><span>${escapeHtml(projection)}</span><b>${escapeHtml(paceCopy)}</b></div><div class="goal-pace-track"><i style="width:${progress}%"></i><em style="left:${progress}%"></em></div><footer><span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span><b>${escapeHtml(intelligence?.status?.replaceAll('_',' ') || (hasGoal && progress >= 100 ? 'Goal reached' : 'In progress'))}</b></footer>`;
   } else if (displayType === 'gauge') {
     const value = Number(kpi.value);
     const configuredMax = Number(kpi.goalValue);
     const maximum = Number.isFinite(configuredMax) && configuredMax > 0 ? configuredMax : Math.max(10, 10 ** Math.ceil(Math.log10(Math.max(1, Math.abs(value)))));
     const progress = clampPercent((value / maximum) * 100);
-    card.innerHTML = `${header}<div class="structured-kpi-title"><p>Gauge · 0 to ${escapeHtml(formatKpiValue(maximum, kpi.displayFormat))}</p><strong>${escapeHtml(kpi.name)}</strong></div><div class="gauge-dial" style="--gauge-turn:${(progress / 100).toFixed(4)}turn"><div><strong>${escapeHtml(formatKpiValue(value, kpi.displayFormat))}</strong><span>${progress.toFixed(1)}%</span></div></div><footer><span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span><b>${Number.isFinite(configuredMax) && configuredMax > 0 ? 'Goal range' : 'Auto range'}</b></footer>`;
+    card.innerHTML = `${header}<div class="structured-kpi-title"><p>Gauge · 0 to ${escapeHtml(formatKpiValue(maximum, kpi.displayFormat))}</p><strong>${escapeHtml(kpi.name)}</strong></div><div class="gauge-dial" style="--gauge-turn:${(progress / 100).toFixed(4)}turn"><div><strong>${escapeHtml(formatKpiValue(value, kpi.displayFormat))}</strong><span>${progress.toFixed(1)}%</span></div></div><footer><span>${escapeHtml(kpi.intelligence ? `Projected ${formatKpiValue(kpi.intelligence.projectedFinish, kpi.displayFormat)}` : timeAgo(kpi.fetchedAt))}</span><b>${escapeHtml(kpi.intelligence?.status?.replaceAll('_',' ') || (Number.isFinite(configuredMax) && configuredMax > 0 ? 'Goal range' : 'Auto range'))}</b></footer>`;
   } else if (compositeScorecard) {
     const payload = kpi.displayPayload;
     const progress = payload.goal.value === 0 ? null : clampPercent((payload.metric.value / payload.goal.value) * 100);
@@ -1411,6 +1417,14 @@ function renderLiveKpis() {
     }
     card.dataset.liveKpi = kpi.id;
     card.dataset.cardKey = kpi.id;
+    const trustButton = card.querySelector('[data-live-trust]');
+    if (trustButton) {
+      trustButton.dataset.interactionStatus = 'working';
+      trustButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        openLiveMetricTrust(kpi.id, trustButton).catch((error) => showToast('Trust details unavailable', error.message));
+      });
+    }
     const refresh = card.querySelector('[data-sync-live-kpi]');
     refresh.dataset.interactionStatus = 'working';
     refresh.addEventListener('click', async (event) => {
@@ -1485,12 +1499,54 @@ function renderLiveConnections() {
   document.querySelector('#googleHealthBadge').textContent = activeGoogleConnection.status === 'healthy' ? '● Live' : '● Attention';
 }
 
+function renderLiveEngagement() {
+  const summaryValues = document.querySelectorAll('.trust-summary dd');
+  if (summaryValues.length >= 3) {
+    summaryValues[0].textContent = String(liveEngagement.summary?.certified || 0);
+    summaryValues[1].textContent = String(liveEngagement.summary?.stale || 0);
+    summaryValues[2].textContent = timeAgo(liveEngagement.summary?.latestVerifiedAt);
+  }
+  if (liveBrand) {
+    workspaceName.value = liveBrand.name || liveWorkspaceName;
+    if (liveBrand.tokens?.primary) brandColor.value = liveBrand.tokens.primary;
+    syncBrandPreview();
+    document.querySelector('#tvPreviewModal')?.style.setProperty('--customer-primary', liveBrand.tokens?.primary || brandColor.value);
+  }
+  const events = liveEngagement.events || [];
+  const ledger = document.querySelector('.event-ledger-table');
+  if (ledger) {
+    ledger.querySelectorAll('.event-ledger-row:not(.event-ledger-head)').forEach((row) => row.remove());
+    if (!events.length) {
+      const empty = document.createElement('div');
+      empty.className = 'event-ledger-row';
+      empty.innerHTML = '<span><b>No events yet</b><small>Waiting for a certified milestone</small></span><span><b>—</b><small>Refresh a goal-backed metric</small></span><span><i class="ledger-status held">Ready</i></span><span><b>Preview only</b></span><span><b>Published brand</b></span><button type="button" disabled>Inspect</button>';
+      ledger.append(empty);
+    } else events.forEach((event) => {
+      const row = document.createElement('div');
+      row.className = 'event-ledger-row';
+      const milestone = event.payload?.milestone ? `${event.payload.milestone}% milestone` : event.type;
+      row.innerHTML = `<span><b>${escapeHtml(new Date(event.occurredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))}</b><small>${escapeHtml(event.id.slice(0, 12))}…</small></span><span><b>${escapeHtml(event.type)}</b><small>${escapeHtml(event.metricName || milestone)}</small></span><span><i class="ledger-status delivered">Recorded</i><small>${escapeHtml(event.delivery.status)}</small></span><span><b>Preview ledger</b><small>No external delivery</small></span><span><b>${escapeHtml(liveBrand?.name || liveWorkspaceName)} v${escapeHtml(event.brandVersion)}</b><small>Customer-facing</small></span><button type="button">Inspect</button>`;
+      row.querySelector('button').addEventListener('click', () => showToast('Immutable milestone event', `${event.idempotencyKey} · rule v${event.ruleVersion}`));
+      ledger.append(row);
+    });
+  }
+  const ledgerStats = document.querySelectorAll('.ledger-summary strong');
+  if (ledgerStats.length >= 4) {
+    ledgerStats[0].textContent = String(events.length);
+    ledgerStats[1].textContent = String(events.filter((event) => event.delivery.status === 'pending').length);
+    ledgerStats[2].textContent = '0';
+    ledgerStats[3].textContent = '100%';
+  }
+}
+
 async function loadLiveData() {
   try {
     const bootstrap = await apiJson('/api/axoboard/bootstrap');
-    const { session, connections: connectionPayload, kpis: kpiPayload, dashboard: dashboardPayload } = bootstrap;
+    const { session, connections: connectionPayload, kpis: kpiPayload, dashboard: dashboardPayload, engagement, brand } = bootstrap;
     liveConnections = connectionPayload.connections || [];
     liveKpis = kpiPayload.kpis || [];
+    liveEngagement = engagement || { summary: {}, events: [] };
+    liveBrand = brand || null;
     if (session.user?.workspace_name) {
       liveWorkspaceId = session.user.workspace_id;
       liveWorkspaceName = session.user.workspace_name;
@@ -1508,6 +1564,7 @@ async function loadLiveData() {
     }
     renderLiveConnections();
     renderLiveKpis();
+    renderLiveEngagement();
   } catch (error) {
     console.warn('[axoboard] live integration state unavailable', error.message);
   }
@@ -1594,6 +1651,9 @@ function openKpiBuilder(source = 'google', trigger = document.activeElement, kpi
   document.querySelector('#sheetHasHeaders').checked = false;
   document.querySelector('#kpiGoal').value = '';
   document.querySelector('#periodGranularity').value = 'month';
+  document.querySelector('#goalDirection').value = 'higher_is_better';
+  document.querySelector('#goalCalendar').value = 'weekdays';
+  document.querySelector('#goalTimezone').value = 'America/Denver';
   selectDisplayType('scorecard');
   document.querySelector('#kpiComparisonMode').value = 'none';
   document.querySelector('#kpiComparisonFields').hidden = true;
@@ -1658,6 +1718,9 @@ async function hydrateKpiBuilder(kpi) {
   previewKpiName.textContent = kpi.name;
   document.querySelector('#kpiFormat').value = kpi.displayFormat || 'number';
   document.querySelector('#periodGranularity').value = kpi.periodGranularity || 'month';
+  document.querySelector('#goalDirection').value = kpi.goalDirection || 'higher_is_better';
+  document.querySelector('#goalCalendar').value = kpi.goalCalendarType || 'weekdays';
+  document.querySelector('#goalTimezone').value = kpi.goalTimezone || 'America/Denver';
   document.querySelector('#kpiGoal').value = kpi.goalValue ?? '';
   document.querySelector('#kpiComparisonMode').value = kpi.comparisonRange ? 'range' : 'none';
   document.querySelector('#kpiComparisonFields').hidden = !kpi.comparisonRange;
@@ -1913,7 +1976,11 @@ async function saveLiveKpi() {
       rangeRoles: rangeRolesForPayload(primaryRangeRoles, document.querySelector('#sheetRange').value.trim()),
       aggregation: document.querySelector('#sheetAggregation').value, includeHeaders: document.querySelector('#sheetHasHeaders').checked, name: kpiName.value.trim(),
       displayFormat: document.querySelector('#kpiFormat').value, displayType: activeDisplayType,
-      periodGranularity: document.querySelector('#periodGranularity').value, ...comparisonBuilderPayload()
+      periodGranularity: document.querySelector('#periodGranularity').value,
+      goalDirection: document.querySelector('#goalDirection').value,
+      goalCalendarType: document.querySelector('#goalCalendar').value,
+      goalTimezone: document.querySelector('#goalTimezone').value,
+      ...comparisonBuilderPayload()
     })
   });
   closeKpiBuilder();
@@ -2468,6 +2535,29 @@ function openDrilldown(key, trigger) {
   openFeatureModal('drilldownModal', trigger);
 }
 
+async function openLiveMetricTrust(mappingId, trigger) {
+  const payload = await apiJson(`/api/axoboard/metrics/${encodeURIComponent(mappingId)}/trust`);
+  const metric = payload.metric;
+  document.querySelector('#drilldownTitle').textContent = `${metric.name} · Certified metric`;
+  document.querySelector('#drilldownSubtitle').textContent = `${metric.certification.status} · verified ${timeAgo(metric.freshness.fetchedAt)}`;
+  document.querySelector('#drilldownSource').textContent = 'Google Sheets';
+  document.querySelector('#drilldownPath').textContent = `${metric.source.spreadsheetTitle} → ${metric.source.sheetTitle} → ${metric.source.range}`;
+  const liveKpi = liveKpis.find((kpi) => kpi.id === mappingId);
+  document.querySelector('#drilldownValue').textContent = liveKpi ? formatKpiValue(liveKpi.value, liveKpi.displayFormat) : '—';
+  document.querySelector('#drilldownFormula').textContent = `Read-only source · refresh ${Math.round(metric.freshness.refreshSeconds / 60)}m`;
+  document.querySelector('#drilldownTableTitle').textContent = 'Certified source and immutable lineage';
+  document.querySelector('.drilldown-content aside p').textContent = metric.definition;
+  const facts = document.querySelectorAll('.drilldown-content aside dd');
+  if (facts.length >= 4) {
+    facts[0].textContent = liveKpi?.goal?.timezone || 'Workspace timezone';
+    facts[1].textContent = `${Math.round(metric.freshness.staleAfterSeconds / 60)} minutes`;
+    facts[2].textContent = metric.certification.method.replaceAll('_', ' ');
+    facts[3].textContent = timeAgo(metric.certification.certifiedAt);
+  }
+  document.querySelector('#drilldownSourceMark').textContent = 'G';
+  openFeatureModal('drilldownModal', trigger);
+}
+
 document.querySelectorAll('.kpi-card[data-drilldown]').forEach((card) => {
   card.addEventListener('click', (event) => {
     if (!event.target.closest('button')) openDrilldown(card.dataset.drilldown, card);
@@ -2481,6 +2571,11 @@ document.querySelectorAll('.kpi-card[data-drilldown]').forEach((card) => {
 });
 document.querySelectorAll('[data-open-trust], #openMetricTrust').forEach((button) => button.addEventListener('click', (event) => {
   event.stopPropagation();
+  const liveMetric = liveKpis.find((kpi) => kpi.certification?.status === 'certified');
+  if (liveMetric) {
+    openLiveMetricTrust(liveMetric.id, event.currentTarget).catch((error) => showToast('Trust details unavailable', error.message));
+    return;
+  }
   openDrilldown('net-sales', event.currentTarget);
   document.querySelector('#drilldownTitle').textContent = 'Revenue to goal · Certified metric';
   document.querySelector('#drilldownSubtitle').textContent = '$82,400 · healthy · verified 2 minutes ago';

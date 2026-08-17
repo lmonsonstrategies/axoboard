@@ -525,6 +525,57 @@ try {
   assert.equal(scalarSheetGoalBody.preview.goalValue, 50000);
   assert.equal(scalarSheetGoalBody.preview.goalSource, 'google_sheets');
 
+  const createGoalMetric = await api('/api/axoboard/kpis', {
+    method: 'POST', cookie: first.cookie,
+    body: {
+      ...selection, comparisonRange: '', comparisonSheetId: null, name: 'Certified monthly revenue', displayFormat: 'currency',
+      displayType: 'goal_pace', goalValue: 25, periodGranularity: 'month', goalDirection: 'higher_is_better',
+      goalCalendarType: 'weekdays', goalTimezone: 'America/Denver'
+    }
+  });
+  const createGoalText = await createGoalMetric.text();
+  assert.equal(createGoalMetric.status, 201, createGoalText);
+  const goalKpi = JSON.parse(createGoalText).kpi;
+  const goalKpiList = await api('/api/axoboard/kpis', { cookie: first.cookie });
+  const persistedGoalKpi = (await goalKpiList.json()).kpis.find((kpi) => kpi.id === goalKpi.id);
+  assert.equal(persistedGoalKpi.certification.status, 'certified');
+  assert.equal(persistedGoalKpi.certification.method, 'source_contract_v1');
+  assert.equal(persistedGoalKpi.goal.periodGranularity, 'month');
+  assert.equal(persistedGoalKpi.goalCalendarType, 'weekdays');
+  assert.equal(persistedGoalKpi.goalTimezone, 'America/Denver');
+  assert.ok(persistedGoalKpi.intelligence.projectedFinish > 0);
+  assert.equal(persistedGoalKpi.intelligence.nextMilestone, 90);
+
+  const trustResponse = await api(`/api/axoboard/metrics/${goalKpi.id}/trust`, { cookie: first.cookie });
+  const trustBody = await trustResponse.json();
+  assert.equal(trustResponse.status, 200, JSON.stringify(trustBody));
+  assert.equal(trustBody.metric.mappingId, goalKpi.id);
+  assert.equal(trustBody.metric.source.range, 'D8:D9');
+  assert.equal(trustBody.metric.freshness.staleAfterSeconds, 900);
+  assert.equal(trustBody.metric.lineageHash.length, 64);
+  const foreignTrust = await api(`/api/axoboard/metrics/${goalKpi.id}/trust`, { cookie: second.cookie });
+  assert.equal(foreignTrust.status, 404, 'another workspace cannot discover certified metric trust details');
+
+  const firstEvents = await api('/api/axoboard/events', { cookie: first.cookie });
+  const firstEventBody = await firstEvents.json();
+  assert.equal(firstEvents.status, 200, JSON.stringify(firstEventBody));
+  assert.deepEqual(firstEventBody.events.map((event) => event.payload.milestone).sort((a, b) => a - b), [25, 50, 75]);
+  assert.ok(firstEventBody.events.every((event) => event.delivery.status === 'pending'));
+  const isolatedEvents = await api('/api/axoboard/events', { cookie: second.cookie });
+  assert.deepEqual((await isolatedEvents.json()).events, [], 'milestone ledger is workspace scoped');
+  const repeatGoalSync = await api(`/api/axoboard/kpis/${goalKpi.id}/sync`, { method: 'POST', cookie: first.cookie });
+  assert.equal(repeatGoalSync.status, 200, await repeatGoalSync.text());
+  const repeatedEvents = await api('/api/axoboard/events', { cookie: first.cookie });
+  assert.equal((await repeatedEvents.json()).events.length, 3, 'repeated snapshots cannot duplicate milestone events in one goal period');
+  const goalBootstrap = await api('/api/axoboard/bootstrap', { cookie: first.cookie });
+  const goalBootstrapBody = await goalBootstrap.json();
+  assert.equal(goalBootstrapBody.brand.name, 'Google Primary');
+  assert.equal(goalBootstrapBody.brand.version, 1);
+  assert.ok(goalBootstrapBody.engagement.summary.certified >= 1);
+  assert.equal(goalBootstrapBody.engagement.events.length, 3);
+  const deleteGoalMetric = await api(`/api/axoboard/kpis/${goalKpi.id}`, { method: 'DELETE', cookie: first.cookie });
+  assert.equal(deleteGoalMetric.status, 200);
+
   const ambiguousRange = await api('/api/axoboard/kpis/google/preview', {
     method: 'POST', cookie: first.cookie,
     body: { ...selection, range: 'D8:D10', includeHeaders: false, comparisonRange: '' }
