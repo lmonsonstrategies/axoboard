@@ -224,7 +224,9 @@ const fakeGoogle = createServer(async (req, res) => {
       ["'Summary'!F2", [[50000]]],
       ["'Summary'!A1:A2", [['Rep'], ['Andrew']]],
       ["'Summary'!C1:C2", [['Monthly Revenue'], [46189]]],
-      ["'Summary'!F1:F2", [['Goal'], [50000]]]
+      ["'Summary'!F1:F2", [['Goal'], [50000]]],
+      ["'Summary'!G1:J1", [['Andrew', 'Jacob', 'Jaden', 'Xavier']]],
+      ["'Summary'!G4:J4", [[46189, 13897, 64281, 21938]]]
     ]);
     assert.ok(ranges.every((range) => selectedValues.has(range)), `unexpected batch ranges: ${ranges.join(',')}`);
     return json(200, {
@@ -477,6 +479,22 @@ try {
     rep: { label: 'Rep', value: 'Andrew' }, metric: { label: 'Monthly Revenue', value: 46189 }, goal: { label: 'Goal', value: 50000 }
   }, 'scorecard headers provide the rep, metric, and goal labels shown on the card');
 
+  const roleBasedLeaderboard = await api('/api/axoboard/kpis/google/preview', {
+    method: 'POST', cookie: first.cookie,
+    body: {
+      ...selection, range: 'G1:J1,G4:J4', includeHeaders: false, displayType: 'leaderboard', comparisonRange: '',
+      rangeRoles: [{ range: 'G1:J1', role: 'header' }, { range: 'G4:J4', role: 'metric' }]
+    }
+  });
+  const roleBasedLeaderboardText = await roleBasedLeaderboard.text();
+  assert.equal(roleBasedLeaderboard.status, 200, roleBasedLeaderboardText);
+  const rolePreview = JSON.parse(roleBasedLeaderboardText).preview;
+  assert.equal(rolePreview.includeHeaders, true, 'a separate header range enables headers without an inline header row');
+  assert.deepEqual(rolePreview.rangeRoles, [{ range: 'G1:J1', role: 'header' }, { range: 'G4:J4', role: 'metric' }]);
+  assert.deepEqual(rolePreview.displayPayload.items.map((item) => [item.label, item.value]), [
+    ['Andrew', 46189], ['Jacob', 13897], ['Jaden', 64281], ['Xavier', 21938]
+  ], 'one header range aligns with a separate metrics range');
+
   const ambiguousRange = await api('/api/axoboard/kpis/google/preview', {
     method: 'POST', cookie: first.cookie,
     body: { ...selection, range: 'D8:D10', includeHeaders: false, comparisonRange: '' }
@@ -523,6 +541,38 @@ try {
   assert.equal(syncComposite.status, 200, await syncComposite.text());
   const deleteComposite = await api(`/api/axoboard/kpis/${compositeKpi.id}`, { method: 'DELETE', cookie: first.cookie });
   assert.equal(deleteComposite.status, 200);
+
+  const createRoleKpi = await api('/api/axoboard/kpis', {
+    method: 'POST', cookie: first.cookie,
+    body: {
+      ...selection, range: 'G1:J1,G4:J4', includeHeaders: false, displayType: 'leaderboard', comparisonRange: '',
+      rangeRoles: [{ range: 'G1:J1', role: 'header' }, { range: 'G4:J4', role: 'metric' }],
+      name: 'Revenue leaderboard', displayFormat: 'currency'
+    }
+  });
+  const createRoleText = await createRoleKpi.text();
+  assert.equal(createRoleKpi.status, 201, createRoleText);
+  const roleKpi = JSON.parse(createRoleText).kpi;
+  const editRoleKpi = await api(`/api/axoboard/kpis/${roleKpi.id}`, {
+    method: 'PUT', cookie: first.cookie,
+    body: {
+      ...selection, range: 'G1:J1,G4:J4', includeHeaders: false, displayType: 'leaderboard', comparisonRange: '',
+      rangeRoles: [{ range: 'G1:J1', role: 'header' }, { range: 'G4:J4', role: 'metric' }],
+      name: 'Monthly revenue leaderboard', displayFormat: 'number'
+    }
+  });
+  const editRoleText = await editRoleKpi.text();
+  assert.equal(editRoleKpi.status, 200, editRoleText);
+  const editedList = await api('/api/axoboard/kpis', { cookie: first.cookie });
+  const editedRoleKpi = (await editedList.json()).kpis.find((kpi) => kpi.id === roleKpi.id);
+  assert.equal(editedRoleKpi.name, 'Monthly revenue leaderboard');
+  assert.equal(editedRoleKpi.displayFormat, 'number');
+  assert.equal(editedRoleKpi.spreadsheetId, 'sheet_test_123456789');
+  assert.deepEqual(editedRoleKpi.rangeRoles, [{ range: 'G1:J1', role: 'header' }, { range: 'G4:J4', role: 'metric' }]);
+  const crossTenantEdit = await api(`/api/axoboard/kpis/${roleKpi.id}`, { method: 'PUT', cookie: second.cookie, body: {} });
+  assert.equal(crossTenantEdit.status, 404, 'another workspace cannot discover or edit the KPI');
+  const deleteRoleKpi = await api(`/api/axoboard/kpis/${roleKpi.id}`, { method: 'DELETE', cookie: first.cookie });
+  assert.equal(deleteRoleKpi.status, 200);
 
   const create = await api('/api/axoboard/kpis', { method: 'POST', cookie: first.cookie, body: { ...selection, name: 'Qualified pipeline', displayFormat: 'currency' } });
   const createText = await create.text();

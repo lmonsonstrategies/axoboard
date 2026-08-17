@@ -129,14 +129,24 @@ const picker = await evaluate(`(async () => {
   setSheetSelection({ row: 2, column: 1 });
   setSheetSelection({ row: 2, column: 3 }, undefined, { additive: true });
   setSheetSelection({ row: 2, column: 6 }, undefined, { additive: true });
+  sheetSelectionRoles = ['header', 'metric', 'metric'];
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   const modal = document.querySelector('.range-picker-modal').getBoundingClientRect();
   const button = document.querySelector('#selectRangeButton').getBoundingClientRect();
-  return { renderMs, dragUpdateMs, batchedSelectionsMs: performance.now() - dragStart, cells: document.querySelectorAll('#sheetGrid [data-sheet-cell]').length, selectedCells: document.querySelectorAll('#sheetGrid [data-sheet-cell].is-selected').length, ranges: document.querySelector('#rangePickerInput').value, chips: document.querySelectorAll('#rangeSelectionChips > span').length, modal: { width: modal.width, height: modal.height }, button: { width: button.width, height: button.height } };
+  return { renderMs, dragUpdateMs, batchedSelectionsMs: performance.now() - dragStart, cells: document.querySelectorAll('#sheetGrid [data-sheet-cell]').length, selectedCells: document.querySelectorAll('#sheetGrid [data-sheet-cell].is-selected').length, ranges: document.querySelector('#rangePickerInput').value, chips: document.querySelectorAll('#rangeSelectionChips > span').length, roleSelects: document.querySelectorAll('#rangeSelectionChips select').length, modal: { width: modal.width, height: modal.height }, button: { width: button.width, height: button.height } };
 })()`);
 
-const visualizations = await evaluate(`(() => {
-  const base = { value: 42, comparisonValue: 40, comparisonDelta: 2, goalValue: 100, status: 'active', displayFormat: 'number', aggregation: 'single_value', sheetTitle: 'Audit', range: 'A1:B4', sourceRange: "'Audit'!A1:B4", fetchedAt: new Date().toISOString() };
+await send('Emulation.setDeviceMetricsOverride', { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
+const laptopPicker = await evaluate(`(() => {
+  const add = document.querySelector('#addRangeSelection').getBoundingClientRect();
+  const grid = document.querySelector('#sheetGrid').getBoundingClientRect();
+  const footer = document.querySelector('.range-picker-modal > footer').getBoundingClientRect();
+  return { add: { top: add.top, bottom: add.bottom, width: add.width, height: add.height }, grid: { top: grid.top, bottom: grid.bottom, height: grid.height }, footer: { top: footer.top }, viewport: { width: innerWidth, height: innerHeight } };
+})()`);
+await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+
+const visualizations = await evaluate(`(async () => {
+  const base = { value: 42, comparisonValue: 40, comparisonDelta: 2, goalValue: 100, status: 'active', displayFormat: 'number', aggregation: 'single_value', spreadsheetId: 'sheet-audit-1', spreadsheetTitle: 'Monthly Revenue', sheetId: 1, sheetTitle: 'Audit', range: 'A1:B4', rangeRoles: [], includeHeaders: false, sourceRange: "'Audit'!A1:B4", fetchedAt: new Date().toISOString() };
   const paired = { kind: 'paired', orientation: 'columns', headers: { label: 'Rep', value: 'Sales' }, items: [{ label: 'Ava', value: 90 }, { label: 'Ben', value: 70 }] };
   liveKpis = [
     ['scorecard', { kind: 'scorecard', layout: 'rep_metric_goal', rep: { label: 'Rep', value: 'Ava' }, metric: { label: 'Monthly Revenue', value: 90 }, goal: { label: 'Goal', value: 100 } }], ['goal_pace', { kind: 'scalar', headers: { value: 'Revenue' } }], ['gauge', { kind: 'scalar', headers: { value: 'Revenue' } }],
@@ -149,8 +159,16 @@ const visualizations = await evaluate(`(() => {
   renderLiveKpis();
   activeDisplayType = 'scorecard';
   renderStructuredPreview(liveKpis[0].displayPayload);
+  loadedSpreadsheet = { input: 'sheet-audit-1', title: 'Monthly Revenue', sheets: [{ sheetId: 1, title: 'Audit' }] };
+  document.querySelector('#sheetFile').value = 'sheet-audit-1';
+  document.querySelector('#sheetTab').replaceChildren(new Option('Audit', '1'));
+  document.querySelector('#comparisonSheet').replaceChildren(new Option('Audit', '1'));
+  editingKpiId = liveKpis[0].id;
+  await hydrateKpiBuilder(liveKpis[0]);
+  showBuilderStep(3);
   return {
     cards: document.querySelectorAll('[data-live-kpi]').length,
+    editButtons: document.querySelectorAll('[data-edit-live-kpi]').length,
     leaderboardHeaders: [...document.querySelectorAll('.leaderboard-head > *')].map((node) => node.textContent.trim()),
     heatmapCorner: document.querySelector('.heatmap-visual header span')?.textContent.trim(),
     scalarStructured: document.querySelector('[data-live-kpi="audit-scorecard"]')?.classList.contains('kpi-card-structured'),
@@ -158,9 +176,14 @@ const visualizations = await evaluate(`(() => {
     sheetsGoalDisabled: document.querySelector('#kpiGoal').disabled,
     sheetsGoalHelp: document.querySelector('#kpiGoalHelp').textContent,
     comparisonHidden: document.querySelector('#comparisonModeField').hidden,
-    tableHeaders: [...document.querySelectorAll('[data-live-kpi="audit-table"] th')].map((node) => node.textContent.trim())
+    tableHeaders: [...document.querySelectorAll('[data-live-kpi="audit-table"] th')].map((node) => node.textContent.trim()),
+    editName: document.querySelector('#kpiName').value,
+    editRange: document.querySelector('#sheetRange').value,
+    editAction: document.querySelector('#builderNext').textContent
   };
 })()`);
+
+await evaluate('showBuilderStep(2)');
 
 await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
 const mobile = await evaluate(`(() => {
@@ -180,7 +203,7 @@ const warmLoad = await evaluate(`(() => {
   return { assetBytes: resources.filter((entry) => ['/app.js','/styles.css'].includes(entry.name)).reduce((total, entry) => total + entry.transferSize, 0), assetBodyBytes: resources.filter((entry) => ['/app.js','/styles.css'].includes(entry.name)).reduce((total, entry) => total + entry.encodedBodySize, 0), resources };
 })()`);
 
-console.log(JSON.stringify({ firstLoad, warmLoad, drivePicker, picker, visualizations, mobile }, null, 2));
+console.log(JSON.stringify({ firstLoad, warmLoad, drivePicker, picker, laptopPicker, visualizations, mobile }, null, 2));
 assert.deepEqual(firstLoad.apiRequests, ['/api/axoboard/bootstrap'], 'app startup uses one product bootstrap request');
 assert.ok(firstLoad.domInteractive < 1000, 'local app shell becomes interactive in under one second');
 assert.ok(firstLoad.assetBodyBytes < 90_000, 'compressed core JS and CSS remain under 90 KB');
@@ -195,10 +218,15 @@ assert.ok(picker.dragUpdateMs < 20, '80 drag updates complete synchronously in u
 assert.ok(picker.batchedSelectionsMs < 250, 'batched drag selection paints within the headless-browser frame budget');
 assert.equal(picker.ranges, 'A2,C2,F2', 'picker preserves ordered non-adjacent selections');
 assert.equal(picker.chips, 3, 'picker exposes each selected range as a removable chip');
+assert.equal(picker.roleSelects, 3, 'every selected range can be assigned as Headers or Metrics');
 assert.equal(picker.selectedCells, 3, 'non-adjacent selected cells remain visibly selected');
 assert.ok(picker.modal.width >= 1400, 'desktop picker uses the near-full-screen workspace');
 assert.ok(picker.button.height >= 55, 'Choose Cells action is a prominent touch target');
+assert.ok(laptopPicker.add.width >= 100 && laptopPicker.add.height >= 42, 'Add range control remains visible at 100% laptop scaling');
+assert.ok(laptopPicker.add.top >= 0 && laptopPicker.add.bottom <= laptopPicker.viewport.height, 'Add range control stays inside the laptop viewport');
+assert.ok(laptopPicker.grid.height >= 160 && laptopPicker.grid.bottom <= laptopPicker.footer.top, 'sheet canvas yields space to persistent controls without overlapping the footer');
 assert.equal(visualizations.cards, 12, 'all card types render from their saved payload');
+assert.equal(visualizations.editButtons, 12, 'every saved KPI exposes an edit action');
 assert.deepEqual(visualizations.leaderboardHeaders, ['#', 'Rep', 'Sales'], 'leaderboard preserves source headers');
 assert.equal(visualizations.heatmapCorner, 'Rep / Day', 'heatmap preserves its corner header');
 assert.equal(visualizations.scalarStructured, false, 'scalar header metadata does not change scorecard rendering');
@@ -207,6 +235,9 @@ assert.equal(visualizations.sheetsGoalDisabled, true, 'a Sheets-provided scoreca
 assert.match(visualizations.sheetsGoalHelp, /Goal cell selected in Google Sheets/, 'scorecard explains where its live goal comes from');
 assert.equal(visualizations.comparisonHidden, true, 'a composite scorecard hides redundant comparison controls');
 assert.deepEqual(visualizations.tableHeaders, ['Rep', 'Sales'], 'table preserves source headers');
+assert.equal(visualizations.editName, 'Audit scorecard', 'editing hydrates the saved KPI name');
+assert.equal(visualizations.editRange, 'A1:B4', 'editing hydrates the saved Sheets range');
+assert.equal(visualizations.editAction, 'Save KPI changes', 'editing uses an explicit update action');
 assert.ok(mobile.modal.width <= mobile.viewportWidth && mobile.modal.height <= 844, 'mobile picker stays within the viewport');
 assert.ok(mobile.driveModal.width <= mobile.viewportWidth && mobile.driveModal.height <= 844, 'mobile Drive chooser stays within the viewport');
 assert.ok(mobile.button.height >= 55, 'mobile Choose Cells action remains a prominent touch target');

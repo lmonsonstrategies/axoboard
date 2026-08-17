@@ -411,6 +411,9 @@ let spreadsheetPickerSelection = '';
 let loadedSpreadsheet = null;
 let builderPreview = null;
 let builderPreviewRequest = 0;
+let editingKpiId = null;
+let primaryRangeRoles = [];
+let comparisonRangeRoles = [];
 let activeDisplayType = 'scorecard';
 let sheetGridState = null;
 let sheetGridRequest = 0;
@@ -419,6 +422,7 @@ let sheetSelectionFrame = null;
 let selectingSheetCells = false;
 let sheetSelection = { anchor: { row: 1, column: 1 }, focus: { row: 1, column: 1 } };
 let sheetSelections = [sheetSelection];
+let sheetSelectionRoles = ['metric'];
 let activeSheetSelectionIndex = 0;
 let addingSeparateRange = false;
 let rangePickerTarget = 'primary';
@@ -579,9 +583,24 @@ function selectDisplayType(type) {
 }
 
 function currentRangeShape() {
-  const parsed = parseSheetRanges(document.querySelector('#sheetRange').value);
+  const rangeValue = document.querySelector('#sheetRange').value;
+  const parsed = parseSheetRanges(rangeValue);
   if (!parsed) return null;
   const shapes = parsed.map((range) => ({ rows: Math.abs(range.focus.row - range.anchor.row) + 1, columns: Math.abs(range.focus.column - range.anchor.column) + 1 }));
+  const roles = rangeRolesForPayload(primaryRangeRoles, rangeValue);
+  if (roles.some((item) => item.role === 'header')) {
+    const combinedShape = (role) => {
+      const selected = shapes.filter((shape, index) => roles[index].role === role);
+      if (!selected.length) return null;
+      if (selected.every((shape) => shape.rows === selected[0].rows)) return { rows: selected[0].rows, columns: selected.reduce((total, shape) => total + shape.columns, 0) };
+      if (selected.every((shape) => shape.columns === selected[0].columns)) return { rows: selected.reduce((total, shape) => total + shape.rows, 0), columns: selected[0].columns };
+      return null;
+    };
+    const headerShape = combinedShape('header');
+    const metricShape = combinedShape('metric');
+    if (!headerShape || !metricShape || headerShape.rows !== 1 || headerShape.columns !== metricShape.columns) return { rows: 0, columns: 0, ranges: shapes.length, incompatible: true };
+    return { rows: 1 + metricShape.rows, columns: metricShape.columns, ranges: shapes.length };
+  }
   if (shapes.every((shape) => shape.rows === shapes[0].rows)) return { rows: shapes[0].rows, columns: shapes.reduce((total, shape) => total + shape.columns, 0), ranges: shapes.length };
   if (shapes.every((shape) => shape.columns === shapes[0].columns)) return { rows: shapes.reduce((total, shape) => total + shape.rows, 0), columns: shapes[0].columns, ranges: shapes.length };
   return { rows: 0, columns: 0, ranges: shapes.length, incompatible: true };
@@ -589,7 +608,7 @@ function currentRangeShape() {
 
 function updateDisplayRequirement() {
   const note = document.querySelector('#displayDataRequirement');
-  const headers = document.querySelector('#sheetHasHeaders').checked;
+  const headers = primaryUsesHeaders();
   const shape = currentRangeShape();
   note.classList.remove('is-warning');
   if (activeDisplayType === 'scorecard') {
@@ -717,6 +736,19 @@ function sheetSelectionsA1() {
   return sheetSelections.map(sheetSelectionA1).join(',');
 }
 
+function normalizedSelectionRoles(roles = sheetSelectionRoles) {
+  return sheetSelections.map((selection, index) => ({ range: sheetSelectionA1(selection), role: roles[index] === 'header' ? 'header' : 'metric' }));
+}
+
+function primaryUsesHeaders() {
+  return document.querySelector('#sheetHasHeaders').checked || primaryRangeRoles.some((item) => item.role === 'header');
+}
+
+function rangeRolesForPayload(roles, rangeValue) {
+  const ranges = String(rangeValue || '').split(',').map((range) => range.trim().toUpperCase()).filter(Boolean);
+  return roles.length === ranges.length && roles.every((item, index) => item.range === ranges[index]) ? roles : [];
+}
+
 function sheetSelectionCellCount() {
   return sheetSelections.reduce((total, selection) => {
     const bounds = sheetSelectionBounds(selection);
@@ -729,7 +761,8 @@ function renderRangeSelectionChips() {
   chips.replaceChildren(...sheetSelections.map((selection, index) => {
     const chip = document.createElement('span');
     chip.className = index === activeSheetSelectionIndex ? 'is-active' : '';
-    chip.innerHTML = `<b>${index + 1}</b><strong>${escapeHtml(sheetSelectionA1(selection))}</strong>${sheetSelections.length > 1 ? `<button type="button" data-remove-range="${index}" aria-label="Remove ${escapeHtml(sheetSelectionA1(selection))}">×</button>` : ''}`;
+    const role = sheetSelectionRoles[index] === 'header' ? 'header' : 'metric';
+    chip.innerHTML = `<b>${index + 1}</b><strong>${escapeHtml(sheetSelectionA1(selection))}</strong><select data-range-role="${index}" aria-label="Role for ${escapeHtml(sheetSelectionA1(selection))}"><option value="metric"${role === 'metric' ? ' selected' : ''}>Metrics</option><option value="header"${role === 'header' ? ' selected' : ''}>Headers</option></select>${sheetSelections.length > 1 ? `<button type="button" data-remove-range="${index}" aria-label="Remove ${escapeHtml(sheetSelectionA1(selection))}">×</button>` : ''}`;
     return chip;
   }));
 }
@@ -740,17 +773,19 @@ function syncSheetSelection() {
   document.querySelectorAll('#sheetGrid [data-sheet-cell]').forEach((cell) => {
     const row = Number(cell.dataset.row);
     const column = Number(cell.dataset.column);
-    const containing = selectionBounds.find((bounds) => row >= bounds.minRow && row <= bounds.maxRow && column >= bounds.minColumn && column <= bounds.maxColumn);
+    const containingIndex = selectionBounds.findIndex((bounds) => row >= bounds.minRow && row <= bounds.maxRow && column >= bounds.minColumn && column <= bounds.maxColumn);
+    const containing = selectionBounds[containingIndex];
     const selected = Boolean(containing);
     const edge = selected && (row === containing.minRow || row === containing.maxRow || column === containing.minColumn || column === containing.maxColumn);
-    const header = selected && includesHeaders && row === containing.minRow;
+    const header = selected && (sheetSelectionRoles[containingIndex] === 'header' || (includesHeaders && row === containing.minRow));
     if (cell.classList.contains('is-selected') !== selected) cell.classList.toggle('is-selected', selected);
     if (cell.classList.contains('is-selection-edge') !== edge) cell.classList.toggle('is-selection-edge', edge);
     if (cell.classList.contains('is-header-cell') !== header) cell.classList.toggle('is-header-cell', header);
     if (cell.getAttribute('aria-selected') !== String(selected)) cell.setAttribute('aria-selected', String(selected));
   });
   const cellCount = sheetSelectionCellCount();
-  document.querySelector('#rangePickerSelectionSummary').textContent = `${sheetSelections.length} range${sheetSelections.length === 1 ? '' : 's'} · ${cellCount} selected cell${cellCount === 1 ? '' : 's'}${includesHeaders ? ' · first row of each range treated as headers' : ''}`;
+  const explicitHeaders = sheetSelectionRoles.filter((role) => role === 'header').length;
+  document.querySelector('#rangePickerSelectionSummary').textContent = `${sheetSelections.length} range${sheetSelections.length === 1 ? '' : 's'} · ${cellCount} selected cell${cellCount === 1 ? '' : 's'}${explicitHeaders ? ` · ${explicitHeaders} header range${explicitHeaders === 1 ? '' : 's'}` : includesHeaders ? ' · inline header rows' : ''}`;
   renderRangeSelectionChips();
 }
 
@@ -766,12 +801,14 @@ function setSheetSelection(anchor, focus = anchor, { writeInput = true, additive
   const next = { anchor: { ...anchor }, focus: { ...focus } };
   if (additive) {
     sheetSelections = [...sheetSelections, next];
+    sheetSelectionRoles = [...sheetSelectionRoles, 'metric'];
     activeSheetSelectionIndex = sheetSelections.length - 1;
   } else if (Number.isInteger(selectionIndex) && sheetSelections[selectionIndex]) {
     sheetSelections = sheetSelections.map((selection, index) => index === selectionIndex ? next : selection);
     activeSheetSelectionIndex = selectionIndex;
   } else {
     sheetSelections = [next];
+    sheetSelectionRoles = ['metric'];
     activeSheetSelectionIndex = 0;
   }
   sheetSelection = sheetSelections[activeSheetSelectionIndex];
@@ -957,7 +994,10 @@ function updatePrimaryRangeSummary() {
   }
   const count = parsed.reduce((total, range) => total + ((Math.abs(range.focus.row - range.anchor.row) + 1) * (Math.abs(range.focus.column - range.anchor.column) + 1)), 0);
   document.querySelector('#sheetSelectionSummary').textContent = `${parsed.length} range${parsed.length === 1 ? '' : 's'} · ${count} cell${count === 1 ? '' : 's'}`;
-  document.querySelector('#sheetPreviewResult').textContent = document.querySelector('#sheetHasHeaders').checked ? 'First row will be used as headers' : 'Ready to choose a display';
+  const explicitHeaders = primaryRangeRoles.filter((item) => item.role === 'header').length;
+  document.querySelector('#sheetPreviewResult').textContent = explicitHeaders
+    ? `${explicitHeaders} separate header range${explicitHeaders === 1 ? '' : 's'} configured`
+    : document.querySelector('#sheetHasHeaders').checked ? 'First row will be used as headers' : 'Ready to choose a display';
   updateDisplayRequirement();
 }
 
@@ -978,6 +1018,10 @@ async function openRangePicker(target, trigger = document.activeElement) {
   const parsed = parseSheetRanges(sourceRange);
   if (!parsed) throw new Error('Use ranges such as D8, D8:D20, or A2,C2,F2.');
   sheetSelections = parsed;
+  const storedRoles = rangePickerTarget === 'comparison' ? comparisonRangeRoles : primaryRangeRoles;
+  sheetSelectionRoles = storedRoles.length === parsed.length
+    ? storedRoles.map((item) => item.role === 'header' ? 'header' : 'metric')
+    : parsed.map(() => 'metric');
   activeSheetSelectionIndex = 0;
   sheetSelection = sheetSelections[0];
   addingSeparateRange = false;
@@ -1021,12 +1065,14 @@ function applyRangePickerSelection() {
     document.querySelector('#comparisonSheet').value = pickerSheet;
     document.querySelector('#comparisonRange').value = range;
     document.querySelector('#comparisonHasHeaders').checked = includesHeaders;
+    comparisonRangeRoles = normalizedSelectionRoles();
     document.querySelector('#comparisonSelectionLabel').textContent = `${selectedSheetTitle(pickerSheet)}!${range}`;
     document.querySelector('#comparisonPreviewStatus').textContent = 'Ready to preview';
   } else {
     document.querySelector('#sheetTab').value = pickerSheet;
     document.querySelector('#sheetRange').value = range;
     document.querySelector('#sheetHasHeaders').checked = includesHeaders;
+    primaryRangeRoles = normalizedSelectionRoles();
     updatePrimaryRangeSummary();
   }
   builderPreview = null;
@@ -1127,7 +1173,7 @@ function renderLiveKpis() {
     const comparisonPercent = kpi.comparisonValue === null || kpi.comparisonValue === 0 ? null : (kpi.comparisonDelta / Math.abs(kpi.comparisonValue)) * 100;
     const comparisonText = kpi.comparisonValue === null ? '' : `${kpi.comparisonDelta >= 0 ? '+' : ''}${formatKpiValue(kpi.comparisonDelta, kpi.displayFormat)}${comparisonPercent === null ? '' : ` (${comparisonPercent >= 0 ? '+' : ''}${comparisonPercent.toFixed(1)}%)`} vs ${kpi.comparisonSourceRange}`;
     const contextText = comparisonText || (goalProgress === null ? (kpi.status === 'active' ? 'Live' : 'Needs attention') : `${goalProgress.toFixed(1)}% of ${formatKpiValue(kpi.goalValue, kpi.displayFormat)} goal`);
-    const header = `<header class="structured-kpi-head"><span class="source-mark google">G</span><small>Google Sheets · ${escapeHtml(kpi.sourceRange || `${kpi.sheetTitle}!${kpi.range}`)}</small><span class="kpi-card-actions"><button type="button" data-sync-live-kpi="${escapeHtml(kpi.id)}" aria-label="Refresh ${escapeHtml(kpi.name)}" title="Refresh KPI">↻</button><button class="kpi-delete-button" type="button" data-delete-live-kpi="${escapeHtml(kpi.id)}" aria-label="Delete ${escapeHtml(kpi.name)}" title="Delete KPI">×</button></span></header>`;
+    const header = `<header class="structured-kpi-head"><span class="source-mark google">G</span><small>Google Sheets · ${escapeHtml(kpi.sourceRange || `${kpi.sheetTitle}!${kpi.range}`)}</small><span class="kpi-card-actions"><button type="button" data-edit-live-kpi="${escapeHtml(kpi.id)}" aria-label="Edit ${escapeHtml(kpi.name)}" title="Edit KPI">✎</button><button type="button" data-sync-live-kpi="${escapeHtml(kpi.id)}" aria-label="Refresh ${escapeHtml(kpi.name)}" title="Refresh KPI">↻</button><button class="kpi-delete-button" type="button" data-delete-live-kpi="${escapeHtml(kpi.id)}" aria-label="Delete ${escapeHtml(kpi.name)}" title="Delete KPI">×</button></span></header>`;
     if (displayType === 'goal_pace') {
       const target = Number(kpi.goalValue);
       const hasGoal = Number.isFinite(target) && target !== 0;
@@ -1185,6 +1231,12 @@ function renderLiveKpis() {
         showToast('KPI refreshed', `${kpi.name} now shows the latest Google Sheets value.`);
       } catch (error) { showToast('Refresh failed', error.message); }
       finally { refresh.disabled = false; }
+    });
+    const editButton = card.querySelector('[data-edit-live-kpi]');
+    editButton.dataset.interactionStatus = 'working';
+    editButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      openKpiBuilder('google', editButton, kpi);
     });
     const deleteButton = card.querySelector('[data-delete-live-kpi]');
     deleteButton.dataset.interactionStatus = 'working';
@@ -1296,8 +1348,8 @@ function showBuilderStep(step) {
     label.classList.toggle('is-complete', labelStep < activeBuilderStep);
   });
   builderBack.disabled = activeBuilderStep === 1;
-  builderNext.textContent = activeBuilderStep === 1 ? 'Choose data →' : activeBuilderStep === 2 ? 'Design KPI →' : '＋ Add to dashboard';
-  document.querySelector('#builderStatus').textContent = activeBuilderStep === 3 ? 'Ready to create live KPI' : 'Nothing saved until the final step';
+  builderNext.textContent = activeBuilderStep === 1 ? 'Choose data →' : activeBuilderStep === 2 ? 'Design KPI →' : editingKpiId ? 'Save KPI changes' : '＋ Add to dashboard';
+  document.querySelector('#builderStatus').textContent = activeBuilderStep === 3 ? (editingKpiId ? 'Ready to update this live KPI' : 'Ready to create live KPI') : 'Nothing saved until the final step';
   document.querySelector('.builder-body').scrollTop = 0;
 }
 
@@ -1312,14 +1364,14 @@ function validateSelectedData() {
 }
 
 function recommendDisplayForSelection(shape) {
-  const headers = document.querySelector('#sheetHasHeaders').checked;
+  const headers = primaryUsesHeaders();
   if ((headers && shape.rows === 2 && shape.columns === 3) || (!headers && shape.rows === 1 && shape.columns === 3)) return 'scorecard';
   if (shape.rows * shape.columns === 1) return 'scorecard';
   if (headers && ((shape.columns === 2 && shape.rows >= 2) || (shape.rows === 2 && shape.columns >= 2))) return 'leaderboard';
   return 'table';
 }
 
-function openKpiBuilder(source = 'google', trigger = document.activeElement) {
+function openKpiBuilder(source = 'google', trigger = document.activeElement, kpi = null) {
   if (source === 'google' && !activeGoogleConnection) {
     showScreen('integrations');
     showToast('Connect Google Sheets first', 'Authorize one Google account before choosing spreadsheet cells.');
@@ -1331,6 +1383,9 @@ function openKpiBuilder(source = 'google', trigger = document.activeElement) {
     return;
   }
   builderReturnFocus = trigger;
+  editingKpiId = kpi?.id || null;
+  document.querySelector('#kpiBuilderEyebrow').textContent = editingKpiId ? 'EDIT LIVE DASHBOARD METRIC' : 'NEW DASHBOARD METRIC';
+  document.querySelector('#kpiBuilderTitle').textContent = editingKpiId ? `Edit ${kpi.name}` : 'Build a KPI';
   availableSpreadsheets = [];
   loadedSpreadsheet = null;
   builderPreview = null;
@@ -1340,6 +1395,9 @@ function openKpiBuilder(source = 'google', trigger = document.activeElement) {
   document.querySelector('#sheetRange').value = 'A1';
   sheetSelection = parseSheetRange('A1');
   sheetSelections = [sheetSelection];
+  sheetSelectionRoles = ['metric'];
+  primaryRangeRoles = [];
+  comparisonRangeRoles = [];
   activeSheetSelectionIndex = 0;
   addingSeparateRange = false;
   document.querySelector('#sheetHasHeaders').checked = false;
@@ -1373,7 +1431,7 @@ function openKpiBuilder(source = 'google', trigger = document.activeElement) {
   kpiBuilderModal.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
   document.querySelector('#closeKpiBuilder').focus();
-  if (source === 'google') loadSpreadsheetList().catch((error) => {
+  if (source === 'google') loadSpreadsheetList().then(() => kpi ? hydrateKpiBuilder(kpi) : null).catch((error) => {
     document.querySelector('#sheetPickerTitle').textContent = 'Spreadsheet list unavailable';
     document.querySelector('#sheetPickerSubtitle').textContent = error.message;
     document.querySelector('#sheetFile').innerHTML = '<option value="">Reconnect Google Sheets</option>';
@@ -1383,12 +1441,47 @@ function openKpiBuilder(source = 'google', trigger = document.activeElement) {
   });
 }
 
+async function hydrateKpiBuilder(kpi) {
+  const spreadsheet = availableSpreadsheets.find((item) => item.spreadsheetId === kpi.spreadsheetId);
+  if (!spreadsheet) throw new Error('The KPI spreadsheet is no longer available to this Google account.');
+  const fileSelect = document.querySelector('#sheetFile');
+  if (fileSelect.value !== kpi.spreadsheetId) {
+    fileSelect.value = kpi.spreadsheetId;
+    syncSpreadsheetTrigger();
+    await loadSpreadsheetMetadata();
+  }
+  document.querySelector('#sheetTab').value = String(kpi.sheetId);
+  document.querySelector('#comparisonSheet').value = String(kpi.comparisonSheetId ?? kpi.sheetId);
+  document.querySelector('#sheetRange').value = kpi.range;
+  primaryRangeRoles = Array.isArray(kpi.rangeRoles) ? kpi.rangeRoles.map((item) => ({ range: String(item.range).toUpperCase(), role: item.role === 'header' ? 'header' : 'metric' })) : [];
+  document.querySelector('#sheetHasHeaders').checked = Boolean(kpi.includeHeaders) && !primaryRangeRoles.some((item) => item.role === 'header');
+  kpiName.value = kpi.name;
+  previewKpiName.textContent = kpi.name;
+  document.querySelector('#kpiFormat').value = kpi.displayFormat || 'number';
+  document.querySelector('#periodGranularity').value = kpi.periodGranularity || 'month';
+  document.querySelector('#kpiGoal').value = kpi.goalValue ?? '';
+  document.querySelector('#kpiComparisonMode').value = kpi.comparisonRange ? 'range' : 'none';
+  document.querySelector('#kpiComparisonFields').hidden = !kpi.comparisonRange;
+  document.querySelector('#comparisonRange').value = kpi.comparisonRange || '';
+  document.querySelector('#comparisonHasHeaders').checked = Boolean(kpi.comparisonIncludeHeaders);
+  document.querySelector('#comparisonSelectionLabel').textContent = kpi.comparisonRange ? `${kpi.comparisonSheetTitle || kpi.sheetTitle}!${kpi.comparisonRange}` : 'Choose comparison cells';
+  selectDisplayType(kpi.displayType || 'scorecard');
+  builderPreview = null;
+  previewKpiValue.textContent = formatKpiValue(kpi.value, kpi.displayFormat);
+  document.querySelector('#previewLineage').textContent = `${kpi.spreadsheetTitle} · ${kpi.sourceRange}`;
+  document.querySelector('#previewFreshness').textContent = `last synced ${timeAgo(kpi.fetchedAt)}`;
+  renderStructuredPreview(kpi.displayPayload);
+  updatePrimaryRangeSummary();
+  document.querySelector('#builderStatus').textContent = 'Editing saved KPI · nothing changes until Save';
+}
+
 function closeKpiBuilder() {
   if (document.querySelector('#spreadsheetPickerModal').classList.contains('is-visible')) closeSpreadsheetPicker();
   if (document.querySelector('#rangePickerModal').classList.contains('is-visible')) closeRangePicker();
   kpiBuilderModal.classList.remove('is-visible');
   kpiBuilderModal.setAttribute('aria-hidden', 'true');
   document.body.style.overflow = '';
+  editingKpiId = null;
   builderReturnFocus?.focus?.();
 }
 
@@ -1552,7 +1645,7 @@ async function previewGoogleSelection() {
     payload = await apiJson('/api/axoboard/kpis/google/preview', {
       method: 'POST', body: JSON.stringify({
         connectionId: activeGoogleConnection.id, spreadsheet: spreadsheetInput, sheetId,
-        range: selectedRange, aggregation: document.querySelector('#sheetAggregation').value,
+        range: selectedRange, rangeRoles: rangeRolesForPayload(primaryRangeRoles, selectedRange), aggregation: document.querySelector('#sheetAggregation').value,
         includeHeaders: document.querySelector('#sheetHasHeaders').checked, displayType: activeDisplayType, ...comparisonBuilderPayload()
       })
     });
@@ -1594,10 +1687,12 @@ async function previewGoogleSelection() {
 
 async function saveLiveKpi() {
   if (!builderPreview && !await previewGoogleSelection()) throw new Error('The display changed while Google was checking the selected cells. Try again.');
-  const payload = await apiJson('/api/axoboard/kpis', {
-    method: 'POST', body: JSON.stringify({
+  const editedId = editingKpiId;
+  const payload = await apiJson(editedId ? `/api/axoboard/kpis/${encodeURIComponent(editedId)}` : '/api/axoboard/kpis', {
+    method: editedId ? 'PUT' : 'POST', body: JSON.stringify({
       connectionId: activeGoogleConnection.id, spreadsheet: document.querySelector('#sheetFile').value.trim(),
       sheetId: Number(document.querySelector('#sheetTab').value), range: document.querySelector('#sheetRange').value.trim(),
+      rangeRoles: rangeRolesForPayload(primaryRangeRoles, document.querySelector('#sheetRange').value.trim()),
       aggregation: document.querySelector('#sheetAggregation').value, includeHeaders: document.querySelector('#sheetHasHeaders').checked, name: kpiName.value.trim(),
       displayFormat: document.querySelector('#kpiFormat').value, displayType: activeDisplayType,
       periodGranularity: document.querySelector('#periodGranularity').value, ...comparisonBuilderPayload()
@@ -1606,7 +1701,7 @@ async function saveLiveKpi() {
   closeKpiBuilder();
   await loadLiveData();
   showScreen('dashboard');
-  showToast('Live KPI created', `${payload.kpi.name} is synced from ${payload.kpi.sourceRange}.`);
+  showToast(editedId ? 'KPI updated' : 'Live KPI created', `${payload.kpi.name} is synced from ${payload.kpi.sourceRange}.`);
   document.querySelector(`[data-live-kpi="${payload.kpi.id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
@@ -1712,6 +1807,7 @@ document.querySelector('#sheetTab').addEventListener('change', async () => {
 });
 document.querySelector('#sheetRange').addEventListener('input', () => {
   builderPreview = null;
+  if (!rangeRolesForPayload(primaryRangeRoles, document.querySelector('#sheetRange').value).length) primaryRangeRoles = [];
   updatePrimaryRangeSummary();
 });
 document.querySelector('#sheetHasHeaders').addEventListener('change', () => {
@@ -1727,6 +1823,7 @@ document.querySelector('#rangePickerSheet').addEventListener('change', async () 
 });
 document.querySelector('#rangePickerInput').addEventListener('input', () => {
   const parsed = parseSheetRanges(document.querySelector('#rangePickerInput').value);
+  if (parsed && parsed.length !== sheetSelections.length) sheetSelectionRoles = parsed.map(() => 'metric');
   document.querySelector('#jumpToRangeButton').disabled = !parsed;
   document.querySelector('#applyRangePicker').disabled = !parsed;
 });
@@ -1734,6 +1831,7 @@ document.querySelector('#jumpToRangeButton').addEventListener('click', async () 
   const parsed = parseSheetRanges(document.querySelector('#rangePickerInput').value);
   if (!parsed) return showToast('Ranges need attention', 'Use ranges such as D8, B2:E14, or A2,C2,F2.');
   sheetSelections = parsed;
+  if (sheetSelectionRoles.length !== parsed.length) sheetSelectionRoles = parsed.map(() => 'metric');
   activeSheetSelectionIndex = 0;
   sheetSelection = sheetSelections[0];
   scheduleSheetSelectionSync();
@@ -1755,9 +1853,18 @@ document.querySelector('#rangeSelectionChips').addEventListener('click', (event)
   if (!remove) return;
   const index = Number(remove.dataset.removeRange);
   sheetSelections = sheetSelections.filter((selection, selectionIndex) => selectionIndex !== index);
+  sheetSelectionRoles = sheetSelectionRoles.filter((role, selectionIndex) => selectionIndex !== index);
   activeSheetSelectionIndex = Math.max(0, Math.min(activeSheetSelectionIndex, sheetSelections.length - 1));
   sheetSelection = sheetSelections[activeSheetSelectionIndex];
   document.querySelector('#rangePickerInput').value = sheetSelectionsA1();
+  builderPreview = null;
+  document.querySelector('#rangePickerPreviewResult').textContent = 'Ready to apply';
+  syncSheetSelection();
+});
+document.querySelector('#rangeSelectionChips').addEventListener('change', (event) => {
+  const roleSelect = event.target.closest('[data-range-role]');
+  if (!roleSelect) return;
+  sheetSelectionRoles[Number(roleSelect.dataset.rangeRole)] = roleSelect.value === 'header' ? 'header' : 'metric';
   builderPreview = null;
   document.querySelector('#rangePickerPreviewResult').textContent = 'Ready to apply';
   syncSheetSelection();
