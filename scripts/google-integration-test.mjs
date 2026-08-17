@@ -404,6 +404,13 @@ try {
   assert.equal(kpis[0].comparisonValue, 10);
   assert.equal(kpis[0].comparisonDelta, 10);
 
+  const initialDashboard = await api('/api/axoboard/dashboard', { cookie: first.cookie });
+  assert.equal(initialDashboard.status, 200);
+  assert.deepEqual((await initialDashboard.json()).dashboard.layout.kpiOrder, [createdKpi.id], 'dashboard order is derived only from the authenticated workspace');
+  const isolatedDashboard = await api('/api/axoboard/dashboard', { method: 'PUT', cookie: second.cookie, body: { layout: { preset: 'compact', kpiOrder: [createdKpi.id] } } });
+  assert.equal(isolatedDashboard.status, 200);
+  assert.deepEqual((await isolatedDashboard.json()).dashboard.layout.kpiOrder, [], 'foreign KPI IDs are removed from another workspace layout');
+
   const connectionRow = (await pool.query('SELECT * FROM integration_connections WHERE id=$1', [connection.id])).rows[0];
   const aad = `connection:${connection.id}:${first.workspaceId}:v1`;
   const tokens = vault.decryptJson({ ciphertext: connectionRow.token_ciphertext, iv: connectionRow.token_iv, authTag: connectionRow.token_auth_tag }, aad);
@@ -428,6 +435,20 @@ try {
   assert.equal(valuesCalls, valuesBeforeScheduledSync + 2, 'due KPI refreshes its primary and comparison ranges exactly once');
   assert.equal(successfulRuns.rows[0].count, 3, 'initial, manual, and scheduled syncs are observable');
 
+  const createSecond = await api('/api/axoboard/kpis', { method: 'POST', cookie: first.cookie, body: { ...selection, name: 'Revenue pacing', displayFormat: 'currency' } });
+  const createSecondText = await createSecond.text();
+  assert.equal(createSecond.status, 201, createSecondText);
+  const secondKpi = JSON.parse(createSecondText).kpi;
+  const savedDashboard = await api('/api/axoboard/dashboard', {
+    method: 'PUT', cookie: first.cookie,
+    body: { layout: { preset: 'compact', showTrend: false, showActionCenter: true, kpiOrder: [secondKpi.id, createdKpi.id] } }
+  });
+  const savedDashboardBody = await savedDashboard.json();
+  assert.equal(savedDashboard.status, 200);
+  assert.deepEqual(savedDashboardBody.dashboard.layout.kpiOrder, [secondKpi.id, createdKpi.id], 'workspace KPI order is persisted');
+  assert.equal(savedDashboardBody.dashboard.layout.preset, 'compact');
+  assert.equal(savedDashboardBody.dashboard.layout.showTrend, false);
+
   const disconnected = await api(`/api/axoboard/integrations/connections/${connection.id}`, { method: 'DELETE', cookie: first.cookie });
   const disconnectedText = await disconnected.text();
   assert.equal(disconnected.status, 200, disconnectedText);
@@ -435,12 +456,23 @@ try {
   const afterDisconnect = await api(`/api/axoboard/kpis/${createdKpi.id}/sync`, { method: 'POST', cookie: first.cookie });
   assert.equal(afterDisconnect.status, 409);
   const retained = await api('/api/axoboard/kpis', { cookie: first.cookie });
-  const retainedKpi = (await retained.json()).kpis[0];
+  const retainedKpi = (await retained.json()).kpis.find((kpi) => kpi.id === createdKpi.id);
   assert.equal(retainedKpi.value, 20, 'disconnect preserves last known good value');
   assert.equal(retainedKpi.status, 'degraded');
   assert.equal(retainedKpi.lastErrorCode, 'connection_disconnected');
 
-  console.log('AxoBoard Google integration test passed: OAuth, recent-first discovery, virtual-scroll grid preview, header-aware KPI and comparison ranges, sync, disconnect, and tenant isolation.');
+  const crossTenantDelete = await api(`/api/axoboard/kpis/${createdKpi.id}`, { method: 'DELETE', cookie: second.cookie });
+  assert.equal(crossTenantDelete.status, 404, 'another workspace cannot discover or delete the KPI');
+  const deleteFirst = await api(`/api/axoboard/kpis/${createdKpi.id}`, { method: 'DELETE', cookie: first.cookie });
+  assert.equal(deleteFirst.status, 200);
+  const layoutAfterDelete = await api('/api/axoboard/dashboard', { cookie: first.cookie });
+  assert.deepEqual((await layoutAfterDelete.json()).dashboard.layout.kpiOrder, [secondKpi.id], 'deleted KPI is removed from the saved layout');
+  const deleteSecond = await api(`/api/axoboard/kpis/${secondKpi.id}`, { method: 'DELETE', cookie: first.cookie });
+  assert.equal(deleteSecond.status, 200);
+  const emptyList = await api('/api/axoboard/kpis', { cookie: first.cookie });
+  assert.deepEqual((await emptyList.json()).kpis, [], 'soft-deleted KPIs no longer render on the workspace dashboard');
+
+  console.log('AxoBoard Google integration test passed: OAuth, recent-first discovery, virtual-scroll grid preview, header-aware KPI and comparison ranges, workspace layout, delete, sync, disconnect, and tenant isolation.');
 } finally {
   app.kill('SIGTERM');
   await new Promise((resolveExit) => app.once('exit', resolveExit));

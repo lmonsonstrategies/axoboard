@@ -13,9 +13,16 @@ let activeOauthProvider = null;
 let layoutEditSnapshot = null;
 let layoutDraft = null;
 
-function normalizeDashboardLayout(layout = {}) {
+function currentDashboardCardKeys() {
+  const cards = [...document.querySelectorAll('#dashboardKpiGrid .kpi-card')];
+  const keys = cards.map((card) => card.dataset.cardKey || card.dataset.liveKpi || card.dataset.drilldown).filter(Boolean);
+  return keys.length ? keys : [...dashboardKpiKeys];
+}
+
+function normalizeDashboardLayout(layout = {}, validKeys = currentDashboardCardKeys()) {
   const suppliedOrder = Array.isArray(layout.kpiOrder) ? layout.kpiOrder : [];
-  const kpiOrder = [...new Set([...suppliedOrder.filter((key) => dashboardKpiKeys.includes(key)), ...dashboardKpiKeys])];
+  const validKeySet = new Set(validKeys);
+  const kpiOrder = [...new Set([...suppliedOrder.filter((key) => validKeySet.has(key)), ...validKeys])];
   return {
     preset: ['balanced', 'kpi-focus', 'compact'].includes(layout.preset) ? layout.preset : defaultDashboardLayout.preset,
     showTrend: layout.showTrend !== false,
@@ -124,14 +131,16 @@ const dashboardActionCenter = document.querySelector('#dashboardActionCenter');
 const dashboardLowerGrid = document.querySelector('#dashboardLowerGrid');
 
 function kpiLabel(key) {
-  return dashboardKpiGrid.querySelector(`[data-drilldown="${key}"] > p`)?.textContent.trim() || key;
+  const card = [...dashboardKpiGrid.querySelectorAll('.kpi-card')].find((item) => (item.dataset.cardKey || item.dataset.liveKpi || item.dataset.drilldown) === key);
+  return card?.querySelector(':scope > p, .structured-kpi-title > strong')?.textContent.trim() || key;
 }
 
 function applyDashboardLayout(layout = betaState.dashboardLayout) {
+  [...dashboardKpiGrid.querySelectorAll('.kpi-card')].forEach((card) => { card.dataset.cardKey ||= card.dataset.liveKpi || card.dataset.drilldown; });
   const normalized = normalizeDashboardLayout(layout);
   dashboardPanel.dataset.layoutPreset = normalized.preset;
   normalized.kpiOrder.forEach((key) => {
-    const card = dashboardKpiGrid.querySelector(`[data-drilldown="${key}"]`);
+    const card = [...dashboardKpiGrid.querySelectorAll('.kpi-card')].find((item) => item.dataset.cardKey === key);
     if (card) dashboardKpiGrid.append(card);
   });
   dashboardTrendPanel.hidden = !normalized.showTrend;
@@ -149,7 +158,8 @@ function renderLayoutOrder(focusKey = '', focusDirection = '') {
   list.replaceChildren(...layoutDraft.kpiOrder.map((key, index) => {
     const item = document.createElement('li');
     item.dataset.layoutKpi = key;
-    item.innerHTML = `<span class="layout-order-position" aria-hidden="true">${index + 1}</span><div><strong>${kpiLabel(key)}</strong><small>Dashboard KPI ${index + 1}</small></div><div class="layout-order-actions"><button type="button" data-layout-move="up" data-interaction-status="working" aria-label="Move ${kpiLabel(key)} up" ${index === 0 ? 'disabled' : ''}>↑ Move up</button><button type="button" data-layout-move="down" data-interaction-status="working" aria-label="Move ${kpiLabel(key)} down" ${index === layoutDraft.kpiOrder.length - 1 ? 'disabled' : ''}>↓ Move down</button></div>`;
+    item.draggable = true;
+    item.innerHTML = `<button class="layout-drag-handle" type="button" aria-label="Drag ${escapeHtml(kpiLabel(key))} to reorder" title="Drag to reorder">⠿</button><span class="layout-order-position" aria-hidden="true">${index + 1}</span><div><strong>${escapeHtml(kpiLabel(key))}</strong><small>Dashboard KPI ${index + 1}</small></div><div class="layout-order-actions"><button type="button" data-layout-move="up" data-interaction-status="working" aria-label="Move ${escapeHtml(kpiLabel(key))} up" ${index === 0 ? 'disabled' : ''}>↑</button><button type="button" data-layout-move="down" data-interaction-status="working" aria-label="Move ${escapeHtml(kpiLabel(key))} down" ${index === layoutDraft.kpiOrder.length - 1 ? 'disabled' : ''}>↓</button>${liveWorkspaceId ? `<button class="layout-delete" type="button" data-layout-delete="${escapeHtml(key)}" data-interaction-status="working" aria-label="Delete ${escapeHtml(kpiLabel(key))}">Delete</button>` : ''}</div>`;
     return item;
   }));
   if (focusKey && focusDirection) list.querySelector(`[data-layout-kpi="${focusKey}"] [data-layout-move="${focusDirection}"]`)?.focus();
@@ -193,6 +203,11 @@ function wireLayoutWorkflow() {
     previewLayoutDraft();
   };
   document.querySelector('#layoutKpiOrder').addEventListener('click', (event) => {
+    const deleteButton = event.target.closest('[data-layout-delete]');
+    if (deleteButton) {
+      deleteLiveKpi(deleteButton.dataset.layoutDelete, deleteButton);
+      return;
+    }
     const button = event.target.closest('[data-layout-move]');
     if (!button || button.disabled) return;
     const item = button.closest('[data-layout-kpi]');
@@ -203,6 +218,30 @@ function wireLayoutWorkflow() {
     [layoutDraft.kpiOrder[currentIndex], layoutDraft.kpiOrder[nextIndex]] = [layoutDraft.kpiOrder[nextIndex], layoutDraft.kpiOrder[currentIndex]];
     renderLayoutOrder(key, button.dataset.layoutMove);
     previewLayoutDraft();
+  });
+  const orderList = document.querySelector('#layoutKpiOrder');
+  let draggedKey = '';
+  orderList.addEventListener('dragstart', (event) => {
+    const item = event.target.closest('[data-layout-kpi]');
+    if (!item) return;
+    draggedKey = item.dataset.layoutKpi;
+    item.classList.add('is-dragging');
+    event.dataTransfer.effectAllowed = 'move';
+  });
+  orderList.addEventListener('dragover', (event) => {
+    if (!draggedKey) return;
+    event.preventDefault();
+    const target = event.target.closest('[data-layout-kpi]');
+    if (!target || target.dataset.layoutKpi === draggedKey) return;
+    const fromIndex = layoutDraft.kpiOrder.indexOf(draggedKey);
+    const toIndex = layoutDraft.kpiOrder.indexOf(target.dataset.layoutKpi);
+    layoutDraft.kpiOrder.splice(toIndex, 0, layoutDraft.kpiOrder.splice(fromIndex, 1)[0]);
+    renderLayoutOrder();
+    previewLayoutDraft();
+  });
+  orderList.addEventListener('dragend', () => {
+    draggedKey = '';
+    orderList.querySelector('.is-dragging')?.classList.remove('is-dragging');
   });
 }
 
@@ -363,6 +402,9 @@ let activeKpiSource = 'google';
 let builderReturnFocus = null;
 let liveConnections = [];
 let liveKpis = [];
+let liveWorkspaceId = '';
+let liveWorkspaceName = '';
+let liveDashboardLayout = null;
 let activeGoogleConnection = null;
 let availableSpreadsheets = [];
 let loadedSpreadsheet = null;
@@ -935,18 +977,31 @@ function renderHeatmap(payload, displayFormat) {
 
 function renderLiveKpis() {
   document.body.dataset.liveKpis = liveKpis.length ? 'true' : 'false';
-  if (!liveKpis.length) return;
-  dashboardKpiGrid.replaceChildren(...liveKpis.map((kpi) => {
+  if (!liveKpis.length) {
+    const empty = document.createElement('section');
+    empty.className = 'surface live-dashboard-empty';
+    empty.innerHTML = '<span class="empty-axo">•ᴗ•</span><div><small>THIS WORKSPACE</small><h2>No KPIs yet</h2><p>Connect Google Sheets, then add the first trusted KPI to this dashboard.</p></div><button class="button button-primary" type="button">＋ Add KPI</button>';
+    empty.querySelector('button').addEventListener('click', (event) => openKpiBuilder('google', event.currentTarget));
+    dashboardKpiGrid.replaceChildren(empty);
+    document.querySelector('.dashboard-toolbar strong').textContent = liveWorkspaceName || 'Workspace dashboard';
+    document.querySelector('.dashboard-toolbar small').textContent = '0 KPIs · nothing inherited from another workspace';
+    return;
+  }
+  const order = normalizeDashboardLayout(liveDashboardLayout || {}, liveKpis.map((kpi) => kpi.id)).kpiOrder;
+  const orderIndex = new Map(order.map((id, index) => [id, index]));
+  const orderedKpis = [...liveKpis].sort((a, b) => (orderIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (orderIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+  dashboardKpiGrid.replaceChildren(...orderedKpis.map((kpi) => {
     const card = document.createElement('article');
     const displayType = kpi.displayType || 'scorecard';
     const structured = Boolean(kpi.displayPayload);
     card.className = `surface kpi-card kpi-card-${displayType}${structured ? ' kpi-card-structured' : ''}`;
     card.dataset.liveKpi = kpi.id;
+    card.dataset.cardKey = kpi.id;
     const goalProgress = kpi.goalValue === null || kpi.goalValue === 0 ? null : Math.max(0, Math.min(100, (kpi.value / kpi.goalValue) * 100));
     const comparisonPercent = kpi.comparisonValue === null || kpi.comparisonValue === 0 ? null : (kpi.comparisonDelta / Math.abs(kpi.comparisonValue)) * 100;
     const comparisonText = kpi.comparisonValue === null ? '' : `${kpi.comparisonDelta >= 0 ? '+' : ''}${formatKpiValue(kpi.comparisonDelta, kpi.displayFormat)}${comparisonPercent === null ? '' : ` (${comparisonPercent >= 0 ? '+' : ''}${comparisonPercent.toFixed(1)}%)`} vs ${kpi.comparisonSourceRange}`;
     const contextText = comparisonText || (goalProgress === null ? (kpi.status === 'active' ? 'Live' : 'Needs attention') : `${goalProgress.toFixed(1)}% of ${formatKpiValue(kpi.goalValue, kpi.displayFormat)} goal`);
-    const header = `<header class="structured-kpi-head"><span class="source-mark google">G</span><small>Google Sheets · ${escapeHtml(kpi.sourceRange || `${kpi.sheetTitle}!${kpi.range}`)}</small><button type="button" data-sync-live-kpi="${escapeHtml(kpi.id)}" aria-label="Refresh ${escapeHtml(kpi.name)}">↻</button></header>`;
+    const header = `<header class="structured-kpi-head"><span class="source-mark google">G</span><small>Google Sheets · ${escapeHtml(kpi.sourceRange || `${kpi.sheetTitle}!${kpi.range}`)}</small><span class="kpi-card-actions"><button type="button" data-sync-live-kpi="${escapeHtml(kpi.id)}" aria-label="Refresh ${escapeHtml(kpi.name)}" title="Refresh KPI">↻</button><button class="kpi-delete-button" type="button" data-delete-live-kpi="${escapeHtml(kpi.id)}" aria-label="Delete ${escapeHtml(kpi.name)}" title="Delete KPI">×</button></span></header>`;
     if (displayType === 'goal_pace') {
       const target = Number(kpi.goalValue);
       const hasGoal = Number.isFinite(target) && target !== 0;
@@ -989,7 +1044,8 @@ function renderLiveKpis() {
     }
     const refresh = card.querySelector('[data-sync-live-kpi]');
     refresh.dataset.interactionStatus = 'working';
-    refresh.addEventListener('click', async () => {
+    refresh.addEventListener('click', async (event) => {
+      event.stopPropagation();
       refresh.disabled = true;
       try {
         await apiJson(`/api/axoboard/kpis/${encodeURIComponent(kpi.id)}/sync`, { method: 'POST' });
@@ -998,10 +1054,41 @@ function renderLiveKpis() {
       } catch (error) { showToast('Refresh failed', error.message); }
       finally { refresh.disabled = false; }
     });
+    const deleteButton = card.querySelector('[data-delete-live-kpi]');
+    deleteButton.dataset.interactionStatus = 'working';
+    deleteButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      deleteLiveKpi(kpi.id, deleteButton);
+    });
     return card;
   }));
-  document.querySelector('.dashboard-toolbar strong').textContent = 'Google Sheets performance';
+  liveDashboardLayout = normalizeDashboardLayout(liveDashboardLayout || {}, liveKpis.map((kpi) => kpi.id));
+  applyDashboardLayout(liveDashboardLayout);
+  document.querySelector('.dashboard-toolbar strong').textContent = liveWorkspaceName ? `${liveWorkspaceName} dashboard` : 'Google Sheets performance';
   document.querySelector('.dashboard-toolbar small').textContent = `${liveKpis.length} KPI${liveKpis.length === 1 ? '' : 's'} · latest ${timeAgo(liveKpis[0]?.fetchedAt)}`;
+}
+
+async function deleteLiveKpi(kpiId, trigger) {
+  const kpi = liveKpis.find((item) => item.id === kpiId);
+  if (!kpi) return;
+  if (!window.confirm(`Delete “${kpi.name}” from ${liveWorkspaceName || 'this workspace'}?\n\nIts historical snapshots stay retained for audit and recovery.`)) return;
+  trigger.disabled = true;
+  try {
+    await apiJson(`/api/axoboard/kpis/${encodeURIComponent(kpiId)}`, { method: 'DELETE' });
+    liveKpis = liveKpis.filter((item) => item.id !== kpiId);
+    liveDashboardLayout = normalizeDashboardLayout(liveDashboardLayout || {}, liveKpis.map((item) => item.id));
+    if (layoutDraft) {
+      layoutDraft = cloneDashboardLayout(liveDashboardLayout);
+      renderLayoutOrder();
+      syncLayoutWorkflowPreview();
+    }
+    renderLiveKpis();
+    renderTvMode();
+    showToast('KPI deleted', `${kpi.name} was removed only from ${liveWorkspaceName || 'this workspace'}.`);
+  } catch (error) {
+    trigger.disabled = false;
+    showToast('Could not delete KPI', error.message);
+  }
 }
 
 function renderLiveConnections() {
@@ -1025,14 +1112,23 @@ function renderLiveConnections() {
 
 async function loadLiveData() {
   try {
-    const [session, connectionPayload, kpiPayload] = await Promise.all([
-      apiJson('/api/auth/session'), apiJson('/api/axoboard/integrations/connections'), apiJson('/api/axoboard/kpis')
+    const [session, connectionPayload, kpiPayload, dashboardPayload] = await Promise.all([
+      apiJson('/api/auth/session'), apiJson('/api/axoboard/integrations/connections'), apiJson('/api/axoboard/kpis'), apiJson('/api/axoboard/dashboard')
     ]);
     liveConnections = connectionPayload.connections || [];
     liveKpis = kpiPayload.kpis || [];
     if (session.user?.workspace_name) {
+      liveWorkspaceId = session.user.workspace_id;
+      liveWorkspaceName = session.user.workspace_name;
+      liveDashboardLayout = normalizeDashboardLayout(dashboardPayload.dashboard?.layout || {}, liveKpis.map((kpi) => kpi.id));
+      document.body.dataset.activeWorkspace = 'live';
+      document.body.dataset.demoData = 'false';
       document.querySelector('.workspace-switcher strong').textContent = session.user.workspace_name;
       document.querySelectorAll('.workspace-switcher .workspace-avatar, .mobile-workspace-switch .workspace-avatar').forEach((avatar) => { avatar.textContent = session.user.workspace_name[0].toUpperCase(); });
+      document.querySelector('.mobile-workspace-switch')?.setAttribute('aria-label', `Open ${session.user.workspace_name} workspace settings`);
+      workspaceName.value = session.user.workspace_name;
+      document.querySelector('#serviceWorkspaceName').textContent = session.user.workspace_name;
+      document.querySelector('#dashboardTitle').textContent = `${session.user.workspace_name} dashboard`;
       document.querySelector('.sidebar-user strong').textContent = session.user.full_name;
       document.querySelector('.sidebar-user small').textContent = `Workspace ${session.user.role}`;
     }
@@ -1446,17 +1542,52 @@ let activeFeatureModal = null;
 let featureReturnFocus = null;
 let loopTimer = null;
 
+function tvKpiContext(kpi) {
+  if (kpi.comparisonValue !== null && kpi.comparisonValue !== undefined) {
+    const percent = kpi.comparisonValue === 0 ? null : (kpi.comparisonDelta / Math.abs(kpi.comparisonValue)) * 100;
+    return `${kpi.comparisonDelta >= 0 ? '+' : ''}${formatKpiValue(kpi.comparisonDelta, kpi.displayFormat)}${percent === null ? '' : ` · ${percent >= 0 ? '+' : ''}${percent.toFixed(1)}%`}`;
+  }
+  if (kpi.goalValue) return `${Math.max(0, (Number(kpi.value) / Number(kpi.goalValue)) * 100).toFixed(0)}% of goal`;
+  return `${kpi.status === 'active' ? 'Live' : 'Needs attention'} · ${timeAgo(kpi.fetchedAt)}`;
+}
+
+function renderTvMode() {
+  const grid = document.querySelector('#tvKpiGrid');
+  if (!grid) return;
+  const order = normalizeDashboardLayout(liveDashboardLayout || {}, liveKpis.map((kpi) => kpi.id)).kpiOrder;
+  const orderIndex = new Map(order.map((id, index) => [id, index]));
+  const visibleKpis = [...liveKpis].sort((a, b) => (orderIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (orderIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+  document.querySelector('#tvPreviewTitle').textContent = liveWorkspaceName ? `${liveWorkspaceName} dashboard` : 'Dashboard';
+  document.querySelector('#tvPreviewEyebrow').textContent = `${liveWorkspaceName || 'CURRENT WORKSPACE'} · ${visibleKpis.length} LIVE KPI${visibleKpis.length === 1 ? '' : 'S'}`.toUpperCase();
+  if (!visibleKpis.length) {
+    grid.innerHTML = '<article class="tv-empty-card"><small>THIS WORKSPACE</small><strong>No KPIs yet</strong><span>Add a KPI to populate TV mode.</span></article>';
+    document.querySelector('#tvDashboardContext strong').textContent = 'Nothing from ACME or any sample workspace is shown here.';
+    document.querySelector('#tvDashboardContext .tv-source-summary').innerHTML = '<span>Tenant isolated</span><span>No sample data</span>';
+    document.querySelector('#tvFreshness').textContent = 'Waiting for the first KPI';
+    return;
+  }
+  grid.replaceChildren(...visibleKpis.map((kpi) => {
+    const card = document.createElement('article');
+    card.innerHTML = `<small>${escapeHtml(kpi.name)}</small><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><span>${escapeHtml(tvKpiContext(kpi))}</span><em>${escapeHtml(kpi.sheetTitle)} · ${escapeHtml(kpi.sourceRange || kpi.range)}</em>`;
+    return card;
+  }));
+  const freshest = visibleKpis.reduce((latest, kpi) => !latest || new Date(kpi.fetchedAt) > new Date(latest.fetchedAt) ? kpi : latest, null);
+  document.querySelector('#tvDashboardContext strong').textContent = `${visibleKpis.length} workspace KPI${visibleKpis.length === 1 ? '' : 's'} shown in the saved dashboard order`;
+  document.querySelector('#tvDashboardContext .tv-source-summary').innerHTML = `<span>Google Sheets</span><span>${escapeHtml(liveWorkspaceName)}</span><span>${escapeHtml(freshest?.status || 'unknown')}</span>`;
+  document.querySelector('#tvFreshness').textContent = `Live · freshest update ${timeAgo(freshest?.fetchedAt)}`;
+}
+
 function startLoopCountdown() {
   const countdown = document.querySelector('#loopCountdown');
   let seconds = 45;
   countdown.textContent = seconds;
   window.clearInterval(loopTimer);
-  loopTimer = window.setInterval(() => {
+  loopTimer = window.setInterval(async () => {
     seconds -= 1;
     if (seconds <= 0) {
-      seconds = 30;
-      document.querySelector('#tvPreviewTitle').textContent = 'Pipeline health';
-      document.querySelector('.tv-preview-stage header small').textContent = 'REVENUE PULSE · VIEW 2 OF 3';
+      seconds = 45;
+      await loadLiveData();
+      renderTvMode();
     }
     countdown.textContent = seconds;
   }, 1000);
@@ -1471,7 +1602,10 @@ function openFeatureModal(id, trigger = document.activeElement) {
   modal.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
   modal.querySelector('[data-close-feature]')?.focus();
-  if (id === 'tvPreviewModal') startLoopCountdown();
+  if (id === 'tvPreviewModal') {
+    renderTvMode();
+    startLoopCountdown();
+  }
 }
 
 function closeFeatureModal(modal = activeFeatureModal) {
@@ -1485,8 +1619,6 @@ function closeFeatureModal(modal = activeFeatureModal) {
   modal.setAttribute('aria-hidden', 'true');
   if (modal.id === 'tvPreviewModal') {
     window.clearInterval(loopTimer);
-    document.querySelector('#tvPreviewTitle').textContent = 'Sales performance';
-    document.querySelector('.tv-preview-stage header small').textContent = 'REVENUE PULSE · VIEW 1 OF 3';
   }
   activeFeatureModal = null;
   document.body.style.overflow = '';
@@ -1666,7 +1798,25 @@ function renderWorkflow() {
     document.querySelector('[data-oauth-boundary]').textContent = `Live ${providerName} redirect is intentionally unavailable until an AxoBoard-owned OAuth app, approved scopes, and exact callback URI are configured.`;
   }
   updateWorkflowProgress();
-  if (activeWorkflow === 'layout') wireLayoutWorkflow();
+  if (activeWorkflow === 'layout') {
+    if (liveWorkspaceId) {
+      layoutDraft.showTrend = false;
+      layoutDraft.showActionCenter = false;
+      document.querySelector('.layout-section-fieldset').hidden = true;
+    }
+    wireLayoutWorkflow();
+    if (liveWorkspaceId) {
+      document.querySelector('#workflowDescription').textContent = `Arrange the KPI cards saved to ${liveWorkspaceName}. Changes stay in this workspace.`;
+      document.querySelector('#workflowContext > p').textContent = 'The preview updates immediately. Save writes the layout to this workspace; Cancel restores the current saved layout.';
+      document.querySelector('[data-layout-preview-trend]').hidden = true;
+      document.querySelector('[data-layout-preview-actions]').hidden = true;
+      document.querySelector('[data-layout-preview-empty]').textContent = 'KPI cards only · live sections';
+      document.querySelector('[data-layout-preview-empty]').hidden = false;
+      const summaryValues = document.querySelectorAll('#workflowContext .workflow-summary strong');
+      if (summaryValues[0]) summaryValues[0].textContent = 'Workspace database';
+      if (summaryValues[2]) summaryValues[2].textContent = 'Tenant scoped';
+    }
+  }
   document.querySelectorAll('#workflowCanvas .workflow-card').forEach((card) => {
     card.dataset.interactionStatus = 'working';
     card.addEventListener('click', () => card.parentElement.querySelectorAll('.workflow-card').forEach((item) => item.classList.toggle('is-selected', item === card)));
@@ -1682,7 +1832,7 @@ function updateWorkflowProgress() {
   document.querySelector('#workflowProgress').innerHTML = definition.steps.map((step, index) => `${index ? '<i></i>' : ''}<span data-step="${index + 1}" class="${index === workflowStep ? 'is-active' : ''}">${step}</span>`).join('');
   const isFinalStep = workflowStep === definition.steps.length - 1;
   document.querySelector('#workflowPrimary').textContent = activeWorkflow === 'layout' && isFinalStep ? 'Save layout' : isFinalStep ? 'Save draft' : definition.primary;
-  document.querySelector('#workflowStatus').textContent = `Step ${workflowStep + 1} of ${definition.steps.length} · ${activeWorkflow === 'layout' ? 'browser draft' : 'prototype draft'}`;
+  document.querySelector('#workflowStatus').textContent = `Step ${workflowStep + 1} of ${definition.steps.length} · ${activeWorkflow === 'layout' ? (liveWorkspaceId ? 'workspace draft' : 'browser draft') : 'prototype draft'}`;
 }
 
 function openWorkflow(type, trigger = document.activeElement, titleOverride = '') {
@@ -1693,8 +1843,9 @@ function openWorkflow(type, trigger = document.activeElement, titleOverride = ''
   }
   activeWorkflow = workflowDefinitions[type] ? type : 'generic';
   if (activeWorkflow === 'layout') {
-    layoutEditSnapshot = cloneDashboardLayout(betaState.dashboardLayout);
-    layoutDraft = cloneDashboardLayout(betaState.dashboardLayout);
+    const currentLayout = liveWorkspaceId ? liveDashboardLayout : betaState.dashboardLayout;
+    layoutEditSnapshot = cloneDashboardLayout(currentLayout);
+    layoutDraft = cloneDashboardLayout(currentLayout);
   }
   workflowStep = 0;
   renderWorkflow();
@@ -1739,7 +1890,7 @@ function openFreshOAuth(provider, trigger) {
 }
 
 document.querySelector('#workflowCancel').addEventListener('click', () => closeFeatureModal(document.querySelector('#workflowModal')));
-document.querySelector('#workflowPrimary').addEventListener('click', () => {
+document.querySelector('#workflowPrimary').addEventListener('click', async () => {
   const definition = workflowDefinitions[activeWorkflow] || workflowDefinitions.generic;
   if (workflowStep < definition.steps.length - 1) {
     workflowStep += 1;
@@ -1750,12 +1901,24 @@ document.querySelector('#workflowPrimary').addEventListener('click', () => {
   const completedWorkflows = [...new Set([...betaState.completedWorkflows, activeWorkflow])];
   if (activeWorkflow === 'layout') {
     const savedLayout = cloneDashboardLayout(layoutDraft);
-    persistBetaState({ dashboardLayout: savedLayout, completedWorkflows, draftCount: betaState.draftCount + 1 });
-    applyDashboardLayout(savedLayout);
-    layoutEditSnapshot = null;
-    layoutDraft = null;
-    closeFeatureModal(document.querySelector('#workflowModal'));
-    showToast('Dashboard layout saved', 'Saved in this browser for this prototype workspace. Nothing was published to a server.');
+    const saveButton = document.querySelector('#workflowPrimary');
+    saveButton.disabled = true;
+    try {
+      if (liveWorkspaceId) {
+        const payload = await apiJson('/api/axoboard/dashboard', { method: 'PUT', body: JSON.stringify({ layout: savedLayout }) });
+        liveDashboardLayout = normalizeDashboardLayout(payload.dashboard.layout, liveKpis.map((kpi) => kpi.id));
+        applyDashboardLayout(liveDashboardLayout);
+      } else {
+        persistBetaState({ dashboardLayout: savedLayout, completedWorkflows, draftCount: betaState.draftCount + 1 });
+        applyDashboardLayout(savedLayout);
+      }
+      layoutEditSnapshot = null;
+      layoutDraft = null;
+      closeFeatureModal(document.querySelector('#workflowModal'));
+      showToast('Dashboard layout saved', liveWorkspaceId ? `Card order and density were saved only to ${liveWorkspaceName}.` : 'Saved in this browser for the prototype workspace.');
+    } catch (error) {
+      showToast('Layout was not saved', error.message);
+    } finally { saveButton.disabled = false; }
     return;
   }
   const workspaceValue = document.querySelector('[data-customer-workspace]')?.value.trim();
@@ -1810,7 +1973,14 @@ workflowBindings.forEach(([selector, type]) => {
   document.querySelectorAll(selector).forEach((button) => {
     if (button.tagName !== 'BUTTON') return;
     button.dataset.workflowWired = type;
-    button.addEventListener('click', (event) => openWorkflow(type, event.currentTarget));
+    button.addEventListener('click', (event) => {
+      if (type === 'workspace' && liveWorkspaceId) {
+        showScreen('workspace');
+        showToast(liveWorkspaceName, 'This account is bound to one isolated workspace. Workspace switching is not simulated in the live app.');
+        return;
+      }
+      openWorkflow(type, event.currentTarget);
+    });
   });
 });
 
