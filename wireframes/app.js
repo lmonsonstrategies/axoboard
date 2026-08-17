@@ -1344,6 +1344,14 @@ async function previewGoogleSelection() {
       includeHeaders: document.querySelector('#sheetHasHeaders').checked, displayType: activeDisplayType, ...comparisonBuilderPayload()
     })
   });
+  if (!payload.preview && payload.validation?.valid === false) {
+    builderPreview = null;
+    renderStructuredPreview(null);
+    renderComparisonPreview();
+    document.querySelector('#sheetPickerStatus').textContent = 'Selection needs attention';
+    document.querySelector('#sheetPreviewResult').textContent = payload.validation.error;
+    throw new Error(payload.validation.error || 'Choose data that matches this display.');
+  }
   builderPreview = payload.preview;
   previewKpiValue.textContent = formatKpiValue(builderPreview.value, document.querySelector('#kpiFormat').value);
   document.querySelector('#previewLineage').textContent = `${builderPreview.spreadsheetTitle} · ${builderPreview.sourceRange}`;

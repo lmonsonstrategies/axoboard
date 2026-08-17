@@ -375,16 +375,28 @@ try {
     body: { ...selection, range: 'D8:D10', includeHeaders: false, comparisonRange: '' }
   });
   const ambiguousRangeBody = await ambiguousRange.json();
-  assert.equal(ambiguousRange.status, 422);
-  assert.equal(ambiguousRangeBody.code, 'single_value_requires_one_cell', 'multi-cell ranges cannot silently collapse to the first value');
+  assert.equal(ambiguousRange.status, 200, 'preview validation is a successful API response so expected builder feedback does not create failed-resource noise');
+  assert.equal(ambiguousRangeBody.preview, null);
+  assert.equal(ambiguousRangeBody.validation.valid, false);
+  assert.equal(ambiguousRangeBody.validation.code, 'single_value_requires_one_cell', 'multi-cell ranges cannot silently collapse to the first value');
 
   const sameComparison = await api('/api/axoboard/kpis/google/preview', {
     method: 'POST', cookie: first.cookie,
     body: { ...selection, comparisonSheetId: 12345, comparisonRange: 'D8:D9' }
   });
   const sameComparisonBody = await sameComparison.json();
-  assert.equal(sameComparison.status, 422);
-  assert.equal(sameComparisonBody.code, 'comparison_matches_kpi_range', 'a KPI cannot compare against itself');
+  assert.equal(sameComparison.status, 200);
+  assert.equal(sameComparisonBody.preview, null);
+  assert.equal(sameComparisonBody.validation.valid, false);
+  assert.equal(sameComparisonBody.validation.code, 'comparison_matches_kpi_range', 'a KPI cannot compare against itself');
+
+  const rejectedCreate = await api('/api/axoboard/kpis', {
+    method: 'POST', cookie: first.cookie,
+    body: { ...selection, range: 'D8:D10', includeHeaders: false, comparisonRange: '', name: 'Invalid multi-cell scorecard', displayFormat: 'number' }
+  });
+  const rejectedCreateBody = await rejectedCreate.json();
+  assert.equal(rejectedCreate.status, 422, 'creation remains strict when preview validation fails');
+  assert.equal(rejectedCreateBody.code, 'single_value_requires_one_cell');
 
   const create = await api('/api/axoboard/kpis', { method: 'POST', cookie: first.cookie, body: { ...selection, name: 'Qualified pipeline', displayFormat: 'currency' } });
   const createText = await create.text();
