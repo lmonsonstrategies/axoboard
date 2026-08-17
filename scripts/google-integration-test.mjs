@@ -26,6 +26,48 @@ assert.deepEqual(
   googleIntegrationInternals.displayPayload([['Rep', 'Sales'], ['Andrew', '$10']], 'count', true, 'table'),
   { kind: 'table', columns: ['Rep', 'Sales'], rows: [['Andrew', '$10']] }
 );
+assert.equal(
+  googleIntegrationInternals.displayPayload([[82]], 'single_value', false, 'goal_pace'),
+  null,
+  'goal pace uses the prepared scalar value and optional goal'
+);
+assert.equal(
+  googleIntegrationInternals.displayPayload([[82]], 'single_value', false, 'gauge'),
+  null,
+  'gauge uses the prepared scalar value and optional goal'
+);
+for (const displayType of ['trend', 'category_bar', 'funnel', 'pipeline']) {
+  assert.deepEqual(
+    googleIntegrationInternals.displayPayload([['Period', 'Value'], ['Mon', 10], ['Tue', 20]], 'sum', true, displayType),
+    { kind: displayType, items: [{ label: 'Mon', value: 10, comparisonValue: null }, { label: 'Tue', value: 20, comparisonValue: null }] },
+    `${displayType} preserves ordered labels and prepared values`
+  );
+}
+assert.deepEqual(
+  googleIntegrationInternals.displayPayload(
+    [['Time', 'Event', 'Detail', 'Value'], ['09:00', 'Deal won', 'Andrew', '$1,200'], ['10:15', 'Goal crossed', 'Team', '100%']],
+    'sum', true, 'activity_feed'
+  ),
+  {
+    kind: 'activity_feed', columns: ['Time', 'Event', 'Detail', 'Value'],
+    entries: [
+      { timestamp: '09:00', label: 'Deal won', detail: 'Andrew', value: '$1,200' },
+      { timestamp: '10:15', label: 'Goal crossed', detail: 'Team', value: '100%' }
+    ]
+  }
+);
+assert.deepEqual(
+  googleIntegrationInternals.displayPayload(
+    [['Rep', 'Mon', 'Tue'], ['Andrew', 2, 5], ['Jacob', 8, 4]],
+    'sum', true, 'heatmap'
+  ),
+  { kind: 'heatmap', xLabels: ['Mon', 'Tue'], yLabels: ['Andrew', 'Jacob'], cells: [[2, 5], [8, 4]], min: 2, max: 8 }
+);
+assert.throws(
+  () => googleIntegrationInternals.displayPayload([['Time'], ['09:00']], 'sum', true, 'activity_feed'),
+  /2–4 columns/,
+  'activity feeds require a useful event shape'
+);
 
 if (!process.env.DATABASE_URL) {
   console.log('AxoBoard Google integration test skipped: DATABASE_URL is not configured.');

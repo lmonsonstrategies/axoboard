@@ -413,16 +413,29 @@ function formatKpiValue(value, format = 'number') {
 
 const displayTypeHelp = {
   scorecard: 'Best for one number already calculated in Google Sheets.',
+  goal_pace: 'Shows one prepared value against an optional goal, including remaining distance.',
+  gauge: 'Shows one prepared value within a zero-to-goal range, or an automatically sized range.',
   rep_cards: 'Select two columns: a label column and one calculated value column. Include the header row.',
   leaderboard: 'Select two columns: a label column and one calculated value column. Include the header row.',
+  trend: 'Select labels or dates plus one prepared numeric value series. Keep the source order.',
+  category_bar: 'Select category labels plus one prepared numeric value column.',
+  funnel: 'Select ordered stage labels plus one prepared numeric value column.',
+  pipeline: 'Select ordered stage labels plus one prepared numeric value column.',
+  activity_feed: 'Select 2–4 columns: timestamp, event, and optional detail/value. Include headers.',
+  heatmap: 'Select a matrix with column headers, row labels, and numeric cells.',
   table: 'Shows the selected rows and columns exactly as they appear in Google Sheets.'
 };
+
+const scalarDisplayTypes = new Set(['scorecard', 'goal_pace', 'gauge']);
+const pairedDisplayTypes = new Set(['rep_cards', 'leaderboard', 'trend', 'category_bar', 'funnel', 'pipeline']);
+const comparisonDisabledDisplayTypes = new Set(['table', 'activity_feed', 'heatmap']);
+const headerRequiredDisplayTypes = new Set([...pairedDisplayTypes, 'activity_feed', 'heatmap']);
 
 const periodLabels = { day: 'Daily', week: 'Weekly', month: 'Monthly', year: 'Yearly' };
 
 function renderStructuredPreview(payload = builderPreview?.displayPayload) {
   const preview = document.querySelector('#previewStructured');
-  if (!payload || activeDisplayType === 'scorecard') {
+  if (!payload || scalarDisplayTypes.has(activeDisplayType)) {
     preview.hidden = true;
     preview.replaceChildren();
     previewKpiValue.hidden = false;
@@ -433,7 +446,11 @@ function renderStructuredPreview(payload = builderPreview?.displayPayload) {
     : (payload.items || []);
   const items = payload.kind === 'table'
     ? payload.rows.slice(0, 3).map((row, index) => ({ label: row[0] || `Row ${index + 1}`, value: row.slice(1).filter((value) => value !== '').join(' · ') || '—' }))
-    : structuredItems.slice(0, 5);
+    : payload.kind === 'activity_feed'
+      ? payload.entries.slice(0, 4).map((entry) => ({ label: `${entry.timestamp} ${entry.label}`.trim(), value: entry.detail || entry.value || 'Event' }))
+      : payload.kind === 'heatmap'
+        ? payload.yLabels.slice(0, 4).map((label, index) => ({ label, value: payload.cells[index].map((value) => formatKpiValue(value, document.querySelector('#kpiFormat').value)).join(' · ') }))
+        : structuredItems.slice(0, 5);
   preview.replaceChildren(...items.map((item) => {
     const row = document.createElement('div');
     const value = payload.kind === 'table' ? item.value : formatKpiValue(item.value, document.querySelector('#kpiFormat').value);
@@ -449,13 +466,13 @@ function selectDisplayType(type) {
   document.querySelectorAll('[data-display-type]').forEach((button) => button.classList.toggle('is-selected', button.dataset.displayType === activeDisplayType));
   document.querySelector('#displayTypeHelp').textContent = displayTypeHelp[activeDisplayType];
   document.querySelector('#periodGranularityField').hidden = activeDisplayType !== 'rep_cards';
-  document.querySelector('#comparisonModeField').hidden = activeDisplayType === 'table';
-  if (activeDisplayType === 'table') {
+  document.querySelector('#comparisonModeField').hidden = comparisonDisabledDisplayTypes.has(activeDisplayType);
+  if (comparisonDisabledDisplayTypes.has(activeDisplayType)) {
     document.querySelector('#kpiComparisonMode').value = 'none';
     document.querySelector('#kpiComparisonFields').hidden = true;
   }
-  document.querySelector('#sheetAggregation').value = activeDisplayType === 'scorecard' ? 'single_value' : 'sum';
-  document.querySelector('#comparisonAggregation').value = activeDisplayType === 'scorecard' ? 'single_value' : 'sum';
+  document.querySelector('#sheetAggregation').value = scalarDisplayTypes.has(activeDisplayType) ? 'single_value' : 'sum';
+  document.querySelector('#comparisonAggregation').value = scalarDisplayTypes.has(activeDisplayType) ? 'single_value' : 'sum';
   updateDisplayRequirement();
   builderPreview = null;
   renderStructuredPreview(null);
@@ -475,20 +492,36 @@ function updateDisplayRequirement() {
   const headers = document.querySelector('#sheetHasHeaders').checked;
   const shape = currentRangeShape();
   note.classList.remove('is-warning');
-  if (activeDisplayType === 'scorecard') {
+  if (scalarDisplayTypes.has(activeDisplayType)) {
     note.hidden = false;
     note.textContent = headers
-      ? 'Scorecard expects one header cell and one calculated value cell beneath it.'
-      : 'Scorecard expects exactly one calculated numeric cell.';
+      ? 'This display expects one header cell and one calculated value cell beneath it.'
+      : 'This display expects exactly one calculated numeric cell.';
     if (shape && ((headers && shape.rows * shape.columns !== 2) || (!headers && shape.rows * shape.columns !== 1))) note.classList.add('is-warning');
     return;
   }
-  if (activeDisplayType === 'rep_cards' || activeDisplayType === 'leaderboard') {
+  if (pairedDisplayTypes.has(activeDisplayType)) {
     note.hidden = false;
     note.textContent = headers
       ? 'Ready: the first row supplies column headers. Select exactly two columns—labels first, calculated values second.'
       : 'Headers are required. Go back to Data and turn on “Use first row as headers.”';
     if (!headers || (shape && !((shape.columns === 2 && shape.rows >= 2) || (shape.rows === 2 && shape.columns >= 2)))) note.classList.add('is-warning');
+    return;
+  }
+  if (activeDisplayType === 'activity_feed') {
+    note.hidden = false;
+    note.textContent = headers
+      ? 'Ready when the range has 2–4 columns: timestamp, event, and optional detail/value.'
+      : 'Headers are required. Use the first row for Timestamp, Event, Detail, and optional Value.';
+    if (!headers || (shape && (shape.columns < 2 || shape.columns > 4 || shape.rows < 2))) note.classList.add('is-warning');
+    return;
+  }
+  if (activeDisplayType === 'heatmap') {
+    note.hidden = false;
+    note.textContent = headers
+      ? 'Ready when the top row contains column labels, the first column contains row labels, and the remaining cells are numeric.'
+      : 'Headers are required for both heatmap axes.';
+    if (!headers || (shape && (shape.columns < 2 || shape.rows < 2))) note.classList.add('is-warning');
     return;
   }
   note.hidden = false;
@@ -840,20 +873,93 @@ function applyRangePickerSelection() {
   closeRangePicker();
 }
 
+function clampPercent(value) {
+  return Math.max(0, Math.min(100, Number.isFinite(Number(value)) ? Number(value) : 0));
+}
+
+function renderTrendChart(items, displayFormat) {
+  const points = (items || []).filter((item) => Number.isFinite(Number(item.value)));
+  if (!points.length) return '<div class="visual-empty">No numeric trend points</div>';
+  const values = points.flatMap((item) => [Number(item.value), Number(item.comparisonValue)].filter(Number.isFinite));
+  let minimum = Math.min(...values);
+  let maximum = Math.max(...values);
+  if (minimum === maximum) { minimum -= 1; maximum += 1; }
+  const coordinates = (key) => points.map((item, index) => {
+    const value = Number(item[key]);
+    if (!Number.isFinite(value)) return null;
+    const x = points.length === 1 ? 160 : 12 + (index / (points.length - 1)) * 296;
+    const y = 108 - ((value - minimum) / (maximum - minimum)) * 92;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).filter(Boolean).join(' ');
+  const comparison = points.every((item) => Number.isFinite(Number(item.comparisonValue)))
+    ? `<polyline class="trend-comparison" points="${coordinates('comparisonValue')}" />`
+    : '';
+  const labels = points.length <= 6 ? points.map((item) => `<span>${escapeHtml(item.label)}</span>`).join('') : `<span>${escapeHtml(points[0].label)}</span><span>${escapeHtml(points.at(-1).label)}</span>`;
+  return `<div class="trend-visual" role="img" aria-label="Trend from ${escapeHtml(points[0].label)} ${escapeHtml(formatKpiValue(points[0].value, displayFormat))} to ${escapeHtml(points.at(-1).label)} ${escapeHtml(formatKpiValue(points.at(-1).value, displayFormat))}"><svg viewBox="0 0 320 120" preserveAspectRatio="none" aria-hidden="true"><line x1="12" y1="108" x2="308" y2="108" />${comparison}<polyline class="trend-current" points="${coordinates('value')}" /></svg><div class="trend-labels">${labels}</div></div>`;
+}
+
+function renderCategoryBars(items, displayFormat) {
+  const values = (items || []).map((item) => Math.abs(Number(item.value))).filter(Number.isFinite);
+  const maximum = Math.max(1, ...values);
+  return `<div class="category-bars">${(items || []).map((item) => `<div class="category-bar-row"><span title="${escapeHtml(item.label)}">${escapeHtml(item.label)}</span><i><b style="width:${clampPercent((Math.abs(Number(item.value)) / maximum) * 100)}%"></b></i><strong>${escapeHtml(formatKpiValue(item.value, displayFormat))}</strong></div>`).join('')}</div>`;
+}
+
+function renderFlow(items, displayFormat, kind) {
+  const stages = (items || []).filter((item) => Number.isFinite(Number(item.value)));
+  const maximum = Math.max(1, ...stages.map((item) => Math.abs(Number(item.value))));
+  if (kind === 'pipeline') {
+    return `<div class="pipeline-visual">${stages.map((item, index) => `<div class="pipeline-stage"><small>${index + 1}</small><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(formatKpiValue(item.value, displayFormat))}</strong></div>`).join('')}</div>`;
+  }
+  return `<div class="funnel-visual">${stages.map((item, index) => {
+    const previous = index ? Math.abs(Number(stages[index - 1].value)) : null;
+    const conversion = previous ? `${((Math.abs(Number(item.value)) / previous) * 100).toFixed(0)}%` : 'Start';
+    const width = 34 + (Math.abs(Number(item.value)) / maximum) * 66;
+    return `<div style="width:${width.toFixed(1)}%"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(formatKpiValue(item.value, displayFormat))}</strong><small>${conversion}</small></div>`;
+  }).join('')}</div>`;
+}
+
+function renderActivityFeed(payload) {
+  return `<div class="activity-feed">${(payload.entries || []).slice(0, 20).map((entry) => `<div><time>${escapeHtml(entry.timestamp)}</time><span><strong>${escapeHtml(entry.label)}</strong>${entry.detail ? `<small>${escapeHtml(entry.detail)}</small>` : ''}</span>${entry.value !== null && entry.value !== '' ? `<b>${escapeHtml(entry.value)}</b>` : ''}</div>`).join('')}</div>`;
+}
+
+function renderHeatmap(payload, displayFormat) {
+  const range = Number(payload.max) - Number(payload.min) || 1;
+  const columns = Math.max(1, payload.xLabels?.length || 1);
+  const header = `<span></span>${(payload.xLabels || []).map((label) => `<strong title="${escapeHtml(label)}">${escapeHtml(label)}</strong>`).join('')}`;
+  const rows = (payload.yLabels || []).map((label, rowIndex) => `<b title="${escapeHtml(label)}">${escapeHtml(label)}</b>${(payload.cells[rowIndex] || []).map((value) => {
+    const intensity = 0.16 + ((Number(value) - Number(payload.min)) / range) * 0.78;
+    return `<i style="--heat:${intensity.toFixed(3)}" title="${escapeHtml(label)} · ${escapeHtml(formatKpiValue(value, displayFormat))}">${escapeHtml(formatKpiValue(value, displayFormat))}</i>`;
+  }).join('')}`).join('');
+  return `<div class="heatmap-scroll"><div class="heatmap-visual" style="--heatmap-columns:${columns}"><header>${header}</header>${rows}</div></div>`;
+}
+
 function renderLiveKpis() {
   document.body.dataset.liveKpis = liveKpis.length ? 'true' : 'false';
   if (!liveKpis.length) return;
   dashboardKpiGrid.replaceChildren(...liveKpis.map((kpi) => {
     const card = document.createElement('article');
-    const structured = kpi.displayType && kpi.displayType !== 'scorecard' && kpi.displayPayload;
-    card.className = `surface kpi-card${structured ? ' kpi-card-structured' : ''}`;
+    const displayType = kpi.displayType || 'scorecard';
+    const structured = Boolean(kpi.displayPayload);
+    card.className = `surface kpi-card kpi-card-${displayType}${structured ? ' kpi-card-structured' : ''}`;
     card.dataset.liveKpi = kpi.id;
     const goalProgress = kpi.goalValue === null || kpi.goalValue === 0 ? null : Math.max(0, Math.min(100, (kpi.value / kpi.goalValue) * 100));
     const comparisonPercent = kpi.comparisonValue === null || kpi.comparisonValue === 0 ? null : (kpi.comparisonDelta / Math.abs(kpi.comparisonValue)) * 100;
     const comparisonText = kpi.comparisonValue === null ? '' : `${kpi.comparisonDelta >= 0 ? '+' : ''}${formatKpiValue(kpi.comparisonDelta, kpi.displayFormat)}${comparisonPercent === null ? '' : ` (${comparisonPercent >= 0 ? '+' : ''}${comparisonPercent.toFixed(1)}%)`} vs ${kpi.comparisonSourceRange}`;
     const contextText = comparisonText || (goalProgress === null ? (kpi.status === 'active' ? 'Live' : 'Needs attention') : `${goalProgress.toFixed(1)}% of ${formatKpiValue(kpi.goalValue, kpi.displayFormat)} goal`);
     const header = `<header class="structured-kpi-head"><span class="source-mark google">G</span><small>Google Sheets · ${escapeHtml(kpi.sourceRange || `${kpi.sheetTitle}!${kpi.range}`)}</small><button type="button" data-sync-live-kpi="${escapeHtml(kpi.id)}" aria-label="Refresh ${escapeHtml(kpi.name)}">↻</button></header>`;
-    if (!structured) {
+    if (displayType === 'goal_pace') {
+      const target = Number(kpi.goalValue);
+      const hasGoal = Number.isFinite(target) && target !== 0;
+      const progress = hasGoal ? clampPercent((Number(kpi.value) / target) * 100) : 0;
+      const remaining = hasGoal ? Math.max(0, target - Number(kpi.value)) : null;
+      card.innerHTML = `${header}<p>${escapeHtml(kpi.name)}</p><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><div class="goal-pace-copy"><span>${hasGoal ? `${progress.toFixed(1)}% complete` : 'Add a goal to calculate pace'}</span><b>${remaining === null ? 'Target needed' : `${formatKpiValue(remaining, kpi.displayFormat)} remaining`}</b></div><div class="goal-pace-track"><i style="width:${progress}%"></i><em style="left:${progress}%"></em></div><footer><span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span><b>${hasGoal && progress >= 100 ? 'Goal reached' : 'In progress'}</b></footer>`;
+    } else if (displayType === 'gauge') {
+      const value = Number(kpi.value);
+      const configuredMax = Number(kpi.goalValue);
+      const maximum = Number.isFinite(configuredMax) && configuredMax > 0 ? configuredMax : Math.max(10, 10 ** Math.ceil(Math.log10(Math.max(1, Math.abs(value)))));
+      const progress = clampPercent((value / maximum) * 100);
+      card.innerHTML = `${header}<div class="structured-kpi-title"><p>Gauge · 0 to ${escapeHtml(formatKpiValue(maximum, kpi.displayFormat))}</p><strong>${escapeHtml(kpi.name)}</strong></div><div class="gauge-dial" style="--gauge-turn:${(progress / 100).toFixed(4)}turn"><div><strong>${escapeHtml(formatKpiValue(value, kpi.displayFormat))}</strong><span>${progress.toFixed(1)}%</span></div></div><footer><span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span><b>${Number.isFinite(configuredMax) && configuredMax > 0 ? 'Goal range' : 'Auto range'}</b></footer>`;
+    } else if (!structured) {
       card.innerHTML = `${header}<p>${escapeHtml(kpi.name)}</p><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><div class="kpi-change ${kpi.status === 'active' ? 'positive' : 'neutral'}">● ${escapeHtml(contextText)} <span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span></div><div class="mini-progress"><i style="width:${goalProgress === null ? (kpi.status === 'active' ? '100' : '20') : goalProgress}%"></i></div><footer><span>${escapeHtml(kpi.aggregation.replaceAll('_', ' '))} · read only</span><b>${escapeHtml(kpi.status)}</b></footer>`;
     } else if (kpi.displayType === 'rep_cards') {
       const period = periodLabels[kpi.periodGranularity] || 'Monthly';
@@ -866,6 +972,16 @@ function renderLiveKpis() {
     } else if (kpi.displayType === 'leaderboard') {
       const rows = [...(kpi.displayPayload.items || [])].sort((a, b) => Number(b.value) - Number(a.value)).map((item, index) => `<div class="leaderboard-row"><b>${index + 1}</b><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(formatKpiValue(item.value, kpi.displayFormat))}</strong></div>`).join('');
       card.innerHTML = `${header}<div class="structured-kpi-title"><p>Leaderboard</p><strong>${escapeHtml(kpi.name)}</strong></div><div class="leaderboard-list">${rows}</div>`;
+    } else if (displayType === 'trend') {
+      card.innerHTML = `${header}<div class="structured-kpi-title"><p>Trend</p><strong>${escapeHtml(kpi.name)}</strong></div>${renderTrendChart(kpi.displayPayload.items, kpi.displayFormat)}`;
+    } else if (displayType === 'category_bar') {
+      card.innerHTML = `${header}<div class="structured-kpi-title"><p>Category comparison</p><strong>${escapeHtml(kpi.name)}</strong></div>${renderCategoryBars(kpi.displayPayload.items, kpi.displayFormat)}`;
+    } else if (displayType === 'funnel' || displayType === 'pipeline') {
+      card.innerHTML = `${header}<div class="structured-kpi-title"><p>${displayType === 'funnel' ? 'Conversion funnel' : 'Stage pipeline'}</p><strong>${escapeHtml(kpi.name)}</strong></div>${renderFlow(kpi.displayPayload.items, kpi.displayFormat, displayType)}`;
+    } else if (displayType === 'activity_feed') {
+      card.innerHTML = `${header}<div class="structured-kpi-title"><p>Latest activity</p><strong>${escapeHtml(kpi.name)}</strong></div>${renderActivityFeed(kpi.displayPayload)}`;
+    } else if (displayType === 'heatmap') {
+      card.innerHTML = `${header}<div class="structured-kpi-title"><p>Heatmap</p><strong>${escapeHtml(kpi.name)}</strong></div>${renderHeatmap(kpi.displayPayload, kpi.displayFormat)}`;
     } else {
       const columns = (kpi.displayPayload.columns || []).map((column) => `<th>${escapeHtml(column)}</th>`).join('');
       const rows = (kpi.displayPayload.rows || []).slice(0, 25).map((row) => `<tr>${row.map((value) => `<td>${escapeHtml(value)}</td>`).join('')}</tr>`).join('');
@@ -1167,7 +1283,7 @@ sourceChoices.forEach((choice) => choice.addEventListener('click', () => syncBui
 document.querySelectorAll('[data-display-type]').forEach((button) => button.addEventListener('click', async () => {
   selectDisplayType(button.dataset.displayType);
   if (activeBuilderStep !== 3) return;
-  if ((activeDisplayType === 'rep_cards' || activeDisplayType === 'leaderboard') && !document.querySelector('#sheetHasHeaders').checked) {
+  if (headerRequiredDisplayTypes.has(activeDisplayType) && !document.querySelector('#sheetHasHeaders').checked) {
     showToast('Headers are required', 'Go back to Data and turn on “Use first row as headers.”');
     return;
   }
@@ -1724,7 +1840,7 @@ document.querySelectorAll('[data-plan-action]').forEach((button) => button.addEv
 }));
 
 document.querySelectorAll('button').forEach((button) => {
-  const known = button.matches('[data-screen], [data-plan-cycle], [data-plan-action], [data-fresh-oauth], [data-load-demo], [data-reset-sample], [data-empty-workflow], [data-close-feature], [data-share-tab], [data-celebration-style], .use-template, .source-choice, [data-visual], #sheetGrid button, #addKpiButton, #builderBack, #builderNext, #closeKpiBuilder, #closeRangePicker, #cancelRangePicker, #applyRangePicker, #jumpToRangeButton, #previewComparisonButton, #closeWin, #replayWin, #celebrateButton, #previewCelebration, .replay-mini, .sound-row, #soundPreviewButton, #wavePlay, #saveSound, #uploadZone, #uploadSoundButton, #previewGame, #publishGame, #publishBrand, #templateGalleryButton, #shareDashboardButton, #openTvMode, #previewLoopButton, #pairScreenButton, #saveLoopButton, [data-move-loop], #copyShareLink, #createShareLink, #saveSnapshotSchedule, #openSourceButton, #selectRangeButton, #reconnectSource, .build-source-kpi, .destination-grid button, #workflowCancel, #workflowPrimary');
+  const known = button.matches('[data-screen], [data-plan-cycle], [data-plan-action], [data-fresh-oauth], [data-load-demo], [data-reset-sample], [data-empty-workflow], [data-close-feature], [data-share-tab], [data-celebration-style], [data-display-type], .use-template, .source-choice, [data-visual], #sheetGrid button, #addKpiButton, #builderBack, #builderNext, #closeKpiBuilder, #closeRangePicker, #cancelRangePicker, #applyRangePicker, #jumpToRangeButton, #previewComparisonButton, #closeWin, #replayWin, #celebrateButton, #previewCelebration, .replay-mini, .sound-row, #soundPreviewButton, #wavePlay, #saveSound, #uploadZone, #uploadSoundButton, #previewGame, #publishGame, #publishBrand, #templateGalleryButton, #shareDashboardButton, #openTvMode, #previewLoopButton, #pairScreenButton, #saveLoopButton, [data-move-loop], #copyShareLink, #createShareLink, #saveSnapshotSchedule, #openSourceButton, #selectRangeButton, #reconnectSource, .build-source-kpi, .destination-grid button, #workflowCancel, #workflowPrimary');
   if (button.dataset.workflowWired) { button.dataset.interactionStatus = 'wireframed'; return; }
   if (known) { button.dataset.interactionStatus = 'working'; return; }
   button.dataset.workflowWired = 'generic';

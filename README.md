@@ -32,6 +32,7 @@ After a pushed feature/fix branch passes CI, use `npm run release:check` for a r
 - New accounts default to `pending_payment`; no redirect or browser state can grant access.
 - Starter billing uses Stripe-hosted Checkout and Portal sessions. Only raw-body signature-verified, idempotent Stripe webhooks may change workspace entitlement.
 - Google Sheets has a server-backed vertical slice: one-time PKCE OAuth, encrypted refresh tokens, recent-first spreadsheet discovery, spreadsheet/sheet/range selection, persisted KPI snapshots, scheduled refresh, visible lineage, and disconnect/revoke.
+- Prepared Sheet ranges can render as Scorecard, Goal Pace, Gauge, Rep Cards, Leaderboard, Trend, Category Bar, Funnel, Pipeline, Activity Feed, Heatmap, or Table displays.
 - Dashboard layout/publish history and providers other than Google Sheets remain roadmap work, not live-integration claims.
 
 ## Google Sheets configuration

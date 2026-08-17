@@ -64,6 +64,13 @@ const app = spawn(process.execPath, ['server.mjs'], {
   },
   stdio: ['ignore', 'pipe', 'pipe']
 });
+let appExited = false;
+let appExitCode = null;
+const appExit = new Promise((resolveExit) => app.once('exit', (code) => {
+  appExited = true;
+  appExitCode = code;
+  resolveExit(code);
+}));
 let logs = '';
 let completed = false;
 app.stdout.on('data', (chunk) => { logs += chunk; });
@@ -71,6 +78,7 @@ app.stderr.on('data', (chunk) => { logs += chunk; });
 
 async function waitForHealth() {
   for (let attempt = 0; attempt < 30; attempt += 1) {
+    if (appExited) throw new Error(`billing test server exited with code ${appExitCode}\n${logs}`);
     try { if ((await fetch(`${baseUrl}/healthz`)).ok) return; } catch {}
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 300));
   }
@@ -180,8 +188,10 @@ try {
   console.log('AxoBoard Stripe billing test passed: Checkout fail-closed, signed/idempotent webhooks, ordering, portal, revocation, and tenant isolation.');
   completed = true;
 } finally {
-  app.kill('SIGTERM');
-  await new Promise((resolveExit) => app.once('exit', resolveExit));
+  if (!appExited) {
+    app.kill('SIGTERM');
+    await appExit;
+  }
   await new Promise((resolveClose) => fakeStripe.close(resolveClose));
   if (testWorkspaceIds.length) await pool.query('DELETE FROM workspaces WHERE id = ANY($1::uuid[])', [testWorkspaceIds]);
   if (testEventIds.length) await pool.query('DELETE FROM stripe_webhook_events WHERE event_id = ANY($1::text[])', [[...new Set(testEventIds)]]);
