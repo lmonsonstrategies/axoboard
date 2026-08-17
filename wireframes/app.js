@@ -409,6 +409,7 @@ let activeGoogleConnection = null;
 let availableSpreadsheets = [];
 let loadedSpreadsheet = null;
 let builderPreview = null;
+let builderPreviewRequest = 0;
 let activeDisplayType = 'scorecard';
 let sheetGridState = null;
 let sheetGridRequest = 0;
@@ -503,7 +504,17 @@ function renderStructuredPreview(payload = builderPreview?.displayPayload) {
   previewKpiValue.hidden = true;
 }
 
+function setBuilderPreviewStatus(status, message, lineage = '') {
+  previewKpiValue.textContent = '—';
+  previewKpiValue.hidden = false;
+  document.querySelector('#previewStructured').hidden = true;
+  document.querySelector('#previewFreshness').textContent = message;
+  document.querySelector('#previewLineage').textContent = lineage || document.querySelector('#sheetRange').value.trim() || 'No range selected';
+  document.querySelector('.kpi-preview-card .kpi-change').dataset.previewStatus = status;
+}
+
 function selectDisplayType(type) {
+  builderPreviewRequest += 1;
   activeDisplayType = displayTypeHelp[type] ? type : 'scorecard';
   document.querySelectorAll('[data-display-type]').forEach((button) => button.classList.toggle('is-selected', button.dataset.displayType === activeDisplayType));
   document.querySelector('#displayTypeHelp').textContent = displayTypeHelp[activeDisplayType];
@@ -518,6 +529,7 @@ function selectDisplayType(type) {
   updateDisplayRequirement();
   builderPreview = null;
   renderStructuredPreview(null);
+  if (activeBuilderStep === 3) setBuilderPreviewStatus('idle', 'waiting for compatible data');
 }
 
 function currentRangeShape() {
@@ -1167,6 +1179,7 @@ function showBuilderStep(step) {
   builderBack.disabled = activeBuilderStep === 1;
   builderNext.textContent = activeBuilderStep === 1 ? 'Choose data →' : activeBuilderStep === 2 ? 'Design KPI →' : '＋ Add to dashboard';
   document.querySelector('#builderStatus').textContent = activeBuilderStep === 3 ? 'Ready to create live KPI' : 'Nothing saved until the final step';
+  document.querySelector('.builder-body').scrollTop = 0;
 }
 
 function validateSelectedData() {
@@ -1328,6 +1341,7 @@ async function loadSpreadsheetMetadata() {
 }
 
 async function previewGoogleSelection() {
+  const requestId = ++builderPreviewRequest;
   const spreadsheetInput = document.querySelector('#sheetFile').value.trim();
   if (!loadedSpreadsheet || loadedSpreadsheet.input !== spreadsheetInput) await loadSpreadsheetMetadata();
   const selectedSheet = document.querySelector('#sheetTab').value;
@@ -1337,20 +1351,40 @@ async function previewGoogleSelection() {
   if (document.querySelector('#kpiComparisonMode').value === 'range' && !document.querySelector('#comparisonRange').value) {
     throw new Error('Choose comparison cells from the sheet preview.');
   }
-  const payload = await apiJson('/api/axoboard/kpis/google/preview', {
-    method: 'POST', body: JSON.stringify({
-      connectionId: activeGoogleConnection.id, spreadsheet: spreadsheetInput, sheetId,
-      range: document.querySelector('#sheetRange').value.trim(), aggregation: document.querySelector('#sheetAggregation').value,
-      includeHeaders: document.querySelector('#sheetHasHeaders').checked, displayType: activeDisplayType, ...comparisonBuilderPayload()
-    })
-  });
+  const selectedRange = document.querySelector('#sheetRange').value.trim();
+  setBuilderPreviewStatus('loading', 'checking selected cells', selectedRange);
+  document.querySelector('#builderStatus').textContent = 'Checking live Google data…';
+  let payload;
+  try {
+    payload = await apiJson('/api/axoboard/kpis/google/preview', {
+      method: 'POST', body: JSON.stringify({
+        connectionId: activeGoogleConnection.id, spreadsheet: spreadsheetInput, sheetId,
+        range: selectedRange, aggregation: document.querySelector('#sheetAggregation').value,
+        includeHeaders: document.querySelector('#sheetHasHeaders').checked, displayType: activeDisplayType, ...comparisonBuilderPayload()
+      })
+    });
+  } catch (error) {
+    if (requestId === builderPreviewRequest) {
+      setBuilderPreviewStatus('error', 'preview unavailable — retry', selectedRange);
+      document.querySelector('#builderStatus').textContent = error.message;
+    }
+    throw error;
+  }
+  if (requestId !== builderPreviewRequest) return null;
   if (!payload.preview && payload.validation?.valid === false) {
     builderPreview = null;
     renderStructuredPreview(null);
     renderComparisonPreview();
+    setBuilderPreviewStatus('invalid', 'selection needs attention', selectedRange);
     document.querySelector('#sheetPickerStatus').textContent = 'Selection needs attention';
     document.querySelector('#sheetPreviewResult').textContent = payload.validation.error;
+    document.querySelector('#builderStatus').textContent = payload.validation.error || 'Choose data that matches this display.';
     throw new Error(payload.validation.error || 'Choose data that matches this display.');
+  }
+  if (!payload.preview) {
+    setBuilderPreviewStatus('error', 'preview unavailable — retry', selectedRange);
+    document.querySelector('#builderStatus').textContent = 'Google returned no preview. Choose the cells again and retry.';
+    throw new Error('Google returned no preview. Choose the cells again and retry.');
   }
   builderPreview = payload.preview;
   previewKpiValue.textContent = formatKpiValue(builderPreview.value, document.querySelector('#kpiFormat').value);
@@ -1358,13 +1392,15 @@ async function previewGoogleSelection() {
   document.querySelector('#previewFreshness').textContent = 'previewed just now';
   document.querySelector('#sheetPickerStatus').textContent = 'Preview healthy';
   document.querySelector('#sheetPreviewResult').textContent = `${formatKpiValue(builderPreview.value, document.querySelector('#kpiFormat').value)} · ${builderPreview.sourceRowCount} contributing cell${builderPreview.sourceRowCount === 1 ? '' : 's'}`;
+  document.querySelector('#builderStatus').textContent = 'Live preview ready';
+  document.querySelector('.kpi-preview-card .kpi-change').dataset.previewStatus = 'ready';
   renderStructuredPreview(builderPreview.displayPayload);
   renderComparisonPreview(builderPreview.comparison);
   return builderPreview;
 }
 
 async function saveLiveKpi() {
-  if (!builderPreview) await previewGoogleSelection();
+  if (!builderPreview && !await previewGoogleSelection()) throw new Error('The display changed while Google was checking the selected cells. Try again.');
   const payload = await apiJson('/api/axoboard/kpis', {
     method: 'POST', body: JSON.stringify({
       connectionId: activeGoogleConnection.id, spreadsheet: document.querySelector('#sheetFile').value.trim(),
