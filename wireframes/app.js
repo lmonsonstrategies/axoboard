@@ -245,6 +245,21 @@ function wireLayoutWorkflow() {
   });
 }
 
+const celebrationViewButtons = [...document.querySelectorAll('[data-celebration-view]')];
+const celebrationViewPanels = [...document.querySelectorAll('[data-celebration-panel]')];
+
+celebrationViewButtons.forEach((button) => button.addEventListener('click', () => {
+  celebrationViewButtons.forEach((item) => item.classList.toggle('is-active', item === button));
+  celebrationViewPanels.forEach((panel) => { panel.hidden = panel.dataset.celebrationPanel !== button.dataset.celebrationView; });
+}));
+
+document.querySelector('#exportEventLedger').addEventListener('click', () => showToast('Audit export prepared', 'The wireframe includes source IDs, decisions, destinations, brand versions, and delivery attempts.'));
+document.querySelectorAll('[data-ledger-replay]').forEach((button) => button.addEventListener('click', openCelebration));
+document.querySelectorAll('[data-ledger-inspect]').forEach((button) => button.addEventListener('click', () => showToast('Source event inspected', 'The duplicate references evt_8F3A and created no new score or delivery.')));
+document.querySelectorAll('[data-ledger-release]').forEach((button) => button.addEventListener('click', () => showToast('Held delivery previewed', 'Production would create a new destination attempt while preserving the immutable source event.')));
+document.querySelector('#openEventContract').addEventListener('click', (event) => openWorkflow('runs', event.currentTarget, 'Celebration event contract'));
+document.querySelector('#testDeliveryPolicy').addEventListener('click', () => showToast('Delivery policy passed', 'TV visual, silent captions, quiet hours, and destination retry behavior are compatible.'));
+
 const styleButtons = [...document.querySelectorAll('[data-celebration-style]')];
 const activeStyle = document.querySelector('#activeStyle');
 const activeSound = document.querySelector('#activeSound');
@@ -335,6 +350,16 @@ const teamOneColor = document.querySelector('#teamOneColor');
 const teamTwoColor = document.querySelector('#teamTwoColor');
 const winCondition = document.querySelector('#winCondition');
 const arena = document.querySelector('#arenaPreview');
+const scoreIncrement = document.querySelector('#scoreIncrement');
+const scorePoints = document.querySelector('#pointsInput');
+
+function syncScoreTestFormula() {
+  const increment = Math.max(1, Number(scoreIncrement.value) || 1);
+  const points = Math.max(1, Number(scorePoints.value) || 1);
+  const awarded = Math.floor(1500 / increment) * points;
+  document.querySelector('#scoreTestFormula').innerHTML = `$1,500 ÷ $${increment.toLocaleString()} × ${points} = <b>${awarded} points</b>`;
+  return awarded;
+}
 
 function syncGamePreview() {
   const teamOne = teamOneInput.value.trim() || 'Team One';
@@ -357,6 +382,22 @@ function syncGamePreview() {
   syncGamePreview();
   persistBetaState({ teamOne: teamOneInput.value, teamTwo: teamTwoInput.value });
 }));
+[scoreIncrement, scorePoints].forEach((input) => input.addEventListener('input', syncScoreTestFormula));
+document.querySelector('#testScoreEvent').addEventListener('click', () => {
+  const awarded = syncScoreTestFormula();
+  const nextScore = 72 + awarded;
+  document.querySelector('#teamOneScore').textContent = nextScore;
+  document.querySelector('#teamOneBar').style.width = `${Math.min(100, nextScore)}%`;
+  document.querySelector('#winnerTeam').textContent = nextScore >= 100 ? (teamOneInput.value.trim() || 'Team One') : (teamTwoInput.value.trim() || 'Team Two');
+  showToast('Test event calculated', `evt_test_001 awards ${awarded} points. No live score was written.`);
+});
+document.querySelector('#resetScoreTest').addEventListener('click', () => {
+  document.querySelector('#teamOneScore').textContent = '72';
+  document.querySelector('#teamOneBar').style.width = '72%';
+  document.querySelector('#winnerTeam').textContent = teamTwoInput.value.trim() || 'Team Two';
+  showToast('Test snapshot reset', 'The draft score returned to its original value.');
+});
+document.querySelector('#viewCompetitionContract').addEventListener('click', (event) => openWorkflow('game', event.currentTarget, 'Competition calculation contract'));
 document.querySelectorAll('.arena-options button').forEach((button) => button.addEventListener('click', () => {
   document.querySelectorAll('.arena-options button').forEach((item) => item.classList.toggle('is-active', item === button));
   showToast('Arena updated', 'The new environment is shown in the live preview.');
@@ -365,7 +406,7 @@ document.querySelector('#previewGame').addEventListener('click', () => {
   arena.animate([{ transform: 'scale(.985)' }, { transform: 'scale(1)' }], { duration: 420, easing: 'ease-out' });
   showToast('Competition preview started', 'Scores, winner copy, avatars, colors, and sounds are testable.');
 });
-document.querySelector('#publishGame').addEventListener('click', () => showToast('Competition published', `${document.querySelector('#gameNameInput').value || 'Your competition'} is ready to run.`));
+document.querySelector('#publishGame').addEventListener('click', () => showToast('Publish flow wireframed', `${document.querySelector('#gameNameInput').value || 'Your competition'} v4 passed the preview. No live competition was changed.`));
 
 const brandColor = document.querySelector('#brandColor');
 const workspaceName = document.querySelector('#workspaceName');
@@ -373,10 +414,21 @@ const celebrationLanguage = document.querySelector('#celebrationLanguage');
 const brandPreview = document.querySelector('#brandPreview');
 
 function syncBrandPreview() {
-  document.querySelector('#workspacePreview').textContent = workspaceName.value || 'Your workspace';
+  const customerName = workspaceName.value || 'Your workspace';
+  const customerInitial = customerName.trim().charAt(0).toUpperCase() || 'W';
+  const customerSlug = customerName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'customer';
+  document.querySelectorAll('[data-customer-brand-name]').forEach((element) => { element.textContent = customerName; });
+  document.querySelectorAll('[data-customer-logo-name]').forEach((element) => { element.textContent = `${customerSlug}-mark.svg`; });
+  document.querySelector('#workspacePreview').textContent = customerName;
   document.querySelector('#languagePreview').textContent = celebrationLanguage.value || 'Big win!';
   brandPreview.style.setProperty('--pink-600', brandColor.value);
   brandPreview.style.setProperty('--pink-500', brandColor.value);
+  document.querySelectorAll('.customer-logo, .customer-mark-large, .customer-mark-small').forEach((mark) => { mark.textContent = customerInitial; });
+  const runtimeName = document.querySelector('#runtimeBrandPreview strong');
+  if (runtimeName) runtimeName.textContent = customerName;
+  const runtimeAvatar = document.querySelector('#runtimeBrandPreview .workspace-avatar');
+  if (runtimeAvatar) runtimeAvatar.textContent = customerInitial;
+  document.querySelector('#runtimeBrandPreview')?.style.setProperty('--customer-primary', brandColor.value);
 }
 
 [brandColor, workspaceName, celebrationLanguage].forEach((input) => input.addEventListener('input', () => {
@@ -384,7 +436,7 @@ function syncBrandPreview() {
   persistBetaState({ workspaceName: workspaceName.value, brandColor: brandColor.value, celebrationLanguage: celebrationLanguage.value });
   document.querySelector('#serviceWorkspaceName').textContent = workspaceName.value || 'Your workspace';
 }));
-document.querySelector('#publishBrand').addEventListener('click', () => showToast('Brand published', 'Dashboards, celebrations, sounds, and competitions now share this theme.'));
+document.querySelector('#publishBrand').addEventListener('click', () => showToast('Brand publish flow wireframed', 'Dashboard, TV, celebration, competition, and offline previews passed. No live brand was changed.'));
 
 const kpiBuilderModal = document.querySelector('#kpiBuilderModal');
 const builderSteps = [...document.querySelectorAll('[data-builder-step]')];
@@ -535,6 +587,7 @@ function selectDisplayType(type) {
   document.querySelector('#displayTypeHelp').textContent = displayTypeHelp[activeDisplayType];
   document.querySelector('#periodGranularityField').hidden = activeDisplayType !== 'rep_cards';
   document.querySelector('#comparisonModeField').hidden = comparisonDisabledDisplayTypes.has(activeDisplayType);
+  document.querySelector('#goalIntelligenceConfig').hidden = !['goal_pace', 'gauge'].includes(activeDisplayType);
   if (comparisonDisabledDisplayTypes.has(activeDisplayType)) {
     document.querySelector('#kpiComparisonMode').value = 'none';
     document.querySelector('#kpiComparisonFields').hidden = true;
@@ -1709,6 +1762,15 @@ document.querySelector('#templateGalleryButton').addEventListener('click', (even
 document.querySelector('#shareDashboardButton').addEventListener('click', (event) => openFeatureModal('shareModal', event.currentTarget));
 document.querySelector('#openTvMode').addEventListener('click', (event) => openFeatureModal('tvPreviewModal', event.currentTarget));
 document.querySelector('#previewLoopButton').addEventListener('click', (event) => openFeatureModal('tvPreviewModal', event.currentTarget));
+document.querySelector('#previewRuntimeCompatibility').addEventListener('click', (event) => {
+  openFeatureModal('tvPreviewModal', event.currentTarget);
+  showToast('Compatibility preview ready', 'Customer branding, cached fallback, reduced motion, and silent captions are represented.');
+});
+document.querySelector('#manageRuntimeButton').addEventListener('click', (event) => openWorkflow('screen', event.currentTarget, 'Display runtime policy'));
+document.querySelector('#previewAllBrandSurfaces').addEventListener('click', (event) => {
+  openFeatureModal('tvPreviewModal', event.currentTarget);
+  showToast('Customer-facing brand preview', 'Dashboard, TV, celebration, competition, and offline surfaces share one versioned brand package.');
+});
 
 document.querySelectorAll('[data-close-feature]').forEach((button) => button.addEventListener('click', () => closeFeatureModal(button.closest('.feature-overlay'))));
 featureModals.forEach((modal) => modal.addEventListener('click', (event) => {
@@ -1783,6 +1845,14 @@ document.querySelectorAll('.kpi-card[data-drilldown]').forEach((card) => {
     }
   });
 });
+document.querySelectorAll('[data-open-trust], #openMetricTrust').forEach((button) => button.addEventListener('click', (event) => {
+  event.stopPropagation();
+  openDrilldown('net-sales', event.currentTarget);
+  document.querySelector('#drilldownTitle').textContent = 'Revenue to goal · Certified metric';
+  document.querySelector('#drilldownSubtitle').textContent = '$82,400 · healthy · verified 2 minutes ago';
+  document.querySelector('#drilldownValue').textContent = '$82,400';
+  document.querySelector('#drilldownFormula').textContent = 'Actual ÷ $100K goal';
+}));
 document.querySelector('#openSourceButton').addEventListener('click', () => showToast('Source handoff ready', 'Production opens the exact permitted Sheet cell or HubSpot view.'));
 
 document.querySelector('#pairScreenButton').addEventListener('click', () => showToast('Pairing code: AXO-482', 'Enter this one-time code on the new display within 10 minutes.'));
@@ -2037,7 +2107,7 @@ const workflowBindings = [
   ['.workspace-switcher button, .mobile-workspace-switch', 'workspace'], ['.sidebar-user button', 'profile'],
   ['.dashboard-toolbar button:not(#openTvMode):not(#editLayoutButton)', 'dashboard'], ['#editLayoutButton', 'layout'], ['.kpi-card header button', 'kpi'], ['.attention-card li button', 'alert'], ['.attention-card > button', 'alert'],
   ['#browseIntegrations', 'connector'], ['.integration-catalog button', 'connector'], ['.connect-source', 'connection'],
-  ['#pairScreenButton, .display-summary button, .screen-device footer button, .add-loop-view', 'screen'],
+  ['#pairScreenButton, .display-summary button, .screen-device footer button:not(#manageRuntimeButton), .add-loop-view', 'screen'],
   ['.rule-card footer button, #newAutomationButton', 'automation'], ['#viewRunLogButton', 'runs'],
   ['.celebration-header .button-ghost, .performers-card .card-title button, .wins-card .card-title button, .momentum-banner button', 'celebration'],
   ['#uploadSoundButton, #uploadZone, .sounds-layout .add-chip, .sounds-layout .chips button, .favorite-button', 'sound'],
@@ -2090,7 +2160,7 @@ document.querySelectorAll('[data-plan-action]').forEach((button) => button.addEv
 }));
 
 document.querySelectorAll('button').forEach((button) => {
-  const known = button.matches('[data-screen], [data-plan-cycle], [data-plan-action], [data-fresh-oauth], [data-load-demo], [data-reset-sample], [data-empty-workflow], [data-close-feature], [data-share-tab], [data-celebration-style], [data-display-type], .use-template, .source-choice, [data-visual], #sheetGrid button, #addKpiButton, #builderBack, #builderNext, #closeKpiBuilder, #closeRangePicker, #cancelRangePicker, #applyRangePicker, #jumpToRangeButton, #previewComparisonButton, #closeWin, #replayWin, #celebrateButton, #previewCelebration, .replay-mini, .sound-row, #soundPreviewButton, #wavePlay, #saveSound, #uploadZone, #uploadSoundButton, #previewGame, #publishGame, #publishBrand, #templateGalleryButton, #shareDashboardButton, #openTvMode, #previewLoopButton, #pairScreenButton, #saveLoopButton, [data-move-loop], #copyShareLink, #createShareLink, #saveSnapshotSchedule, #openSourceButton, #selectRangeButton, #reconnectSource, .build-source-kpi, .destination-grid button, #workflowCancel, #workflowPrimary');
+  const known = button.matches('[data-screen], [data-plan-cycle], [data-plan-action], [data-fresh-oauth], [data-load-demo], [data-reset-sample], [data-empty-workflow], [data-close-feature], [data-share-tab], [data-celebration-style], [data-celebration-view], [data-ledger-replay], [data-ledger-inspect], [data-ledger-release], [data-display-type], [data-open-trust], .use-template, .source-choice, [data-visual], #sheetGrid button, #addKpiButton, #builderBack, #builderNext, #closeKpiBuilder, #closeRangePicker, #cancelRangePicker, #applyRangePicker, #jumpToRangeButton, #previewComparisonButton, #closeWin, #replayWin, #celebrateButton, #previewCelebration, #exportEventLedger, #openEventContract, #testDeliveryPolicy, .replay-mini, .sound-row, #soundPreviewButton, #wavePlay, #saveSound, #uploadZone, #uploadSoundButton, #previewGame, #publishGame, #testScoreEvent, #resetScoreTest, #viewCompetitionContract, #publishBrand, #previewAllBrandSurfaces, #templateGalleryButton, #shareDashboardButton, #openTvMode, #previewLoopButton, #previewRuntimeCompatibility, #manageRuntimeButton, #openMetricTrust, #pairScreenButton, #saveLoopButton, [data-move-loop], #copyShareLink, #createShareLink, #saveSnapshotSchedule, #openSourceButton, #selectRangeButton, #reconnectSource, .build-source-kpi, .destination-grid button, #workflowCancel, #workflowPrimary');
   if (button.dataset.workflowWired) { button.dataset.interactionStatus = 'wireframed'; return; }
   if (known) { button.dataset.interactionStatus = 'working'; return; }
   button.dataset.workflowWired = 'generic';

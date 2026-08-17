@@ -70,8 +70,14 @@
           <div><button type="button">Today⌄</button><button id="openTvMode" type="button">TV mode ↗</button></div>
         </div>
 
+        <aside class="surface trust-summary" aria-label="Certified metric health">
+          <div><span class="trust-seal">✓</span><span><small>CERTIFIED METRICS</small><strong>Every public number has lineage, freshness, and a fallback policy.</strong></span></div>
+          <dl><div><dt>Healthy</dt><dd>4</dd></div><div><dt>Stale</dt><dd>0</dd></div><div><dt>Last verified</dt><dd>2m ago</dd></div></dl>
+          <button id="openMetricTrust" type="button">Review trust contract →</button>
+        </aside>
+
         <section class="kpi-grid" id="dashboardKpiGrid" aria-label="Customizable key performance indicators">
-          <article class="surface kpi-card kpi-card-featured" data-drilldown="net-sales" tabindex="0"><header><span class="source-mark google">G</span><small>Google Sheets · Summary!D8</small><button type="button" aria-label="Edit net sales KPI">•••</button></header><p>Net sales today</p><strong>$55,396</strong><div class="kpi-change positive">↗ 12.4% <span>vs yesterday</span></div><div class="kpi-spark aqua" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><footer><span>Click for source rows</span><b>85% of goal</b></footer></article>
+          <article class="surface kpi-card kpi-card-featured kpi-card-certified" data-drilldown="net-sales" tabindex="0"><header><span class="source-mark google">G</span><small>Google Sheets · Summary!D8</small><span class="certified-chip">✓ Certified</span><button type="button" aria-label="Edit net sales KPI">•••</button></header><p>Revenue to goal</p><strong>$82,400</strong><div class="kpi-change positive">Projected $108,200 <span>＋8% ahead</span></div><div class="goal-intelligence-track" aria-label="82 percent of 100,000 dollar goal"><i style="width:82.4%"></i><b style="left:90%" title="90 percent milestone"></b></div><div class="goal-intelligence-meta"><span>$1,173/day required</span><b>82% of $100K</b></div><footer><button class="trust-link" type="button" data-open-trust>Trust details</button><b>Fresh 2m ago</b></footer></article>
           <article class="surface kpi-card" data-drilldown="pipeline" tabindex="0"><header><span class="source-mark hubspot">H</span><small>HubSpot · deals.amount</small><button type="button" aria-label="Edit pipeline KPI">•••</button></header><p>Open pipeline</p><strong>$1.28M</strong><div class="kpi-change positive">↗ 8.2% <span>this month</span></div><div class="mini-progress"><i style="width:72%"></i></div><footer><span>Click for 48 deals</span><b>On track</b></footer></article>
           <article class="surface kpi-card" data-drilldown="deals-won" tabindex="0"><header><span class="source-mark hubspot">H</span><small>HubSpot · count deals</small><button type="button" aria-label="Edit deals won KPI">•••</button></header><p>Deals won</p><strong>34</strong><div class="kpi-change positive">＋6 <span>vs last week</span></div><div class="kpi-spark pink" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><footer><span>Click for winning deals</span><b>6 to go</b></footer></article>
           <article class="surface kpi-card" data-drilldown="team-track" tabindex="0"><header><span class="source-mark google">G</span><small>Google Sheets · Reps!G4:G18</small><button type="button" aria-label="Edit attainment KPI">•••</button></header><p>Team on track</p><strong>82.9%</strong><div class="kpi-change neutral">13 of 16 <span>reps pacing</span></div><div class="mini-progress gfp"><i style="width:82.9%"></i></div><footer><span>Click for rep rows</span><b>Healthy</b></footer></article>
@@ -111,9 +117,17 @@
         <div class="display-layout">
           <section class="display-main">
             <div class="display-summary surface"><div><span class="status-orb good"></span><strong>3 screens online</strong><small>Last heartbeat 18s ago</small></div><div><b>2</b><span>Active loops</span></div><div><b>99.98%</b><span>30-day uptime</span></div><button type="button">Manage access</button></div>
+            <article class="surface runtime-contract">
+              <header><div><small>WHITE-LABEL DISPLAY RUNTIME</small><h2>Customer brand, resilient playback</h2></div><span class="compatibility-score">8/8 checks</span></header>
+              <div class="runtime-contract-grid">
+                <div class="runtime-brand-preview" id="runtimeBrandPreview"><span class="workspace-avatar">N</span><span><strong data-customer-brand-name>Customer workspace</strong><small>Customer-facing output</small></span><b>LIVE</b></div>
+                <ul><li><span>✓</span><div><strong>Viewport</strong><small>720p · 1080p · 4K · responsive</small></div></li><li><span>✓</span><div><strong>Fallback</strong><small>Last-good dashboard cached</small></div></li><li><span>✓</span><div><strong>Accessibility</strong><small>Reduced motion · silent captions</small></div></li><li><span>✓</span><div><strong>Recovery</strong><small>Retry → cache → branded offline state</small></div></li></ul>
+              </div>
+              <footer><span>Admin chrome stays AxoBoard. The paired screen shows only the customer brand.</span><button id="previewRuntimeCompatibility" type="button">Preview compatibility</button></footer>
+            </article>
             <h2 class="section-title">Screens</h2>
             <div class="screen-grid">
-              <article class="surface screen-device is-online"><div class="device-preview sales-mini"><span>$55K</span><i></i><i></i><i></i></div><div class="device-copy"><span class="connection-pill">● Online</span><h3>Sales Floor TV</h3><p>Front office · 4K · Chrome</p><dl><div><dt>Now showing</dt><dd>Sales performance</dd></div><div><dt>Loop</dt><dd>Revenue pulse · 3 views</dd></div><div><dt>Last heartbeat</dt><dd>18 seconds ago</dd></div></dl></div><footer><button type="button">Change content</button><button type="button">•••</button></footer></article>
+              <article class="surface screen-device is-online"><div class="device-preview sales-mini"><span>$55K</span><i></i><i></i><i></i></div><div class="device-copy"><span class="connection-pill">● Online</span><h3>Sales Floor TV</h3><p>Front office · 4K · Chrome</p><dl><div><dt>Brand package</dt><dd><span data-customer-brand-name>Customer workspace</span> v7</dd></div><div><dt>Loop</dt><dd>Revenue pulse · 3 views</dd></div><div><dt>Last heartbeat</dt><dd>18 seconds ago</dd></div><div><dt>Cached fallback</dt><dd>Ready · 2m old</dd></div></dl></div><footer><button id="manageRuntimeButton" type="button">Manage runtime</button><button type="button" aria-label="More display options">•••</button></footer></article>
               <article class="surface screen-device is-online"><div class="device-preview concierge-mini"><span>82.9%</span><i></i><i></i><i></i></div><div class="device-copy"><span class="connection-pill">● Online</span><h3>Concierge Wall</h3><p>Service bay · 1080p · Fire TV</p><dl><div><dt>Now showing</dt><dd>Concierge Pulse</dd></div><div><dt>Loop</dt><dd>Customer heartbeat · 2 views</dd></div><div><dt>Last heartbeat</dt><dd>31 seconds ago</dd></div></dl></div><footer><button type="button">Change content</button><button type="button">•••</button></footer></article>
               <article class="surface screen-device is-scheduled"><div class="device-preview executive-mini"><span>2.7×</span><i></i><i></i><i></i></div><div class="device-copy"><span class="schedule-pill">◷ Sleeping</span><h3>Executive Display</h3><p>Conference room · 4K · Apple TV</p><dl><div><dt>Next wake</dt><dd>Tomorrow · 7:00 AM</dd></div><div><dt>Loop</dt><dd>Executive daily · 4 views</dd></div><div><dt>Schedule</dt><dd>Mon–Fri · 7 AM–6 PM</dd></div></dl></div><footer><button type="button">Wake screen</button><button type="button">•••</button></footer></article>
             </div>
@@ -233,7 +247,14 @@
           <div class="header-actions"><button class="button button-ghost" type="button">This week⌄</button><button class="button button-primary" id="celebrateButton" type="button">＋ Celebrate win</button></div>
         </header>
 
-        <div class="celebration-layout">
+        <nav class="surface celebration-view-tabs" aria-label="Celebration HQ views">
+          <button class="is-active" type="button" data-celebration-view="moments">Moments</button>
+          <button type="button" data-celebration-view="ledger">Event ledger <span>24</span></button>
+          <button type="button" data-celebration-view="rules">Delivery rules</button>
+          <small>Immutable source events · deduplicated delivery</small>
+        </nav>
+
+        <div class="celebration-layout" data-celebration-panel="moments">
           <div class="celebration-main">
             <div class="metrics-row">
               <article class="surface goal-card">
@@ -274,7 +295,7 @@
               </article>
             </div>
 
-            <aside class="momentum-banner"><span class="mini-axo large">•ᴗ•</span><div><strong>You’ve created 23 celebrations this week!</strong><p>Keep the good vibes—and wins—going.</p></div><button class="button button-ghost" type="button">Send team shoutout ♡</button></aside>
+            <aside class="momentum-banner"><span class="customer-mark-large">N</span><div><strong>You’ve created 23 celebrations this week!</strong><p>Keep the good vibes—and wins—going.</p></div><button class="button button-ghost" type="button">Send team shoutout ♡</button></aside>
           </div>
 
           <aside class="surface celebration-controls" aria-label="Celebration preferences">
@@ -283,7 +304,7 @@
               <button class="is-active" type="button" data-celebration-style="Confetti"><span>✦</span>Confetti</button>
               <button type="button" data-celebration-style="Fireworks"><span>✺</span>Fireworks</button>
               <button type="button" data-celebration-style="Bubbles"><span>○</span>Bubbles</button>
-              <button type="button" data-celebration-style="Axolotl wave"><span class="mini-axo">•ᴗ•</span>Axo wave</button>
+              <button type="button" data-celebration-style="Team mascot"><span class="customer-mark-small">N</span>Team mascot</button>
             </div>
             <label class="range-field"><span><b>Hype level</b><output id="hypeOutput">High</output></span><input id="hypeRange" type="range" min="1" max="4" value="3" /><small><i>Low</i><i>Medium</i><i>High</i><i>MAX</i></small></label>
             <label class="field-label">Sound<select id="celebrationSound"><option>Victory Splash</option><option>Confetti Burst</option><option>High Five</option><option>Silent</option></select></label>
@@ -292,6 +313,22 @@
             <p class="helper-copy"><span>✓</span> Changes preview instantly. Nothing goes live until you publish.</p>
           </aside>
         </div>
+        <section class="surface event-ledger" data-celebration-panel="ledger" hidden aria-labelledby="eventLedgerTitle">
+          <header><div><small>IMMUTABLE EVENT HISTORY</small><h2 id="eventLedgerTitle">Celebration event ledger</h2><p>Inspect source identity, deduplication, brand version, and every delivery attempt.</p></div><div><label>Result<select id="eventResultFilter"><option>All results</option><option>Delivered</option><option>Deduplicated</option><option>Quiet hours</option><option>Failed</option></select></label><button id="exportEventLedger" type="button">Export audit</button></div></header>
+          <div class="ledger-summary"><div><strong>24</strong><span>Source events</span></div><div><strong>31</strong><span>Deliveries</span></div><div><strong>3</strong><span>Duplicates blocked</span></div><div><strong>100%</strong><span>Traceable</span></div></div>
+          <div class="event-ledger-table" role="table" aria-label="Celebration events">
+            <div class="event-ledger-row event-ledger-head" role="row"><span>Time / event ID</span><span>Normalized event</span><span>Decision</span><span>Destinations</span><span>Brand</span><span>Action</span></div>
+            <div class="event-ledger-row" role="row"><span><b>10:42:18</b><small>evt_8F3A…</small></span><span><b>deal.won</b><small>Maya · $18,420</small></span><span><i class="ledger-status delivered">Delivered</i><small>2 of 2 targets</small></span><span><b>TV + Web</b><small>Audio + captions</small></span><span><b><span data-customer-brand-name>Customer workspace</span> v7</b><small>Customer-facing</small></span><button type="button" data-ledger-replay="evt_8F3A">Replay</button></div>
+            <div class="event-ledger-row" role="row"><span><b>10:42:17</b><small>evt_8F3A…</small></span><span><b>deal.won</b><small>Same source event</small></span><span><i class="ledger-status blocked">Deduplicated</i><small>No recount</small></span><span><b>—</b><small>Safely blocked</small></span><span><b><span data-customer-brand-name>Customer workspace</span> v7</b><small>Rule v12</small></span><button type="button" data-ledger-inspect="evt_8F3A">Inspect</button></div>
+            <div class="event-ledger-row" role="row"><span><b>10:31:04</b><small>evt_7C21…</small></span><span><b>goal.milestone.90</b><small>Team revenue</small></span><span><i class="ledger-status held">Quiet hours</i><small>TV held</small></span><span><b>Web only</b><small>Release at 7:00 AM</small></span><span><b><span data-customer-brand-name>Customer workspace</span> v7</b><small>Reduced motion</small></span><button type="button" data-ledger-release="evt_7C21">Release</button></div>
+          </div>
+          <footer><span>Replays create a new delivery attempt and never mutate or recount the source event.</span><button id="openEventContract" type="button">View event contract →</button></footer>
+        </section>
+        <section class="surface delivery-rules-panel" data-celebration-panel="rules" hidden>
+          <div><small>DELIVERY POLICY</small><h2>One event, controlled everywhere</h2><p>Previewable customer-branded delivery with caps, quiet hours, captions, and destination-level retries.</p></div>
+          <ul><li><span>✓</span><div><strong>Idempotency</strong><small>Workspace + source event + rule version</small></div></li><li><span>◷</span><div><strong>Quiet hours</strong><small>TV muted 8 PM–7 AM · web remains visible</small></div></li><li><span>CC</span><div><strong>Silent compatibility</strong><small>Captions and visual pulse replace audio</small></div></li><li><span>↻</span><div><strong>Destination retries</strong><small>Retry failed targets without replaying successful ones</small></div></li></ul>
+          <button class="button button-primary" id="testDeliveryPolicy" type="button">Test delivery policy</button>
+        </section>
       </section>
 
       <section class="screen" data-screen-panel="sounds" aria-labelledby="soundsTitle">
@@ -332,12 +369,25 @@
           <div class="header-actions"><label class="preset-picker">Preset<select><option>Team Challenge</option><option>Blank competition</option></select></label><span class="autosave">● All changes saved</span></div>
         </header>
 
+        <article class="surface competition-contract">
+          <header><div><small>GENERIC SCORING CONTRACT</small><h2>Certified data in. Deterministic score out.</h2></div><span class="contract-status">✓ Compatible</span></header>
+          <div class="competition-contract-grid">
+            <label>Certified metric<select id="competitionMetric"><option>Net sales · currency · healthy</option><option>Deals won · count · healthy</option><option>Customer reviews · count · healthy</option></select></label>
+            <label>Group score by<select id="competitionGroup"><option>Team assignment</option><option>Owner</option><option>Region</option><option>Source label</option></select></label>
+            <label>Business calendar<select id="competitionCalendar"><option>Weekdays · Mon–Fri</option><option>Calendar days</option><option>Custom working days</option></select></label>
+            <label>Timezone<select id="competitionTimezone"><option>America/Denver</option><option>America/New_York</option><option>America/Los_Angeles</option><option>UTC</option></select></label>
+          </div>
+          <footer><span>Idempotency key: workspace + competition + source event + rule version</span><button id="viewCompetitionContract" type="button">View calculation contract</button></footer>
+        </article>
+
         <div class="competition-layout">
           <aside class="surface studio-steps">
             <div class="step complete"><b>1</b><span><strong>Competition identity</strong><small>Names, teams, terms</small></span><i>✓</i></div>
-            <div class="step active"><b>2</b><span><strong>Customize</strong><small>Make it your own</small></span></div>
+            <div class="step active"><b>2</b><span><strong>Data & scoring</strong><small>Certified metric + rules</small></span></div>
             <nav aria-label="Competition customization sections"><button class="is-active" type="button">👾 Team avatars</button><button type="button">▧ Arena</button><button type="button">◉ Colors</button><button type="button">♫ Sounds</button><button type="button">▣ Scoring rules</button><button type="button">♛ Win condition</button></nav>
-            <div class="step"><b>3</b><span><strong>Preview & publish</strong><small>Test and go live</small></span></div>
+            <div class="step"><b>3</b><span><strong>Brand & presentation</strong><small>Customer-facing identity</small></span></div>
+            <div class="step"><b>4</b><span><strong>Test event</strong><small>Before/after proof</small></span></div>
+            <div class="step"><b>5</b><span><strong>Publish version</strong><small>Schedule + rollback</small></span></div>
             <p class="studio-tip"><span>💡</span><strong>Everything is rebrandable.</strong> Change any name, color, image, rule, or sound.</p>
           </aside>
 
@@ -347,7 +397,7 @@
               <div class="scoreboard"><div><strong id="teamOnePreview">Bluefin</strong><span><i id="teamOneBar" style="width:72%"></i></span><b id="teamOneScore">72</b></div><p>ROUND <b>2</b></p><div><strong id="teamTwoPreview">Coral Crew</strong><span><i id="teamTwoBar" style="width:85%"></i></span><b id="teamTwoScore">85</b></div></div>
               <div class="arena-lights"><i></i><i></i><i></i><i></i><i></i></div>
               <div class="winner-copy"><small>FIRST TO <span id="winTargetPreview">100</span></small><strong><span id="winnerTeam">Coral Crew</span> wins!</strong></div>
-              <div class="fighters"><div class="fighter fighter-one"><span class="fighter-gills">✦</span><b>•ᴗ•</b><i></i><small id="fighterOneLabel">Team Bluefin</small></div><div class="fighter fighter-two"><span class="fighter-gills">✦</span><b>•ᴗ•</b><i></i><small id="fighterTwoLabel">Team Coral</small></div></div>
+              <div class="fighters"><div class="fighter fighter-one"><span class="fighter-gills">✦</span><b>C</b><i></i><small id="fighterOneLabel">Team Comets</small></div><div class="fighter fighter-two"><span class="fighter-gills">✦</span><b>M</b><i></i><small id="fighterTwoLabel">Team Meteors</small></div></div>
               <div class="arena-floor"></div>
             </div>
             <div class="editable-labels"><span>In-game UI—click any label to rename it</span><button type="button">Aa <b id="renameChipOne">Bluefin</b> ✎</button><button type="button">Aa <b id="renameChipTwo">Coral Crew</b> ✎</button><button type="button">♛ First to <b id="targetChip">100</b> ✎</button></div>
@@ -356,13 +406,13 @@
           <aside class="surface game-inspector" aria-label="Competition configuration">
             <div class="inspector-scroll">
               <fieldset><legend>✎ Competition identity</legend><label>Competition name<input id="gameNameInput" type="text" value="Team Challenge" maxlength="40" /></label><div class="field-row"><label>Team 1 name<input id="teamOneInput" type="text" value="Bluefin" maxlength="20" /></label><label>Team 2 name<input id="teamTwoInput" type="text" value="Coral Crew" maxlength="20" /></label></div></fieldset>
-              <fieldset><legend>▣ Scoring rules</legend><div class="field-row"><label>Scoring type<select><option>Points</option><option>Revenue</option><option>Wins</option><option>Custom metric</option></select></label><label>Points per action<input id="pointsInput" type="number" min="1" value="10" /></label></div><label>Win condition<select id="winCondition"><option value="100">First to 100</option><option value="250">First to 250</option><option value="500">First to 500</option><option value="time">Highest score by deadline</option></select></label></fieldset>
-              <fieldset><legend>👾 Team avatars</legend><div class="sprite-pickers"><button type="button"><span class="sprite blue">•ᴗ•</span><small>Team 1 avatar</small><b>Change</b></button><button type="button"><span class="sprite coral">•ᴗ•</span><small>Team 2 avatar</small><b>Change</b></button></div></fieldset>
+              <fieldset><legend>▣ Scoring rules</legend><div class="field-row"><label>Every increment<input id="scoreIncrement" type="number" min="1" value="500" /></label><label>Awards points<input id="pointsInput" type="number" min="1" value="15" /></label></div><label>Direction<select><option>Higher is better</option><option>Lower is better</option></select></label><label>Win condition<select id="winCondition"><option value="100">First to 100</option><option value="250">First to 250</option><option value="500">First to 500</option><option value="time">Highest score by deadline</option></select></label><div class="scoring-test"><small>TEST SNAPSHOT</small><p id="scoreTestFormula">$1,500 ÷ $500 × 15 = <b>45 points</b></p><div><button id="testScoreEvent" type="button">Run test event</button><button id="resetScoreTest" type="button">Reset</button></div></div></fieldset>
+              <fieldset><legend>👾 Team avatars</legend><div class="sprite-pickers"><button type="button"><span class="sprite blue">C</span><small>Team 1 avatar</small><b>Change</b></button><button type="button"><span class="sprite coral">M</span><small>Team 2 avatar</small><b>Change</b></button></div></fieldset>
               <fieldset><legend>▧ Arena</legend><div class="arena-options"><button type="button">🌊</button><button type="button">🏟</button><button class="is-active" type="button">🌌</button><button type="button">🏢</button><button type="button">＋</button></div></fieldset>
               <fieldset><legend>◉ Team colors</legend><div class="color-pickers"><label>Team 1<input id="teamOneColor" type="color" value="#38A8EA" /></label><label>Team 2<input id="teamTwoColor" type="color" value="#F55286" /></label></div></fieldset>
               <fieldset><legend>♫ Sounds</legend><label>Victory fanfare<select><option>Victory Splash</option><option>Cheerful Win</option><option>Level Up</option><option>Silent</option></select></label></fieldset>
             </div>
-            <footer><button class="button button-ghost" id="previewGame" type="button">▷ Preview</button><button class="button button-primary" id="publishGame" type="button">↗ Publish competition</button></footer>
+            <footer><span class="version-chip">Draft v4 · rollback ready</span><button class="button button-ghost" id="previewGame" type="button">▷ Preview</button><button class="button button-primary" id="publishGame" type="button">↗ Publish v4</button></footer>
           </aside>
         </div>
       </section>
@@ -375,8 +425,8 @@
         <div class="brand-layout">
           <section class="surface brand-form">
             <div class="panel-heading"><div><small>BRAND BASICS</small><h2>Your workspace identity</h2></div><span class="step-pill">Step 1 of 3</span></div>
-            <label class="field-label">Workspace name<input id="workspaceName" type="text" value="Acme Sales" /></label>
-            <label class="field-label">Logo<div class="logo-drop"><img class="brand-logo large" src="/assets/favicon/favicon-192.png?v=4" width="62" height="62" alt="AxoBoard low-poly leucistic axolotl logo" /><span><strong>axoboard-logo-low-poly.png</strong><small>Transparent PNG master</small></span><button type="button">Replace</button></div></label>
+            <label class="field-label">Workspace name<input id="workspaceName" type="text" value="Customer Workspace" /></label>
+            <label class="field-label">Logo<div class="logo-drop"><span class="customer-logo">N</span><span><strong data-customer-logo-name>customer-mark.svg</strong><small>Customer-owned vector mark</small></span><button type="button">Replace</button></div></label>
             <div class="field-row"><label class="field-label">Primary color<input id="brandColor" type="color" value="#E96F98" /></label><label class="field-label">Personality<select><option>Playful & polished</option><option>Bold & competitive</option><option>Calm & professional</option></select></label></div>
             <label class="field-label">Celebration language<input id="celebrationLanguage" type="text" value="Big win!" /></label>
             <div class="accessibility-check"><span>✓</span><div><strong>Contrast check passed</strong><small>Your text and controls meet WCAG AA.</small></div></div>
@@ -384,10 +434,15 @@
           </section>
           <aside class="brand-preview" id="brandPreview">
             <div class="preview-browser"><span></span><span></span><span></span><small>Live preview</small></div>
-            <div class="preview-app"><aside><img class="brand-logo large" src="/assets/favicon/favicon-192.png?v=4" width="62" height="62" alt="" /><strong id="workspacePreview">Acme Sales</strong><i></i><i></i><i></i></aside><main><small>CELEBRATION HQ</small><h2 id="languagePreview">Big win!</h2><div class="preview-win"><span class="mini-axo large">•ᴗ•</span><strong>Maya closed<br /><b>$18,420!</b></strong><span class="preview-button">Replay win</span></div><div class="preview-cards"><i></i><i></i><i></i></div></main></div>
+            <div class="preview-app"><aside><span class="customer-logo large">N</span><strong id="workspacePreview">Customer Workspace</strong><i></i><i></i><i></i></aside><main><small>CELEBRATION HQ</small><h2 id="languagePreview">Big win!</h2><div class="preview-win"><span class="customer-mark-large">N</span><strong>Maya closed<br /><b>$18,420!</b></strong><span class="preview-button">Replay win</span></div><div class="preview-cards"><i></i><i></i><i></i></div></main></div>
             <p>Preview updates instantly across the entire product.</p>
           </aside>
         </div>
+        <article class="surface brand-coverage">
+          <header><div><small>CUSTOMER-FACING COVERAGE</small><h2>One brand package, every runtime</h2><p>The admin editor stays AxoBoard. Everything your audience sees uses <span data-customer-brand-name>the customer workspace</span>.</p></div><button id="previewAllBrandSurfaces" type="button">Preview all surfaces</button></header>
+          <div class="brand-coverage-grid"><span>✓ Dashboard</span><span>✓ Shared view</span><span>✓ TV display</span><span>✓ Celebration</span><span>✓ Competition</span><span>✓ Offline state</span></div>
+          <div class="compatibility-grid"><span><b>AA</b>Contrast</span><span><b>↝</b>Reduced motion</span><span><b>CC</b>Silent captions</span><span><b>720</b>720p</span><span><b>1080</b>1080p</span><span><b>4K</b>4K</span><span><b>▯</b>Mobile</span></div>
+        </article>
       </section>
     </main>
   </div>
@@ -436,7 +491,7 @@
   </div>
 
   <div class="feature-overlay tv-preview-overlay" id="tvPreviewModal" role="dialog" aria-modal="true" aria-labelledby="tvPreviewTitle" aria-hidden="true">
-    <div class="tv-preview-stage"><header><div><img src="/assets/favicon/favicon-192.png?v=4" width="48" height="48" alt="" /><span><small id="tvPreviewEyebrow">CURRENT WORKSPACE · LIVE DASHBOARD</small><h2 id="tvPreviewTitle">Dashboard</h2></span></div><button data-close-feature="tvPreviewModal" type="button" aria-label="Close TV preview">×</button></header><div class="tv-kpis" id="tvKpiGrid"></div><div class="tv-chart tv-dashboard-context" id="tvDashboardContext"><div><small>DASHBOARD STATUS</small><strong>Loading this workspace’s KPI cards…</strong></div><div class="tv-source-summary"></div></div><footer><span class="live-dot"></span> <span id="tvFreshness">Loading live data</span> <i></i> Auto-refresh in <b id="loopCountdown">45</b>s</footer></div>
+    <div class="tv-preview-stage"><header><div><span class="customer-logo tv-customer-logo">N</span><span><small id="tvPreviewEyebrow">NORTHSTAR SALES · LIVE DASHBOARD</small><h2 id="tvPreviewTitle">Revenue pulse</h2></span></div><button data-close-feature="tvPreviewModal" type="button" aria-label="Close TV preview">×</button></header><div class="tv-kpis" id="tvKpiGrid"></div><div class="tv-chart tv-dashboard-context" id="tvDashboardContext"><div><small>DASHBOARD STATUS</small><strong>Loading this workspace’s KPI cards…</strong></div><div class="tv-source-summary"></div></div><footer><span class="live-dot"></span> <span id="tvFreshness">Loading live data</span> <i></i> Auto-refresh in <b id="loopCountdown">45</b>s</footer></div>
   </div>
 
   <div class="builder-overlay" id="kpiBuilderModal" role="dialog" aria-modal="true" aria-labelledby="kpiBuilderTitle" aria-hidden="true">
@@ -487,7 +542,18 @@
             <button type="button" data-display-type="heatmap"><span>▦</span><strong>Heatmap</strong><small>Two-dimensional matrix</small></button>
             <button type="button" data-display-type="table"><span>≡</span><strong>Table</strong><small>Keep selected cells</small></button>
           </div><p id="displayTypeHelp">Best for one number already calculated in Google Sheets.</p><aside class="display-data-requirement" id="displayDataRequirement" hidden></aside></fieldset>
-          <div class="display-config"><div><label>KPI name<input id="kpiName" type="text" value="My Google Sheets KPI" /></label><label>Number format<select id="kpiFormat"><option value="number">Number · 55,396</option><option value="currency">Currency · $55,396</option><option value="percentage">Percent · 82.9%</option></select></label></div><div><label id="periodGranularityField" hidden>Card period<select id="periodGranularity"><option value="day">Daily</option><option value="week">Weekly</option><option value="month" selected>Monthly</option><option value="year">Yearly</option></select><small class="field-help">Labels the rep-card view and its progress context.</small></label><label>Goal value<input id="kpiGoal" type="number" step="any" placeholder="Optional" /><small class="field-help">Adds progress-to-goal context to the KPI.</small></label><label id="comparisonModeField">Compare with<select id="kpiComparisonMode"><option value="none">Nothing</option><option value="range">Another Sheets range</option></select><small class="field-help">Choose another prepared cell or matching value range.</small></label></div><section class="kpi-comparison-builder" id="kpiComparisonFields" hidden><header><div><strong>Comparison data</strong><small>Select the prepared prior-period or goal cells from Google Sheets.</small></div><span id="comparisonPreviewStatus">Not selected</span></header><input id="comparisonRange" type="hidden" value="" /><input id="comparisonAggregation" type="hidden" value="single_value" /><select id="comparisonSheet" hidden aria-label="Comparison sheet"></select><button class="comparison-picker-trigger" id="previewComparisonButton" type="button"><span><small>GOOGLE SHEETS</small><strong id="comparisonSelectionLabel">Choose comparison cells</strong></span><b>Choose cells →</b></button><label class="sheet-header-card comparison-header-card"><input id="comparisonHasHeaders" type="checkbox" /><span><strong>Comparison includes a header row</strong><small>Turn this on only if the comparison selection also starts with column headers.</small></span></label></section><aside class="kpi-sync-contract"><span>↻</span><div><strong>Live sync contract</strong><p>Refreshes every 5 minutes. AxoBoard marks the KPI stale after 15 minutes and preserves the last known good values if Google is temporarily unavailable.</p></div></aside></div>
+          <div class="display-config">
+            <div><label>KPI name<input id="kpiName" type="text" value="My Google Sheets KPI" /></label><label>Number format<select id="kpiFormat"><option value="number">Number · 55,396</option><option value="currency">Currency · $55,396</option><option value="percentage">Percent · 82.9%</option></select></label></div>
+            <div><label id="periodGranularityField" hidden>Card period<select id="periodGranularity"><option value="day">Daily</option><option value="week">Weekly</option><option value="month" selected>Monthly</option><option value="year">Yearly</option></select><small class="field-help">Labels the rep-card view and its progress context.</small></label><label>Goal value<input id="kpiGoal" type="number" step="any" placeholder="Optional" /><small class="field-help">Adds progress-to-goal context to the KPI.</small></label><label id="comparisonModeField">Compare with<select id="kpiComparisonMode"><option value="none">Nothing</option><option value="range">Another Sheets range</option></select><small class="field-help">Choose another prepared cell or matching value range.</small></label></div>
+            <section class="goal-intelligence-config" id="goalIntelligenceConfig" hidden>
+              <header><div><small>GOAL INTELLIGENCE</small><strong>Projection, pace, and milestone events</strong></div><span>✓ Certified metric required</span></header>
+              <div class="goal-intelligence-fields"><label>Goal source<select id="goalSource"><option>Fixed value above</option><option>Another certified metric</option></select></label><label>Direction<select id="goalDirection"><option>Higher is better</option><option>Lower is better</option></select></label><label>Business calendar<select id="goalCalendar"><option>Weekdays · Mon–Fri</option><option>Calendar days</option><option>Custom working days</option></select></label><label>Timezone<select id="goalTimezone"><option>Workspace · America/Denver</option><option>UTC</option></select></label></div>
+              <div class="goal-intelligence-preview"><div><small>PROJECTED FINISH</small><strong>$108,200</strong><span>＋8% ahead</span></div><div><small>REQUIRED PACE</small><strong>$1,173/day</strong><span>15 working days</span></div><div><small>NEXT MILESTONE</small><strong>90%</strong><span>Emit preview event</span></div></div>
+              <label class="milestone-toggle"><input id="goalMilestones" type="checkbox" checked /><span><strong>Create milestone events</strong><small>25%, 50%, 75%, 90%, 100%, and stretch goals. Publishing is blocked until the metric is certified.</small></span></label>
+            </section>
+            <section class="kpi-comparison-builder" id="kpiComparisonFields" hidden><header><div><strong>Comparison data</strong><small>Select the prepared prior-period or goal cells from Google Sheets.</small></div><span id="comparisonPreviewStatus">Not selected</span></header><input id="comparisonRange" type="hidden" value="" /><input id="comparisonAggregation" type="hidden" value="single_value" /><select id="comparisonSheet" hidden aria-label="Comparison sheet"></select><button class="comparison-picker-trigger" id="previewComparisonButton" type="button"><span><small>GOOGLE SHEETS</small><strong id="comparisonSelectionLabel">Choose comparison cells</strong></span><b>Choose cells →</b></button><label class="sheet-header-card comparison-header-card"><input id="comparisonHasHeaders" type="checkbox" /><span><strong>Comparison includes a header row</strong><small>Turn this on only if the comparison selection also starts with column headers.</small></span></label></section>
+            <aside class="kpi-sync-contract"><span>↻</span><div><strong>Live sync contract</strong><p>Refreshes every 5 minutes. AxoBoard marks the KPI stale after 15 minutes and preserves the last known good values if Google is temporarily unavailable.</p></div></aside>
+          </div>
           <aside class="kpi-preview-card"><small>LIVE GOOGLE PREVIEW</small><span class="source-mark google" id="previewSourceMark">G</span><p id="previewKpiName">My Google Sheets KPI</p><strong id="previewKpiValue">—</strong><div class="structured-preview" id="previewStructured" hidden></div><div class="kpi-comparison-preview" id="previewComparison" hidden></div><div class="kpi-change neutral">● Read only <span id="previewFreshness">waiting for source</span></div><footer><span id="previewLineage">No range selected</span><b>Draft</b></footer></aside>
         </section>
       </div>
@@ -511,7 +577,7 @@
       <button class="close-win" id="closeWin" type="button" aria-label="Close celebration">×</button>
       <span class="celebration-badge">✦</span>
       <h2 id="winTitle">Maya closed <strong>$18,420!</strong></h2>
-      <div class="hero-axo" aria-hidden="true"><i></i><b>•ᴗ•</b><i></i><span>♬</span></div>
+      <div class="customer-celebration-mark" aria-hidden="true"><b>N</b><span>♬</span></div>
       <p><span id="activeStyle">Confetti</span> · <span id="activeSound">Victory Splash</span> · <span id="activeHype">High hype</span></p>
       <button class="button button-primary" id="replayWin" type="button">↻ Replay win</button>
     </div>
