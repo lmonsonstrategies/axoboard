@@ -29,7 +29,7 @@ await pool.query("INSERT INTO memberships (id,user_id,workspace_id,role) VALUES 
 const loads = [];
 const runtime = createDisplayRuntime({
   pool,
-  env: { AXOBOARD_DISPLAY_TOKEN_SECRET: randomBytes(32).toString('base64url') },
+  env: { APP_BASE_URL: 'https://app.example.test', AXOBOARD_DISPLAY_TOKEN_SECRET: randomBytes(32).toString('base64url') },
   sendJson,
   readJson: async (req) => req.body,
   sameOrigin: () => true,
@@ -45,6 +45,7 @@ await runtime.handleAdmin(request({ name: 'Sales Floor TV', contentMode: 'full_d
 assert.equal(res.status, 201);
 assert.match(res.payload.pairing.code, /^[2-9A-HJ-NP-Z]{8}$/);
 assert.equal(res.payload.display.status, 'pending');
+assert.equal(res.payload.pairing.url, 'https://app.example.test/tv', 'pairing guidance has a working primary-domain fallback');
 const displayId = res.payload.display.id;
 const code = res.payload.pairing.code;
 

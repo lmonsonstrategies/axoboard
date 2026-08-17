@@ -23,7 +23,7 @@ AXOBOARD_DISPLAY_BASE_URL=https://tv.axoboard.io
 AXOBOARD_DISPLAY_TOKEN_SECRET=<independent random secret, at least 32 characters>
 ```
 
-`AXOBOARD_DISPLAY_TOKEN_SECRET` falls back to `AXOBOARD_OAUTH_ENCRYPTION_KEY` to avoid a deployment hard stop, but production should use an independent secret. Set `AXOBOARD_DISPLAY_RUNTIME_ENABLED=false` for an emergency logical rollback; additive migration `012_persistent_display_devices.sql` can remain in place.
+`AXOBOARD_DISPLAY_TOKEN_SECRET` falls back to `AXOBOARD_OAUTH_ENCRYPTION_KEY` to avoid a deployment hard stop, but production should use an independent secret. When `AXOBOARD_DISPLAY_BASE_URL` is unset, pairing guidance safely falls back to `${APP_BASE_URL}/tv`. Set `AXOBOARD_DISPLAY_RUNTIME_ENABLED=false` for an emergency logical rollback; additive migration `012_persistent_display_devices.sql` can remain in place.
 
 ## Domain setup
 

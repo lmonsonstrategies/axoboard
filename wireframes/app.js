@@ -2777,8 +2777,9 @@ document.querySelector('#displayPairingForm').addEventListener('submit', async (
       kpiIds: contentMode === 'selected_kpis' ? selectedDisplayKpis(document.querySelector('#displayKpiOptions')) : [],
       rotationSeconds: Number(document.querySelector('#displayRotationSeconds').value)
     }) });
+    document.querySelector('#displayPairingDestination').textContent = `OPEN ${payload.pairing.url}`;
     document.querySelector('#displayPairingCode').textContent = payload.pairing.code;
-    document.querySelector('#displayPairingExpiry').textContent = `Expires ${new Date(payload.pairing.expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · enter at tv.axoboard.io`;
+    document.querySelector('#displayPairingExpiry').textContent = `Expires ${new Date(payload.pairing.expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
     document.querySelector('#displayPairingResult').hidden = false;
     button.hidden = true;
     liveDisplays = [payload.display, ...liveDisplays];
