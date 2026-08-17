@@ -160,13 +160,24 @@ const visualizations = await evaluate(`(async () => {
   renderLiveKpis();
   activeDisplayType = 'scorecard';
   renderStructuredPreview(liveKpis[0].displayPayload);
-  loadedSpreadsheet = { input: 'sheet-audit-1', title: 'Monthly Revenue', sheets: [{ sheetId: 1, title: 'Audit' }] };
+  loadedSpreadsheet = { input: 'sheet-audit-1', title: 'Monthly Revenue', sheets: [{ sheetId: 1, title: 'Audit', rowCount: 1000, columnCount: 100 }] };
   document.querySelector('#sheetFile').value = 'sheet-audit-1';
   document.querySelector('#sheetTab').replaceChildren(new Option('Audit', '1'));
   document.querySelector('#comparisonSheet').replaceChildren(new Option('Audit', '1'));
+  document.querySelector('#rangePickerSheet').replaceChildren(new Option('Audit', '1'));
   editingKpiId = liveKpis[0].id;
   await hydrateKpiBuilder(liveKpis[0]);
-  showBuilderStep(3);
+  const editStep = activeBuilderStep;
+  await openRangePicker('goal', document.querySelector('#selectGoalRangeButton'));
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const stagedGoal = {
+    ranges: sheetSelectionsA1(),
+    roles: [...sheetSelectionRoles],
+    activeRole: sheetSelectionRoles[activeSheetSelectionIndex],
+    title: document.querySelector('#rangePickerTitle').textContent,
+    copy: document.querySelector('#rangePickerCopy').textContent
+  };
+  closeRangePicker();
   builderPreview = { value: 90, goalValue: 100, goalSource: 'google_sheets', displayPayload: liveKpis[0].displayPayload, sourceRange: "'Audit'!A1:B4", range: 'A1:B4', sheet: { title: 'Audit' }, fetchedAt: new Date().toISOString(), comparison: null };
   renderBuilderAccuratePreview();
   return {
@@ -183,6 +194,9 @@ const visualizations = await evaluate(`(async () => {
     editName: document.querySelector('#kpiName').value,
     editRange: document.querySelector('#sheetRange').value,
     editAction: document.querySelector('#builderNext').textContent,
+    editStep,
+    goalPickerLabel: document.querySelector('#selectGoalRangeLabel').textContent,
+    stagedGoal,
     builderPreviewClass: document.querySelector('#builderAccuratePreview .kpi-card')?.className,
     builderPreviewText: document.querySelector('#builderAccuratePreview')?.textContent.replace(/\s+/g, ' ').trim()
   };
@@ -243,7 +257,14 @@ assert.equal(visualizations.comparisonHidden, true, 'a composite scorecard hides
 assert.deepEqual(visualizations.tableHeaders, ['Rep', 'Sales'], 'table preserves source headers');
 assert.equal(visualizations.editName, 'Audit scorecard', 'editing hydrates the saved KPI name');
 assert.equal(visualizations.editRange, 'A1:B4', 'editing hydrates the saved Sheets range');
+assert.equal(visualizations.editStep, 3, 'editing opens directly on the final Display step');
 assert.equal(visualizations.editAction, 'Save KPI changes', 'editing uses an explicit update action');
+assert.equal(visualizations.goalPickerLabel, 'Change goal cells', 'the final step exposes the live Sheets goal action');
+assert.equal(visualizations.stagedGoal.ranges, 'A1:B4,C1:D4', 'the goal action preserves metrics and stages an adjacent matching range');
+assert.deepEqual(visualizations.stagedGoal.roles, ['metric', 'goal'], 'the staged range is preselected as Goal');
+assert.equal(visualizations.stagedGoal.activeRole, 'goal', 'the new Goal range is the active picker selection');
+assert.equal(visualizations.stagedGoal.title, 'Choose goal cells', 'the picker clearly identifies the Goal workflow');
+assert.match(visualizations.stagedGoal.copy, /already marked Goal/i, 'the picker explains the preselected Goal role');
 assert.match(visualizations.builderPreviewClass, /kpi-card-scorecard-detail/, 'builder preview uses the same scorecard renderer as the saved dashboard');
 assert.match(visualizations.builderPreviewText, /Ava.*Monthly Revenue.*90.*Goal.*100.*90\.0% of goal/, 'builder preview shows the exact saved-card rep, metric, goal, and progress data');
 assert.ok(mobile.modal.width <= mobile.viewportWidth && mobile.modal.height <= 844, 'mobile picker stays within the viewport');

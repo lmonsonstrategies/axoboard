@@ -426,6 +426,7 @@ let sheetSelectionRoles = ['metric'];
 let activeSheetSelectionIndex = 0;
 let addingSeparateRange = false;
 let rangePickerTarget = 'primary';
+let rangePickerIntent = 'primary';
 let rangePickerReturnFocus = null;
 const sheetCellWidth = 110;
 const sheetCellHeight = 38;
@@ -490,11 +491,13 @@ function syncCompositeScorecardControls(payload = null) {
   const sheetGoal = builderPreview?.goalSource === 'google_sheets' || primaryRangeRoles.some((item) => item.role === 'goal') || composite;
   const goalInput = document.querySelector('#kpiGoal');
   const goalHelp = document.querySelector('#kpiGoalHelp');
+  const goalPickerLabel = document.querySelector('#selectGoalRangeLabel');
   goalInput.disabled = sheetGoal;
   goalInput.placeholder = sheetGoal ? 'From Google Sheets' : 'Optional';
+  goalPickerLabel.textContent = sheetGoal ? 'Change goal cells' : 'Use Sheets cell/range';
   goalHelp.textContent = sheetGoal
     ? 'This KPI uses the live Goal cell or range selected in Google Sheets.'
-    : 'Adds progress-to-goal context to the KPI.';
+    : 'Enter a fixed goal or use a live Google Sheets cell/range.';
   if (!sheetGoal) return;
   goalInput.value = '';
   if (!composite) return;
@@ -1014,7 +1017,8 @@ function updatePrimaryRangeSummary() {
 
 async function openRangePicker(target, trigger = document.activeElement) {
   if (!loadedSpreadsheet) await loadSpreadsheetMetadata();
-  rangePickerTarget = target === 'comparison' ? 'comparison' : 'primary';
+  rangePickerIntent = target === 'comparison' ? 'comparison' : target === 'goal' ? 'goal' : 'primary';
+  rangePickerTarget = rangePickerIntent === 'comparison' ? 'comparison' : 'primary';
   rangePickerReturnFocus = trigger;
   const sourceRange = rangePickerTarget === 'comparison'
     ? document.querySelector('#comparisonRange').value || document.querySelector('#sheetRange').value || 'A1'
@@ -1033,14 +1037,40 @@ async function openRangePicker(target, trigger = document.activeElement) {
   sheetSelectionRoles = storedRoles.length === parsed.length
     ? storedRoles.map((item) => ['header', 'goal'].includes(item.role) ? item.role : 'metric')
     : parsed.map(() => 'metric');
-  activeSheetSelectionIndex = 0;
-  sheetSelection = sheetSelections[0];
+  if (rangePickerIntent === 'goal') {
+    const existingGoalIndex = sheetSelectionRoles.indexOf('goal');
+    if (existingGoalIndex >= 0) {
+      activeSheetSelectionIndex = existingGoalIndex;
+    } else {
+      const metricIndex = Math.max(0, sheetSelectionRoles.lastIndexOf('metric'));
+      const metricBounds = sheetSelectionBounds(sheetSelections[metricIndex]);
+      const rows = metricBounds.maxRow - metricBounds.minRow;
+      const columns = metricBounds.maxColumn - metricBounds.minColumn;
+      const selectedSheet = loadedSpreadsheet.sheets.find((sheet) => sheet.sheetId === Number(sourceSheet));
+      const fitsRight = !selectedSheet || metricBounds.maxColumn + columns + 1 <= selectedSheet.columnCount;
+      const fitsBelow = !selectedSheet || metricBounds.maxRow + rows + 1 <= selectedSheet.rowCount;
+      const anchor = fitsRight
+        ? { row: metricBounds.minRow, column: metricBounds.maxColumn + 1 }
+        : fitsBelow
+          ? { row: metricBounds.maxRow + 1, column: metricBounds.minColumn }
+          : { row: 1, column: 1 };
+      const goalSelection = { anchor, focus: { row: anchor.row + rows, column: anchor.column + columns } };
+      sheetSelections = [...sheetSelections, goalSelection];
+      sheetSelectionRoles = [...sheetSelectionRoles, 'goal'];
+      activeSheetSelectionIndex = sheetSelections.length - 1;
+    }
+  } else {
+    activeSheetSelectionIndex = 0;
+  }
+  sheetSelection = sheetSelections[activeSheetSelectionIndex];
   addingSeparateRange = false;
   document.querySelector('#addRangeSelection').setAttribute('aria-pressed', 'false');
   document.querySelector('#rangePickerInput').value = sheetSelectionsA1();
-  document.querySelector('#rangePickerTitle').textContent = rangePickerTarget === 'comparison' ? 'Choose comparison cells' : 'Choose KPI cells';
-  document.querySelector('#rangePickerCopy').textContent = rangePickerTarget === 'comparison'
+  document.querySelector('#rangePickerTitle').textContent = rangePickerIntent === 'comparison' ? 'Choose comparison cells' : rangePickerIntent === 'goal' ? 'Choose goal cells' : 'Choose KPI cells';
+  document.querySelector('#rangePickerCopy').textContent = rangePickerIntent === 'comparison'
     ? 'Pick the cells this KPI should compare against.'
+    : rangePickerIntent === 'goal'
+      ? 'The new range is already marked Goal. Select one shared goal cell or a range matching the metric.'
     : 'Drag to select, then add separate ranges for cells that are not touching.';
   document.querySelector('#rangePickerPreviewResult').textContent = 'Selection not applied';
   const modal = document.querySelector('#rangePickerModal');
@@ -1048,9 +1078,12 @@ async function openRangePicker(target, trigger = document.activeElement) {
   modal.setAttribute('aria-hidden', 'false');
   document.querySelector('#sheetPickerStatus').textContent = 'Loading cells…';
   document.querySelector('#rangePickerInput').focus();
-  await loadSheetGrid(1, 1);
-  document.querySelector('#sheetGrid').scrollTo({ top: 0, left: 0, behavior: 'auto' });
-  updateSheetGridOverlays();
+  if (rangePickerIntent === 'goal') await revealSheetSelection();
+  else {
+    await loadSheetGrid(1, 1);
+    document.querySelector('#sheetGrid').scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    updateSheetGridOverlays();
+  }
 }
 
 function closeRangePicker() {
@@ -1089,6 +1122,9 @@ function applyRangePickerSelection() {
   builderPreview = null;
   renderComparisonPreview();
   closeRangePicker();
+  if (rangePickerIntent === 'goal' && activeBuilderStep === 3) {
+    previewGoogleSelection().catch((error) => showToast('Goal cells need attention', error.message));
+  }
 }
 
 function clampPercent(value) {
@@ -1527,13 +1563,21 @@ function openKpiBuilder(source = 'google', trigger = document.activeElement, kpi
   document.querySelector('#sheetPickerSubtitle').textContent = 'Reading file names and modified dates from Google Drive';
   document.querySelector('#spreadsheetPickerHelp').textContent = 'Sorted by most recently updated';
   document.querySelector('#sheetGrid').innerHTML = '<p>Choose a spreadsheet and sheet to browse its cells.</p>';
+  builderNext.disabled = false;
   syncBuilderSource(source);
-  showBuilderStep(1);
+  showBuilderStep(editingKpiId ? 3 : 1);
+  if (editingKpiId) {
+    builderNext.disabled = true;
+    document.querySelector('#builderStatus').textContent = 'Loading saved KPI…';
+  }
   kpiBuilderModal.classList.add('is-visible');
   kpiBuilderModal.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
   document.querySelector('#closeKpiBuilder').focus();
-  if (source === 'google') loadSpreadsheetList().then(() => kpi ? hydrateKpiBuilder(kpi) : null).catch((error) => {
+  if (source === 'google') loadSpreadsheetList().then(async () => {
+    if (kpi) await hydrateKpiBuilder(kpi);
+    builderNext.disabled = false;
+  }).catch((error) => {
     document.querySelector('#sheetPickerTitle').textContent = 'Spreadsheet list unavailable';
     document.querySelector('#sheetPickerSubtitle').textContent = error.message;
     document.querySelector('#sheetFile').innerHTML = '<option value="">Reconnect Google Sheets</option>';
@@ -1568,12 +1612,30 @@ async function hydrateKpiBuilder(kpi) {
   document.querySelector('#comparisonHasHeaders').checked = Boolean(kpi.comparisonIncludeHeaders);
   document.querySelector('#comparisonSelectionLabel').textContent = kpi.comparisonRange ? `${kpi.comparisonSheetTitle || kpi.sheetTitle}!${kpi.comparisonRange}` : 'Choose comparison cells';
   selectDisplayType(kpi.displayType || 'scorecard');
-  builderPreview = null;
+  builderPreview = {
+    value: kpi.value,
+    goalValue: kpi.goalValue,
+    goalSource: kpi.goalSource || 'manual',
+    displayPayload: kpi.displayPayload,
+    sourceRange: kpi.sourceRange,
+    range: kpi.range,
+    sheet: { title: kpi.sheetTitle },
+    fetchedAt: kpi.fetchedAt,
+    comparison: kpi.comparisonValue === null || kpi.comparisonValue === undefined ? null : {
+      value: kpi.comparisonValue,
+      delta: kpi.comparisonDelta,
+      percentChange: kpi.comparisonPercentChange ?? null,
+      sourceRange: kpi.comparisonSourceRange || `${kpi.comparisonSheetTitle || kpi.sheetTitle}!${kpi.comparisonRange}`
+    }
+  };
   previewKpiValue.textContent = formatKpiValue(kpi.value, kpi.displayFormat);
   document.querySelector('#previewLineage').textContent = `${kpi.spreadsheetTitle} · ${kpi.sourceRange}`;
   document.querySelector('#previewFreshness').textContent = `last synced ${timeAgo(kpi.fetchedAt)}`;
   renderStructuredPreview(kpi.displayPayload);
   updatePrimaryRangeSummary();
+  renderComparisonPreview(builderPreview.comparison);
+  renderBuilderAccuratePreview();
+  showBuilderStep(3);
   document.querySelector('#builderStatus').textContent = 'Editing saved KPI · nothing changes until Save';
 }
 
@@ -1857,6 +1919,13 @@ document.querySelector('#kpiComparisonMode').addEventListener('change', (event) 
 document.querySelector('#previewComparisonButton').addEventListener('click', (event) => {
   openRangePicker('comparison', event.currentTarget).catch((error) => showToast('Sheet preview could not open', error.message));
 });
+document.querySelector('#selectGoalRangeButton').addEventListener('click', (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  openRangePicker('goal', button)
+    .catch((error) => showToast('Goal picker could not open', error.message))
+    .finally(() => { button.disabled = false; });
+});
 document.querySelector('#selectRangeButton').addEventListener('click', async () => {
   const button = document.querySelector('#selectRangeButton');
   button.disabled = true;
@@ -1986,7 +2055,10 @@ document.querySelector('#sheetGrid').addEventListener('pointerdown', (event) => 
   const coordinate = { row: Number(cell.dataset.row), column: Number(cell.dataset.column) };
   const additive = addingSeparateRange || event.ctrlKey || event.metaKey;
   selectingSheetCells = true;
-  setSheetSelection(event.shiftKey && !additive ? sheetSelection.anchor : coordinate, coordinate, { additive });
+  setSheetSelection(event.shiftKey && !additive ? sheetSelection.anchor : coordinate, coordinate, {
+    additive,
+    selectionIndex: rangePickerIntent === 'goal' && !additive ? activeSheetSelectionIndex : null
+  });
   addingSeparateRange = false;
   document.querySelector('#addRangeSelection').setAttribute('aria-pressed', 'false');
   cell.focus();
