@@ -1609,7 +1609,10 @@ function renderLiveEngagement() {
     workspaceName.value = liveBrand.name || liveWorkspaceName;
     if (liveBrand.tokens?.primary) brandColor.value = liveBrand.tokens.primary;
     syncBrandPreview();
-    document.querySelector('#tvPreviewModal')?.style.setProperty('--customer-primary', liveBrand.tokens?.primary || brandColor.value);
+    const tvPreview = document.querySelector('#tvPreviewModal');
+    tvPreview?.style.setProperty('--customer-primary', liveBrand.tokens?.primary || brandColor.value || '#E96F98');
+    tvPreview?.style.setProperty('--customer-secondary', liveBrand.tokens?.secondary || '#43BDE8');
+    tvPreview?.style.setProperty('--customer-success', liveBrand.tokens?.success || '#6DDB65');
   }
   const events = liveEngagement.events || [];
   const ledger = document.querySelector('.event-ledger-table');

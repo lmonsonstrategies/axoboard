@@ -9,6 +9,7 @@
   --pink-100: #fbe7ef;
   --pink-050: #fff3f7;
   --aqua-500: #43bde8;
+  --aqua-400: #68c9ed;
   --aqua-300: #8cddf6;
   --aqua-200: #bcecff;
   --aqua-100: #ddf6ff;
@@ -515,3 +516,25 @@ body[data-tv-runtime="true"] .app-shell,body[data-tv-runtime="true"] > .toast,bo
 @media (max-width:600px) { .bootstrap-gate { grid-template-columns:1fr; place-items:center; text-align:center; padding:24px; }.bootstrap-gate > button { grid-column:1; }.bootstrap-gate p { max-width:36ch; } }
 @media (prefers-reduced-motion:reduce) { .bootstrap-gate-mark { animation:none; } }
 .automation-rule-card footer .archive-rule-button { border-color:#efb1ba; background:#fff8f9; color:#a9253a; }
+
+/* TV visualization paints must always resolve, even before a brand package loads. */
+.tv-preview-overlay {
+  --tv-brand-primary: var(--customer-primary, var(--pink-400, #f08caf));
+  --tv-brand-secondary: var(--customer-secondary, var(--aqua-400, #68c9ed));
+  --tv-brand-success: var(--customer-success, var(--gfp-300, #b8f58e));
+}
+.tv-progress-track i,
+.tv-goal-pace > div i {
+  background: linear-gradient(90deg, var(--tv-brand-primary), var(--tv-brand-secondary), var(--tv-brand-success));
+}
+.tv-gauge {
+  background: conic-gradient(var(--tv-brand-primary) 0 var(--tv-gauge-turn), var(--tv-brand-secondary) var(--tv-gauge-turn), rgba(255,255,255,.1) var(--tv-gauge-turn) 1turn);
+}
+.tv-rep-card i b {
+  background: linear-gradient(90deg, var(--tv-brand-primary), var(--tv-brand-secondary));
+}
+.tv-category-row > i b {
+  background: linear-gradient(90deg, var(--tv-brand-secondary), var(--tv-brand-primary));
+}
+.tv-trend-current { stroke: var(--tv-brand-primary); }
+.tv-trend-comparison { stroke: var(--tv-brand-secondary); }
