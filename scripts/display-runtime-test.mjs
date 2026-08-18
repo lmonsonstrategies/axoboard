@@ -37,7 +37,9 @@ await pool.query(`INSERT INTO memberships (id,user_id,workspace_id,role) VALUES
   randomUUID(), otherUserId, otherWorkspaceId]);
 
 const loads = [];
+const visualQaLoads = [];
 const automationLoads = [];
+let visualQaAvailable = true;
 const runtime = createDisplayRuntime({
   pool,
   env: { APP_BASE_URL: 'https://app.example.test', AXOBOARD_DISPLAY_TOKEN_SECRET: randomBytes(32).toString('base64url') },
@@ -46,6 +48,7 @@ const runtime = createDisplayRuntime({
   sameOrigin: () => true,
   isRateLimited: () => false,
   loadWorkspaceDisplay: async (id, kpiIds) => { loads.push({ id, kpiIds }); return { workspace: { id, name: 'Display Test' }, brand: { name: 'Display Test', version: 1, tokens: {} }, dashboard: { layout: { kpiOrder: [] } }, kpis: [] }; },
+  loadVisualQaDisplay: async (id) => { visualQaLoads.push(id); return visualQaAvailable && id === workspaceId ? { workspace: { id, name: 'Display Test' }, brand: { name: 'Display Test', version: 1, tokens: {} }, dashboard: { layout: { kpiOrder: ['visual-qa-card'] } }, kpis: [{ id: 'visual-qa-card', qa: { synthetic: true, readOnly: true } }], visualQa: { active: true, readOnly: true } } : null; },
   loadAutomationEvents: async (id, options) => {
     automationLoads.push({ id, ...options });
     return { events: [{ id: randomUUID(), title: 'Goal reached', occurredAt: new Date().toISOString() }], cursor: 'next-cursor' };
@@ -126,6 +129,23 @@ await runtime.handlePublic(request({}, displayCookie, 'GET'), res, new URL('http
 assert.equal(res.status, 200);
 assert.equal(res.payload.display.name, 'Sales Floor TV');
 assert.deepEqual(loads.at(-1), { id: workspaceId, kpiIds: null });
+
+const heartbeatBeforeVisualQa = (await pool.query('SELECT last_heartbeat_at,updated_at FROM display_devices WHERE id=$1', [displayId])).rows[0];
+res = response();
+await runtime.handlePublic(request({}, displayCookie, 'GET'), res, new URL('http://local/api/display/runtime?board=visual-qa'));
+assert.equal(res.status, 200);
+assert.equal(res.payload.visualQa.readOnly, true, 'paired TV can load the read-only visual QA board');
+assert.deepEqual(visualQaLoads, [workspaceId], 'visual QA loads only for the paired display workspace');
+assert.equal(loads.length, 1, 'visual QA does not load the ordinary workspace dashboard');
+const heartbeatAfterVisualQa = (await pool.query('SELECT last_heartbeat_at,updated_at FROM display_devices WHERE id=$1', [displayId])).rows[0];
+assert.equal(new Date(heartbeatAfterVisualQa.last_heartbeat_at).getTime(), new Date(heartbeatBeforeVisualQa.last_heartbeat_at).getTime(), 'visual QA runtime does not write a heartbeat');
+assert.equal(new Date(heartbeatAfterVisualQa.updated_at).getTime(), new Date(heartbeatBeforeVisualQa.updated_at).getTime(), 'visual QA runtime does not mutate the display record');
+visualQaAvailable = false;
+res = response();
+await runtime.handlePublic(request({}, displayCookie, 'GET'), res, new URL('http://local/api/display/runtime?board=visual-qa'));
+assert.equal(res.status, 404, 'paired TV hides visual QA when the workspace loader denies access');
+assert.equal(res.payload.code, 'visual_qa_not_found');
+visualQaAvailable = true;
 
 res = response();
 await runtime.handlePublic(request({}, '', 'GET'), res, new URL('http://local/api/display/automation-events'));

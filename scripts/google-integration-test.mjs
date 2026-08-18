@@ -285,6 +285,8 @@ await new Promise((resolveListen) => fakeGoogle.listen(providerPort, '127.0.0.1'
 const app = spawn(process.execPath, ['server.mjs'], {
   env: {
     ...process.env, PORT: String(appPort), NODE_ENV: 'test', APP_BASE_URL: baseUrl,
+    AXOBOARD_AUTOMATION_WORKER_ENABLED: 'false',
+    AXOBOARD_DISABLE_SYNC_SCHEDULER: 'false',
     AXOBOARD_GOOGLE_CLIENT_ID: 'google-client-test', AXOBOARD_GOOGLE_CLIENT_SECRET: 'google-secret-test',
     AXOBOARD_GOOGLE_REDIRECT_URI: `${baseUrl}/api/integrations/oauth/google/callback`,
     AXOBOARD_OAUTH_ENCRYPTION_KEY: encryptionKey,

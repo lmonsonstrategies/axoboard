@@ -7,6 +7,7 @@ const betaStateKey = 'axoboard.beta.service.v2';
 const dashboardKpiKeys = ['net-sales', 'pipeline', 'deals-won', 'team-track'];
 const defaultDashboardLayout = { preset: 'balanced', showTrend: true, showActionCenter: true, kpiOrder: [...dashboardKpiKeys] };
 const defaultBetaState = { activeWorkspace: 'sample-empty', workspaceName: 'New workspace', brandColor: '#E96F98', celebrationLanguage: 'Big win!', teamOne: 'Team One', teamTwo: 'Team Two', sampleDemoData: false, completedWorkflows: [], draftCount: 0, dashboardLayout: defaultDashboardLayout, lastSavedAt: null };
+const visualQaRequested = new URLSearchParams(location.search).get('board') === 'visual-qa';
 let betaState = { ...defaultBetaState };
 let oauthAttempt = 0;
 let activeOauthProvider = null;
@@ -473,6 +474,7 @@ let liveWorkspaceName = '';
 let liveDashboardLayout = null;
 let liveEngagement = { summary: {}, events: [] };
 let liveBrand = null;
+let liveVisualQa = null;
 let liveAutomationRules = [];
 let liveAutomationRuns = [];
 let automationPermissions = { canRead: false, canEdit: false, canPublish: false };
@@ -560,6 +562,11 @@ function timeAgo(value) {
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
   return `${Math.floor(seconds / 86400)}d ago`;
+}
+
+function kpiFreshnessLabel(kpi) {
+  if (kpi?.qa?.synthetic) return kpi.status === 'active' ? 'Frozen fixture' : 'Stale fixture';
+  return timeAgo(kpi?.fetchedAt);
 }
 
 function formatKpiValue(value, format = 'number') {
@@ -1238,25 +1245,30 @@ function clampPercent(value) {
   return Math.max(0, Math.min(100, Number.isFinite(Number(value)) ? Number(value) : 0));
 }
 
+function isFiniteKpiNumber(value) {
+  return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
+}
+
 function renderTrendChart(items, displayFormat) {
-  const points = (items || []).filter((item) => Number.isFinite(Number(item.value)));
+  const points = (items || []).filter((item) => isFiniteKpiNumber(item.value));
   if (!points.length) return '<div class="visual-empty">No numeric trend points</div>';
-  const values = points.flatMap((item) => [Number(item.value), Number(item.comparisonValue)].filter(Number.isFinite));
+  const values = points.flatMap((item) => [item.value, item.comparisonValue].filter(isFiniteKpiNumber).map(Number));
   let minimum = Math.min(...values);
   let maximum = Math.max(...values);
   if (minimum === maximum) { minimum -= 1; maximum += 1; }
   const coordinates = (key) => points.map((item, index) => {
+    if (!isFiniteKpiNumber(item[key])) return null;
     const value = Number(item[key]);
-    if (!Number.isFinite(value)) return null;
     const x = points.length === 1 ? 160 : 12 + (index / (points.length - 1)) * 296;
     const y = 108 - ((value - minimum) / (maximum - minimum)) * 92;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).filter(Boolean).join(' ');
-  const comparison = points.every((item) => Number.isFinite(Number(item.comparisonValue)))
+  const comparison = points.every((item) => isFiniteKpiNumber(item.comparisonValue))
     ? `<polyline class="trend-comparison" points="${coordinates('comparisonValue')}" />`
     : '';
   const labels = points.length <= 6 ? points.map((item) => `<span>${escapeHtml(item.label)}</span>`).join('') : `<span>${escapeHtml(points[0].label)}</span><span>${escapeHtml(points.at(-1).label)}</span>`;
-  return `<div class="trend-visual" role="img" aria-label="Trend from ${escapeHtml(points[0].label)} ${escapeHtml(formatKpiValue(points[0].value, displayFormat))} to ${escapeHtml(points.at(-1).label)} ${escapeHtml(formatKpiValue(points.at(-1).value, displayFormat))}"><svg viewBox="0 0 320 120" preserveAspectRatio="none" aria-hidden="true"><line x1="12" y1="108" x2="308" y2="108" />${comparison}<polyline class="trend-current" points="${coordinates('value')}" /></svg><div class="trend-labels">${labels}</div></div>`;
+  const comparisonDescription = comparison ? `; comparison from ${formatKpiValue(points[0].comparisonValue, displayFormat)} to ${formatKpiValue(points.at(-1).comparisonValue, displayFormat)}` : '';
+  return `<div class="trend-visual" role="img" aria-label="Current trend from ${escapeHtml(points[0].label)} ${escapeHtml(formatKpiValue(points[0].value, displayFormat))} to ${escapeHtml(points.at(-1).label)} ${escapeHtml(formatKpiValue(points.at(-1).value, displayFormat))}${escapeHtml(comparisonDescription)}"><svg viewBox="0 0 320 120" preserveAspectRatio="none" aria-hidden="true"><line x1="12" y1="108" x2="308" y2="108" />${comparison}<polyline class="trend-current" points="${coordinates('value')}" /></svg><div class="trend-labels">${labels}</div></div>`;
 }
 
 function renderCategoryBars(items, displayFormat) {
@@ -1269,7 +1281,7 @@ function renderFlow(items, displayFormat, kind) {
   const stages = (items || []).filter((item) => Number.isFinite(Number(item.value)));
   const maximum = Math.max(1, ...stages.map((item) => Math.abs(Number(item.value))));
   if (kind === 'pipeline') {
-    return `<div class="pipeline-visual">${stages.map((item, index) => `<div class="pipeline-stage"><small>${index + 1}</small><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(formatKpiValue(item.value, displayFormat))}</strong></div>`).join('')}</div>`;
+    return `<div class="pipeline-visual">${stages.map((item, index) => `<div class="pipeline-stage" title="${escapeHtml(item.label)}" aria-label="Stage ${index + 1}: ${escapeHtml(item.label)}, ${escapeHtml(formatKpiValue(item.value, displayFormat))}"><small>${index + 1}</small><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(formatKpiValue(item.value, displayFormat))}</strong></div>`).join('')}</div>`;
   }
   return `<div class="funnel-visual">${stages.map((item, index) => {
     const previous = index ? Math.abs(Number(stages[index - 1].value)) : null;
@@ -1280,7 +1292,9 @@ function renderFlow(items, displayFormat, kind) {
 }
 
 function renderActivityFeed(payload) {
-  return `<div class="activity-feed">${(payload.entries || []).slice(0, 20).map((entry) => `<div><time>${escapeHtml(entry.timestamp)}</time><span><strong>${escapeHtml(entry.label)}</strong>${entry.detail ? `<small>${escapeHtml(entry.detail)}</small>` : ''}</span>${entry.value !== null && entry.value !== '' ? `<b>${escapeHtml(entry.value)}</b>` : ''}</div>`).join('')}</div>`;
+  const entries = (payload.entries || []).slice(0, 20);
+  if (!entries.length) return '<div class="visual-empty" data-qa-empty-state>No activity to show</div>';
+  return `<div class="activity-feed">${entries.map((entry) => `<div><time>${escapeHtml(entry.timestamp)}</time><span><strong>${escapeHtml(entry.label)}</strong>${entry.detail ? `<small>${escapeHtml(entry.detail)}</small>` : ''}</span>${entry.value !== null && entry.value !== '' ? `<b>${escapeHtml(entry.value)}</b>` : ''}</div>`).join('')}</div>`;
 }
 
 function renderHeatmap(payload, displayFormat) {
@@ -1316,7 +1330,9 @@ function renderKpiCard(card, kpi, { interactive = true } = {}) {
   const automationShortcut = automationCount ? `<button class="kpi-automation-badge" type="button" data-open-kpi-automations="${escapeHtml(automationMetricIdForKpi(kpi))}" data-interaction-status="working" aria-label="Open ${automationCount} automation${automationCount === 1 ? '' : 's'} for ${escapeHtml(kpi.name)}" title="${automationCount} linked automation${automationCount === 1 ? '' : 's'}">ϟ ${automationCount}</button>` : '';
   const actions = canManageKpi ? `<span class="kpi-card-actions">${automationShortcut}<button type="button" data-edit-live-kpi="${escapeHtml(kpi.id)}" aria-label="Edit ${escapeHtml(kpi.name)}" title="Edit KPI">✎</button><button type="button" data-sync-live-kpi="${escapeHtml(kpi.id)}" aria-label="Refresh ${escapeHtml(kpi.name)}" title="Refresh KPI">↻</button><button class="kpi-delete-button" type="button" data-delete-live-kpi="${escapeHtml(kpi.id)}" aria-label="Delete ${escapeHtml(kpi.name)}" title="Delete KPI">×</button></span>` : (interactive ? '' : '<span class="preview-live-pill">Preview</span>');
   const certified = kpi.certification?.status === 'certified' ? `<button class="certified-chip" type="button" data-live-trust="${escapeHtml(kpi.id)}">✓ Certified</button>` : '';
-  const source = showSourceDetails
+  const source = kpi.qa?.synthetic
+    ? '<span class="source-mark synthetic">QA</span><small>Synthetic QA fixture · read only</small>'
+    : showSourceDetails
     ? `<span class="source-mark google">G</span><small>Google Sheets · ${escapeHtml(kpi.sourceRange || `${kpi.sheetTitle}!${kpi.range}`)}</small>`
     : '<span class="source-mark certified-source">✓</span><small>Certified metric</small>';
   const header = `<header class="structured-kpi-head">${source}${certified}${actions}</header>`;
@@ -1328,20 +1344,20 @@ function renderKpiCard(card, kpi, { interactive = true } = {}) {
     const intelligence = kpi.intelligence;
     const paceCopy = intelligence ? `${formatKpiValue(intelligence.requiredPerDay, kpi.displayFormat)}/day required` : (remaining === null ? 'Target needed' : `${formatKpiValue(remaining, kpi.displayFormat)} remaining`);
     const projection = intelligence ? `Projected ${formatKpiValue(intelligence.projectedFinish, kpi.displayFormat)}` : (hasGoal ? `${progress.toFixed(1)}% complete` : 'Add a goal to calculate pace');
-    card.innerHTML = `${header}<p>${escapeHtml(kpi.name)}</p><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><div class="goal-pace-copy"><span>${escapeHtml(projection)}</span><b>${escapeHtml(paceCopy)}</b></div><div class="goal-pace-track"><i style="width:${progress}%"></i><em style="left:${progress}%"></em></div><footer><span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span><b>${escapeHtml(intelligence?.status?.replaceAll('_',' ') || (hasGoal && progress >= 100 ? 'Goal reached' : 'In progress'))}</b></footer>`;
+    card.innerHTML = `${header}<p>${escapeHtml(kpi.name)}</p><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><div class="goal-pace-copy"><span>${escapeHtml(projection)}</span><b>${escapeHtml(paceCopy)}</b></div><div class="goal-pace-track"><i style="width:${progress}%"></i><em style="left:${progress}%"></em></div><footer><span>${escapeHtml(kpiFreshnessLabel(kpi))}</span><b>${escapeHtml(intelligence?.status?.replaceAll('_',' ') || (hasGoal && progress >= 100 ? 'Goal reached' : 'In progress'))}</b></footer>`;
   } else if (displayType === 'gauge') {
     const value = Number(kpi.value);
     const configuredMax = Number(kpi.goalValue);
     const maximum = Number.isFinite(configuredMax) && configuredMax > 0 ? configuredMax : Math.max(10, 10 ** Math.ceil(Math.log10(Math.max(1, Math.abs(value)))));
     const progress = clampPercent((value / maximum) * 100);
-    card.innerHTML = `${header}<div class="structured-kpi-title"><p>Gauge · 0 to ${escapeHtml(formatKpiValue(maximum, kpi.displayFormat))}</p><strong>${escapeHtml(kpi.name)}</strong></div><div class="gauge-dial" style="--gauge-turn:${(progress / 100).toFixed(4)}turn"><div><strong>${escapeHtml(formatKpiValue(value, kpi.displayFormat))}</strong><span>${progress.toFixed(1)}%</span></div></div><footer><span>${escapeHtml(kpi.intelligence ? `Projected ${formatKpiValue(kpi.intelligence.projectedFinish, kpi.displayFormat)}` : timeAgo(kpi.fetchedAt))}</span><b>${escapeHtml(kpi.intelligence?.status?.replaceAll('_',' ') || (Number.isFinite(configuredMax) && configuredMax > 0 ? 'Goal range' : 'Auto range'))}</b></footer>`;
+    card.innerHTML = `${header}<div class="structured-kpi-title"><p>Gauge · 0 to ${escapeHtml(formatKpiValue(maximum, kpi.displayFormat))}</p><strong>${escapeHtml(kpi.name)}</strong></div><div class="gauge-dial" style="--gauge-turn:${(progress / 100).toFixed(4)}turn"><div><strong>${escapeHtml(formatKpiValue(value, kpi.displayFormat))}</strong><span>${progress.toFixed(1)}%</span></div></div><footer><span>${escapeHtml(kpi.intelligence ? `Projected ${formatKpiValue(kpi.intelligence.projectedFinish, kpi.displayFormat)}` : kpiFreshnessLabel(kpi))}</span><b>${escapeHtml(kpi.intelligence?.status?.replaceAll('_',' ') || (Number.isFinite(configuredMax) && configuredMax > 0 ? 'Goal range' : 'Auto range'))}</b></footer>`;
   } else if (compositeScorecard) {
     const payload = kpi.displayPayload;
     const progress = payload.goal.value === 0 ? null : clampPercent((payload.metric.value / payload.goal.value) * 100);
-    card.innerHTML = `${header}<div class="scorecard-rep"><small>${escapeHtml(payload.rep.label)}</small><strong>${escapeHtml(payload.rep.value)}</strong></div><div class="scorecard-metric"><p>${escapeHtml(payload.metric.label === 'Metric' ? kpi.name : payload.metric.label)}</p><strong>${escapeHtml(formatKpiValue(payload.metric.value, kpi.displayFormat))}</strong></div><div class="scorecard-goal"><span><small>${escapeHtml(payload.goal.label)}</small><b>${escapeHtml(formatKpiValue(payload.goal.value, kpi.displayFormat))}</b></span><em>${progress === null ? 'Goal progress unavailable' : `${progress.toFixed(1)}% of goal`}</em></div><div class="goal-pace-track"><i style="width:${progress ?? 0}%"></i><em style="left:${progress ?? 0}%"></em></div><footer><span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span><b>Live rep scorecard</b></footer>`;
+    card.innerHTML = `${header}<div class="scorecard-rep"><small>${escapeHtml(payload.rep.label)}</small><strong>${escapeHtml(payload.rep.value)}</strong></div><div class="scorecard-metric"><p>${escapeHtml(payload.metric.label === 'Metric' ? kpi.name : payload.metric.label)}</p><strong>${escapeHtml(formatKpiValue(payload.metric.value, kpi.displayFormat))}</strong></div><div class="scorecard-goal"><span><small>${escapeHtml(payload.goal.label)}</small><b>${escapeHtml(formatKpiValue(payload.goal.value, kpi.displayFormat))}</b></span><em>${progress === null ? 'Goal progress unavailable' : `${progress.toFixed(1)}% of goal`}</em></div><div class="goal-pace-track"><i style="width:${progress ?? 0}%"></i><em style="left:${progress ?? 0}%"></em></div><footer><span>${escapeHtml(kpiFreshnessLabel(kpi))}</span><b>${kpi.qa?.synthetic ? 'Synthetic rep scorecard' : 'Live rep scorecard'}</b></footer>`;
   } else if (!structured) {
     const calculationLabel = kpi.aggregation ? kpi.aggregation.replaceAll('_', ' ') : 'certified value';
-    card.innerHTML = `${header}<p>${escapeHtml(kpi.name)}</p><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><div class="kpi-change ${kpi.status === 'active' ? 'positive' : 'neutral'}">● ${escapeHtml(contextText)} <span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span></div><div class="mini-progress"><i style="width:${goalProgress === null ? (kpi.status === 'active' ? '100' : '20') : goalProgress}%"></i></div><footer><span>${escapeHtml(calculationLabel)} · read only</span><b>${escapeHtml(kpi.status)}</b></footer>`;
+    card.innerHTML = `${header}<p>${escapeHtml(kpi.name)}</p><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><div class="kpi-change ${kpi.status === 'active' ? 'positive' : 'neutral'}">● ${escapeHtml(contextText)} <span>${escapeHtml(kpiFreshnessLabel(kpi))}</span></div><div class="mini-progress"><i style="width:${goalProgress === null ? (kpi.status === 'active' ? '100' : '20') : goalProgress}%"></i></div><footer><span>${escapeHtml(calculationLabel)} · read only</span><b>${escapeHtml(kpi.status)}</b></footer>`;
   } else if (displayType === 'rep_cards') {
     const period = periodLabels[kpi.periodGranularity] || 'Monthly';
     const cards = (kpi.displayPayload.items || []).map((item) => {
@@ -1362,7 +1378,10 @@ function renderKpiCard(card, kpi, { interactive = true } = {}) {
   else if (displayType === 'heatmap') card.innerHTML = `${header}<div class="structured-kpi-title"><p>Heatmap</p><strong>${escapeHtml(kpi.name)}</strong></div>${renderHeatmap(kpi.displayPayload, kpi.displayFormat)}`;
   else {
     const columns = (kpi.displayPayload.columns || []).map((column) => `<th>${escapeHtml(column)}</th>`).join('');
-    const rows = (kpi.displayPayload.rows || []).slice(0, 25).map((row) => `<tr>${row.map((value) => `<td>${escapeHtml(value)}</td>`).join('')}</tr>`).join('');
+    const tableRows = (kpi.displayPayload.rows || []).slice(0, 25);
+    const rows = tableRows.length
+      ? tableRows.map((row) => `<tr>${row.map((value) => `<td>${escapeHtml(value)}</td>`).join('')}</tr>`).join('')
+      : `<tr><td class="table-empty-cell" colspan="${Math.max(1, kpi.displayPayload.columns?.length || 1)}" data-qa-empty-state>No rows to show</td></tr>`;
     card.innerHTML = `${header}<div class="structured-kpi-title"><p>Data table</p><strong>${escapeHtml(kpi.name)}</strong></div><div class="structured-table-scroll"><table class="structured-table"><thead><tr>${columns}</tr></thead><tbody>${rows}</tbody></table></div>`;
   }
 }
@@ -1394,9 +1413,77 @@ function renderBuilderAccuratePreview() {
     sheetTitle: builderPreview.sheet?.title || '',
     range: builderPreview.range,
     fetchedAt: builderPreview.fetchedAt,
-    status: 'active'
+    status: builderPreview.status || 'active',
+    qa: builderPreview.qa || null
   }, { interactive: false });
   target.replaceChildren(card);
+}
+
+function openVisualQaBuilderPreview(kpi, trigger = document.activeElement) {
+  if (!liveVisualQa?.active || !kpi?.qa?.synthetic) return;
+  builderReturnFocus = trigger;
+  editingKpiId = null;
+  automationEditorKpi = null;
+  document.body.dataset.visualQaBuilder = 'true';
+  document.querySelector('#kpiBuilderEyebrow').textContent = 'VISUAL QA · READ ONLY';
+  document.querySelector('#kpiBuilderTitle').textContent = kpi.name;
+  kpiName.value = kpi.name;
+  document.querySelector('#kpiFormat').value = kpi.displayFormat || 'number';
+  document.querySelector('#periodGranularity').value = kpi.periodGranularity || 'month';
+  document.querySelector('#kpiGoal').value = kpi.goalValue ?? '';
+  selectDisplayType(kpi.displayType || 'scorecard');
+  builderPreview = {
+    value: kpi.value,
+    goalValue: kpi.goalValue,
+    displayPayload: kpi.displayPayload,
+    sourceRange: kpi.sourceRange,
+    range: kpi.range,
+    sheet: { title: 'Synthetic QA fixture' },
+    fetchedAt: kpi.fetchedAt,
+    status: kpi.status,
+    qa: kpi.qa,
+    comparison: kpi.comparisonValue === null || kpi.comparisonValue === undefined ? null : {
+      value: kpi.comparisonValue,
+      delta: kpi.comparisonDelta,
+      sourceRange: kpi.comparisonSourceRange || 'Synthetic comparison fixture'
+    }
+  };
+  renderComparisonPreview(builderPreview.comparison);
+  renderBuilderAccuratePreview();
+  showBuilderStep(3);
+  document.querySelector('.display-type-fieldset').disabled = true;
+  document.querySelector('.display-config').inert = true;
+  document.querySelector('#builderStatus').textContent = `Synthetic ${kpi.qa.group} fixture · ${(kpi.qa.cases || []).join(', ') || kpi.displayType} · nothing can be saved`;
+  kpiBuilderModal.classList.add('is-visible');
+  kpiBuilderModal.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  document.querySelector('#closeKpiBuilder').focus();
+}
+
+function previewVisualQaCelebration() {
+  if (!liveVisualQa?.active) return;
+  const brandName = liveBrand?.name || liveWorkspaceName || 'Customer workspace';
+  const mark = brandName.trim().charAt(0).toUpperCase();
+  overlay.dataset.customerBrand = 'true';
+  overlay.style.setProperty('--qa-brand-primary', liveBrand?.tokens?.primary || '#E96F98');
+  overlay.style.setProperty('--qa-brand-secondary', liveBrand?.tokens?.secondary || '#43BDE8');
+  document.querySelector('#winTitle').innerHTML = 'Ava and the enterprise team closed <strong>$1,284,420 against the quarterly expansion target!</strong>';
+  overlay.querySelector('.win-modal > p').innerHTML = '<span>Synthetic QA fixture</span> · <span>Long-copy wrap test</span> · <span>Read only</span>';
+  const customerMark = overlay.querySelector('.customer-celebration-mark b');
+  if (customerMark) customerMark.textContent = mark;
+  openCelebration();
+}
+
+function configureVisualQaMode() {
+  const banner = document.querySelector('.synthetic-data-banner');
+  if (!banner || banner.dataset.visualQaReady === 'true') return;
+  banner.dataset.visualQaReady = 'true';
+  document.querySelector('.trust-summary')?.setAttribute('hidden', '');
+  banner.innerHTML = '<b>VISUAL QA · SYNTHETIC · READ ONLY</b><span>20 deterministic cards: 12 canonical visualization types plus flat, declining, negative, outlier, comparison, long-label, stale, and empty cases. Select any card for its builder preview.</span><div class="visual-qa-actions"><button type="button" data-visual-qa-action="builder">Builder preview</button><button type="button" data-visual-qa-action="tv">TV preview</button><button type="button" data-visual-qa-action="celebration">Celebration</button><button type="button" data-visual-qa-action="exit">Exit QA board</button></div>';
+  banner.querySelector('[data-visual-qa-action="builder"]').addEventListener('click', (event) => openVisualQaBuilderPreview(liveKpis[0], event.currentTarget));
+  banner.querySelector('[data-visual-qa-action="tv"]').addEventListener('click', () => document.querySelector('#openTvMode').click());
+  banner.querySelector('[data-visual-qa-action="celebration"]').addEventListener('click', previewVisualQaCelebration);
+  banner.querySelector('[data-visual-qa-action="exit"]').addEventListener('click', () => { location.href = '/app#dashboard'; });
 }
 
 function renderLiveKpis() {
@@ -1481,6 +1568,23 @@ function renderLiveKpis() {
     }
     card.dataset.liveKpi = kpi.id;
     card.dataset.cardKey = kpi.id;
+    if (kpi.qa?.synthetic) {
+      card.dataset.qaGroup = kpi.qa.group;
+      card.dataset.qaCases = (kpi.qa.cases || []).join(' ');
+      card.tabIndex = 0;
+      card.setAttribute('role', 'button');
+      card.setAttribute('aria-label', `Preview ${kpi.name} in the KPI builder`);
+      const openPreview = (event) => {
+        if (event.target.closest('button, a, input, select')) return;
+        openVisualQaBuilderPreview(kpi, card);
+      };
+      card.addEventListener('click', openPreview);
+      card.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        openVisualQaBuilderPreview(kpi, card);
+      });
+    }
     const trustButton = card.querySelector('[data-live-trust]');
     if (trustButton) {
       trustButton.dataset.interactionStatus = 'working';
@@ -1532,8 +1636,10 @@ function renderLiveKpis() {
   }));
   liveDashboardLayout = normalizeDashboardLayout(liveDashboardLayout || {}, liveKpis.map((kpi) => kpi.id));
   applyDashboardLayout(liveDashboardLayout);
-  document.querySelector('.dashboard-toolbar strong').textContent = liveWorkspaceName ? `${liveWorkspaceName} dashboard` : 'Google Sheets performance';
-  document.querySelector('.dashboard-toolbar small').textContent = `${liveKpis.length} KPI${liveKpis.length === 1 ? '' : 's'} · latest ${timeAgo(liveKpis[0]?.fetchedAt)}`;
+  document.querySelector('.dashboard-toolbar strong').textContent = liveVisualQa?.active ? 'Visual QA board' : liveWorkspaceName ? `${liveWorkspaceName} dashboard` : 'Google Sheets performance';
+  document.querySelector('.dashboard-toolbar small').textContent = liveVisualQa?.active
+    ? `${liveKpis.length} synthetic cards · 12 canonical types · 8 edge cases`
+    : `${liveKpis.length} KPI${liveKpis.length === 1 ? '' : 's'} · latest ${timeAgo(liveKpis[0]?.fetchedAt)}`;
 }
 
 async function deleteLiveKpi(kpiId, trigger) {
@@ -2380,8 +2486,10 @@ function applySessionCapabilities(capabilities = {}) {
 async function loadLiveData() {
   if (!bootstrapReady) setBootstrapState('loading');
   try {
-    const bootstrap = await apiJson('/api/axoboard/bootstrap');
-    const { session, connections: connectionPayload, kpis: kpiPayload, dashboard: dashboardPayload, engagement, brand } = bootstrap;
+    const bootstrap = await apiJson(`/api/axoboard/bootstrap${visualQaRequested ? '?board=visual-qa' : ''}`);
+    const { session, connections: connectionPayload, kpis: kpiPayload, dashboard: dashboardPayload, engagement, brand, visualQa = null } = bootstrap;
+    liveVisualQa = visualQa;
+    document.body.dataset.visualQa = visualQa?.active ? 'true' : 'false';
     applySessionCapabilities(session.capabilities || {});
     const displayPayload = liveCapabilities.readDisplays === false
       ? { displays: [] }
@@ -2414,6 +2522,7 @@ async function loadLiveData() {
     renderLiveKpis();
     renderLiveEngagement();
     renderLiveDisplays();
+    if (liveVisualQa?.active) configureVisualQaMode();
     if (!dedicatedTvRuntime && liveCapabilities.readAutomations !== false) await loadAutomationRules();
     if (activeFeatureModal?.id === 'tvPreviewModal' || dedicatedTvRuntime) {
       renderTvMode();
@@ -2643,6 +2752,9 @@ function closeKpiBuilder() {
   kpiBuilderModal.classList.remove('is-visible');
   kpiBuilderModal.setAttribute('aria-hidden', 'true');
   document.body.style.overflow = '';
+  document.body.dataset.visualQaBuilder = 'false';
+  document.querySelector('.display-type-fieldset').disabled = false;
+  document.querySelector('.display-config').inert = false;
   editingKpiId = null;
   automationEditorKpi = null;
   builderReturnFocus?.focus?.();
@@ -3156,29 +3268,34 @@ function tvKpiContext(kpi) {
 }
 
 function tvKpiMeta(kpi) {
-  const trust = kpi.certification?.status === 'certified' ? 'Certified' : 'Verified metric';
-  return `<footer class="tv-kpi-meta"><span>${escapeHtml(trust)}</span><em>Customer dashboard</em><b>${escapeHtml(timeAgo(kpi.fetchedAt))}</b></footer>`;
+  const trust = kpi.qa?.synthetic ? 'Synthetic fixture' : kpi.certification?.status === 'certified' ? 'Certified' : 'Verified metric';
+  return `<footer class="tv-kpi-meta"><span>${escapeHtml(trust)}</span><em>${kpi.qa?.synthetic ? 'Read-only acceptance board' : 'Customer dashboard'}</em><b>${escapeHtml(kpiFreshnessLabel(kpi))}</b></footer>`;
+}
+
+function tvTruncationCue(total, visible) {
+  return total > visible ? `<small class="tv-collection-cue">Showing ${visible} of ${total}</small>` : '';
 }
 
 function renderTvTrend(items, displayFormat) {
-  const points = (items || []).filter((item) => Number.isFinite(Number(item.value)));
+  const points = (items || []).filter((item) => isFiniteKpiNumber(item.value));
   if (!points.length) return '<div class="tv-visual-empty">No numeric trend points</div>';
-  const values = points.flatMap((item) => [Number(item.value), Number(item.comparisonValue)].filter(Number.isFinite));
+  const values = points.flatMap((item) => [item.value, item.comparisonValue].filter(isFiniteKpiNumber).map(Number));
   let minimum = Math.min(...values);
   let maximum = Math.max(...values);
   if (minimum === maximum) { minimum -= 1; maximum += 1; }
   const coordinates = (key) => points.map((item, index) => {
+    if (!isFiniteKpiNumber(item[key])) return null;
     const value = Number(item[key]);
-    if (!Number.isFinite(value)) return null;
     const x = points.length === 1 ? 320 : 20 + (index / (points.length - 1)) * 600;
     const y = 210 - ((value - minimum) / (maximum - minimum)) * 170;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).filter(Boolean).join(' ');
-  const comparison = points.some((item) => Number.isFinite(Number(item.comparisonValue)))
+  const comparison = points.every((item) => isFiniteKpiNumber(item.comparisonValue))
     ? `<polyline class="tv-trend-comparison" points="${coordinates('comparisonValue')}" />`
     : '';
   const labels = points.length <= 8 ? points : [points[0], points.at(-1)];
-  return `<div class="tv-trend-visual" role="img" aria-label="Trend from ${escapeHtml(points[0].label)} ${escapeHtml(formatKpiValue(points[0].value, displayFormat))} to ${escapeHtml(points.at(-1).label)} ${escapeHtml(formatKpiValue(points.at(-1).value, displayFormat))}"><svg viewBox="0 0 640 230" preserveAspectRatio="none" aria-hidden="true"><line x1="20" y1="210" x2="620" y2="210" />${comparison}<polyline class="tv-trend-current" points="${coordinates('value')}" /></svg><div>${labels.map((item) => `<span>${escapeHtml(item.label)}</span>`).join('')}</div></div>`;
+  const comparisonDescription = comparison ? `; comparison from ${formatKpiValue(points[0].comparisonValue, displayFormat)} to ${formatKpiValue(points.at(-1).comparisonValue, displayFormat)}` : '';
+  return `<div class="tv-trend-visual" role="img" aria-label="Current trend from ${escapeHtml(points[0].label)} ${escapeHtml(formatKpiValue(points[0].value, displayFormat))} to ${escapeHtml(points.at(-1).label)} ${escapeHtml(formatKpiValue(points.at(-1).value, displayFormat))}${escapeHtml(comparisonDescription)}"><svg viewBox="0 0 640 230" preserveAspectRatio="none" aria-hidden="true"><line x1="20" y1="210" x2="620" y2="210" />${comparison}<polyline class="tv-trend-current" points="${coordinates('value')}" /></svg><div>${labels.map((item) => `<span>${escapeHtml(item.label)}</span>`).join('')}</div></div>`;
 }
 
 function renderTvKpiCard(card, kpi) {
@@ -3189,7 +3306,8 @@ function renderTvKpiCard(card, kpi) {
   card.className = `tv-kpi-card tv-kpi-card-${displayType}${wideTypes.has(displayType) ? ' tv-kpi-card-wide' : ''}${compositeScorecard ? ' tv-kpi-card-composite' : ''}`;
   card.dataset.tvKpi = kpi.id;
   card.dataset.tvDisplayType = displayType;
-  const title = `<header class="tv-kpi-heading"><div><small>${escapeHtml(displayType.replaceAll('_', ' '))}</small><h3>${escapeHtml(kpi.name)}</h3></div><span class="tv-live-chip">● Live</span></header>`;
+  const statusLabel = kpi.qa?.synthetic ? (kpi.status === 'active' ? 'Synthetic' : 'Stale fixture') : (kpi.status === 'active' ? 'Live' : 'Needs attention');
+  const title = `<header class="tv-kpi-heading"><div><small>${escapeHtml(displayType.replaceAll('_', ' '))}</small><h3>${escapeHtml(kpi.name)}</h3></div><span class="tv-live-chip${kpi.status === 'active' ? '' : ' is-stale'}">● ${escapeHtml(statusLabel)}</span></header>`;
   const meta = tvKpiMeta(kpi);
 
   if (displayType === 'goal_pace') {
@@ -3197,7 +3315,8 @@ function renderTvKpiCard(card, kpi) {
     const hasGoal = Number.isFinite(target) && target !== 0;
     const progress = hasGoal ? clampPercent((Number(kpi.value) / target) * 100) : 0;
     const remaining = hasGoal ? Math.max(0, target - Number(kpi.value)) : null;
-    card.innerHTML = `${title}<div class="tv-goal-pace"><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><span>${hasGoal ? `${progress.toFixed(1)}% of ${formatKpiValue(target, kpi.displayFormat)}` : 'Add a goal to calculate pace'}</span><div><i style="width:${progress}%"></i><em style="left:${progress}%"></em></div><b>${remaining === null ? 'Target needed' : remaining === 0 ? 'Goal reached' : `${formatKpiValue(remaining, kpi.displayFormat)} remaining`}</b></div>${meta}`;
+    const projection = kpi.intelligence?.projectedFinish;
+    card.innerHTML = `${title}<div class="tv-goal-pace"><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><span>${hasGoal ? `${progress.toFixed(1)}% of ${formatKpiValue(target, kpi.displayFormat)}` : 'Add a goal to calculate pace'}</span>${Number.isFinite(Number(projection)) ? `<small class="tv-goal-projection">Projected ${escapeHtml(formatKpiValue(projection, kpi.displayFormat))}</small>` : ''}<div><i style="width:${progress}%"></i><em style="left:${progress}%"></em></div><b>${remaining === null ? 'Target needed' : remaining === 0 ? 'Goal reached' : `${formatKpiValue(remaining, kpi.displayFormat)} remaining`}</b></div>${meta}`;
     return;
   }
 
@@ -3224,20 +3343,24 @@ function renderTvKpiCard(card, kpi) {
 
   if (displayType === 'rep_cards') {
     const period = periodLabels[kpi.periodGranularity] || 'Monthly';
-    const cards = (payload.items || []).slice(0, 8).map((item) => {
+    const allItems = payload.items || [];
+    const visibleItems = allItems.slice(0, 8);
+    const cards = visibleItems.map((item) => {
       const target = item.goalValue ?? item.comparisonValue ?? kpi.goalValue;
       const progress = !target ? null : clampPercent((Number(item.value) / Number(target)) * 100);
       return `<article class="tv-rep-card"><small>${escapeHtml(item.label)}</small><strong>${escapeHtml(formatKpiValue(item.value, kpi.displayFormat))}</strong><span>${progress === null ? `${period} value` : `${progress.toFixed(0)}% of ${formatKpiValue(target, kpi.displayFormat)}`}</span><i><b style="width:${progress ?? 100}%"></b></i></article>`;
     }).join('');
-    card.innerHTML = `${title}<div class="tv-card-subtitle">${escapeHtml(period)} · ${escapeHtml(pairedDataLabel(payload, 'Value'))}</div><div class="tv-rep-card-grid">${cards}</div>${meta}`;
+    card.innerHTML = `${title}<div class="tv-card-subtitle">${escapeHtml(period)} · ${escapeHtml(pairedDataLabel(payload, 'Value'))}</div><div class="tv-rep-card-grid">${cards}</div>${tvTruncationCue(allItems.length, visibleItems.length)}${meta}`;
     return;
   }
 
   if (displayType === 'leaderboard') {
     const labelHeader = payload.headers?.label || 'Rank';
     const valueHeader = payload.headers?.value || 'Value';
-    const rows = [...(payload.items || [])].sort((a, b) => Number(b.value) - Number(a.value)).slice(0, 10).map((item, index) => `<div class="tv-leaderboard-row"><b>${index + 1}</b><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(formatKpiValue(item.value, kpi.displayFormat))}</strong></div>`).join('');
-    card.innerHTML = `${title}<div class="tv-leaderboard"><div class="tv-leaderboard-row tv-leaderboard-head"><b>#</b><span>${escapeHtml(labelHeader)}</span><strong>${escapeHtml(valueHeader)}</strong></div>${rows}</div>${meta}`;
+    const allItems = [...(payload.items || [])].sort((a, b) => Number(b.value) - Number(a.value));
+    const visibleItems = allItems.slice(0, 10);
+    const rows = visibleItems.map((item, index) => `<div class="tv-leaderboard-row"><b>${index + 1}</b><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(formatKpiValue(item.value, kpi.displayFormat))}</strong></div>`).join('');
+    card.innerHTML = `${title}<div class="tv-leaderboard"><div class="tv-leaderboard-row tv-leaderboard-head"><b>#</b><span>${escapeHtml(labelHeader)}</span><strong>${escapeHtml(valueHeader)}</strong></div>${rows}</div>${tvTruncationCue(allItems.length, visibleItems.length)}${meta}`;
     return;
   }
 
@@ -3248,13 +3371,16 @@ function renderTvKpiCard(card, kpi) {
 
   if (displayType === 'category_bar') {
     const maximum = Math.max(1, ...(payload.items || []).map((item) => Math.abs(Number(item.value))).filter(Number.isFinite));
-    const rows = (payload.items || []).slice(0, 10).map((item) => `<div class="tv-category-row"><span>${escapeHtml(item.label)}</span><i><b style="width:${clampPercent((Math.abs(Number(item.value)) / maximum) * 100)}%"></b></i><strong>${escapeHtml(formatKpiValue(item.value, kpi.displayFormat))}</strong></div>`).join('');
-    card.innerHTML = `${title}<div class="tv-card-subtitle">${escapeHtml(pairedDataLabel(payload, 'Category value'))}</div><div class="tv-category-bars">${rows}</div>${meta}`;
+    const allItems = payload.items || [];
+    const visibleItems = allItems.slice(0, 10);
+    const rows = visibleItems.map((item) => `<div class="tv-category-row"><span>${escapeHtml(item.label)}</span><i><b style="width:${clampPercent((Math.abs(Number(item.value)) / maximum) * 100)}%"></b></i><strong>${escapeHtml(formatKpiValue(item.value, kpi.displayFormat))}</strong></div>`).join('');
+    card.innerHTML = `${title}<div class="tv-card-subtitle">${escapeHtml(pairedDataLabel(payload, 'Category value'))}</div><div class="tv-category-bars">${rows}</div>${tvTruncationCue(allItems.length, visibleItems.length)}${meta}`;
     return;
   }
 
   if (displayType === 'funnel') {
-    const stages = (payload.items || []).filter((item) => Number.isFinite(Number(item.value))).slice(0, 8);
+    const allStages = (payload.items || []).filter((item) => Number.isFinite(Number(item.value)));
+    const stages = allStages.slice(0, 8);
     const maximum = Math.max(1, ...stages.map((item) => Math.abs(Number(item.value))));
     const rows = stages.map((item, index) => {
       const previous = index ? Math.abs(Number(stages[index - 1].value)) : null;
@@ -3262,19 +3388,24 @@ function renderTvKpiCard(card, kpi) {
       const width = 38 + (Math.abs(Number(item.value)) / maximum) * 62;
       return `<div style="width:${width.toFixed(1)}%"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(formatKpiValue(item.value, kpi.displayFormat))}</strong><small>${conversion}</small></div>`;
     }).join('');
-    card.innerHTML = `${title}<div class="tv-funnel">${rows}</div>${meta}`;
+    card.innerHTML = `${title}<div class="tv-funnel">${rows}</div>${tvTruncationCue(allStages.length, stages.length)}${meta}`;
     return;
   }
 
   if (displayType === 'pipeline') {
-    const stages = (payload.items || []).filter((item) => Number.isFinite(Number(item.value))).slice(0, 8).map((item, index) => `<article><small>${index + 1}</small><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(formatKpiValue(item.value, kpi.displayFormat))}</strong></article>`).join('');
-    card.innerHTML = `${title}<div class="tv-pipeline">${stages}</div>${meta}`;
+    const allStages = (payload.items || []).filter((item) => Number.isFinite(Number(item.value)));
+    const visibleStages = allStages.slice(0, 8);
+    const stages = visibleStages.map((item, index) => `<article title="${escapeHtml(item.label)}" aria-label="Stage ${index + 1}: ${escapeHtml(item.label)}, ${escapeHtml(formatKpiValue(item.value, kpi.displayFormat))}"><small>${index + 1}</small><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(formatKpiValue(item.value, kpi.displayFormat))}</strong></article>`).join('');
+    card.innerHTML = `${title}<div class="tv-pipeline">${stages}</div>${tvTruncationCue(allStages.length, visibleStages.length)}${meta}`;
     return;
   }
 
   if (displayType === 'activity_feed') {
-    const entries = (payload.entries || []).slice(0, 8).map((entry) => `<div class="tv-activity-row"><time>${escapeHtml(entry.timestamp)}</time><span><strong>${escapeHtml(entry.label)}</strong>${entry.detail ? `<small>${escapeHtml(entry.detail)}</small>` : ''}</span>${entry.value !== null && entry.value !== '' ? `<b>${escapeHtml(entry.value)}</b>` : ''}</div>`).join('');
-    card.innerHTML = `${title}<div class="tv-activity-feed">${entries}</div>${meta}`;
+    const visibleEntries = (payload.entries || []).slice(0, 8);
+    const entries = visibleEntries.length
+      ? visibleEntries.map((entry) => `<div class="tv-activity-row"><time>${escapeHtml(entry.timestamp)}</time><span><strong>${escapeHtml(entry.label)}</strong>${entry.detail ? `<small>${escapeHtml(entry.detail)}</small>` : ''}</span>${entry.value !== null && entry.value !== '' ? `<b>${escapeHtml(entry.value)}</b>` : ''}</div>`).join('')
+      : '<div class="tv-visual-empty" data-qa-empty-state>No activity to show</div>';
+    card.innerHTML = `${title}<div class="tv-activity-feed">${entries}</div>${tvTruncationCue((payload.entries || []).length, visibleEntries.length)}${meta}`;
     return;
   }
 
@@ -3282,17 +3413,21 @@ function renderTvKpiCard(card, kpi) {
     const range = Number(payload.max) - Number(payload.min) || 1;
     const columns = Math.max(1, payload.xLabels?.length || 1);
     const heatmapHeader = `<span>${escapeHtml(payload.cornerLabel || '')}</span>${(payload.xLabels || []).map((label) => `<strong>${escapeHtml(label)}</strong>`).join('')}`;
-    const rows = (payload.yLabels || []).slice(0, 8).map((label, rowIndex) => `<b>${escapeHtml(label)}</b>${(payload.cells[rowIndex] || []).map((value) => {
+    const visibleLabels = (payload.yLabels || []).slice(0, 8);
+    const rows = visibleLabels.map((label, rowIndex) => `<b>${escapeHtml(label)}</b>${(payload.cells[rowIndex] || []).map((value) => {
       const intensity = 0.2 + ((Number(value) - Number(payload.min)) / range) * 0.8;
       return `<i style="--tv-heat:${intensity.toFixed(3)}">${escapeHtml(formatKpiValue(value, kpi.displayFormat))}</i>`;
     }).join('')}`).join('');
-    card.innerHTML = `${title}<div class="tv-heatmap-scroll"><div class="tv-heatmap" style="--tv-heatmap-columns:${columns}"><header>${heatmapHeader}</header>${rows}</div></div>${meta}`;
+    card.innerHTML = `${title}<div class="tv-heatmap-scroll"><div class="tv-heatmap" style="--tv-heatmap-columns:${columns}"><header>${heatmapHeader}</header>${rows}</div></div>${tvTruncationCue((payload.yLabels || []).length, visibleLabels.length)}${meta}`;
     return;
   }
 
   const columns = (payload.columns || []).map((column) => `<th>${escapeHtml(column)}</th>`).join('');
-  const rows = (payload.rows || []).slice(0, 10).map((row) => `<tr>${row.map((value) => `<td>${escapeHtml(value)}</td>`).join('')}</tr>`).join('');
-  card.innerHTML = `${title}<div class="tv-table-scroll"><table class="tv-table"><thead><tr>${columns}</tr></thead><tbody>${rows}</tbody></table></div>${meta}`;
+  const visibleRows = (payload.rows || []).slice(0, 10);
+  const rows = visibleRows.length
+    ? visibleRows.map((row) => `<tr>${row.map((value) => `<td>${escapeHtml(value)}</td>`).join('')}</tr>`).join('')
+    : `<tr><td colspan="${Math.max(1, payload.columns?.length || 1)}" data-qa-empty-state>No rows to show</td></tr>`;
+  card.innerHTML = `${title}<div class="tv-table-scroll"><table class="tv-table"><thead><tr>${columns}</tr></thead><tbody>${rows}</tbody></table></div>${tvTruncationCue((payload.rows || []).length, visibleRows.length)}${meta}`;
 }
 
 function orderedTvKpis() {
@@ -3331,11 +3466,17 @@ function renderTvMode() {
   const grid = document.querySelector('#tvKpiGrid');
   if (!grid) return;
   const visibleKpis = orderedTvKpis();
+  const stage = document.querySelector('.tv-preview-stage');
+  if (stage) {
+    stage.style.setProperty('--tv-brand-primary', liveBrand?.tokens?.primary || '#E96F98');
+    stage.style.setProperty('--tv-brand-secondary', liveBrand?.tokens?.secondary || '#43BDE8');
+    stage.style.setProperty('--tv-brand-success', liveBrand?.tokens?.success || '#6DDB65');
+  }
   const pageCount = Math.max(1, Math.ceil(visibleKpis.length / tvPageSize));
   tvPageIndex = Math.min(tvPageIndex, pageCount - 1);
   const pageKpis = visibleKpis.slice(tvPageIndex * tvPageSize, (tvPageIndex + 1) * tvPageSize);
-  document.querySelector('#tvPreviewTitle').textContent = liveWorkspaceName ? `${liveWorkspaceName} dashboard` : 'Dashboard';
-  document.querySelector('#tvPreviewEyebrow').textContent = `${liveWorkspaceName || 'CURRENT WORKSPACE'} · ${visibleKpis.length} LIVE KPI${visibleKpis.length === 1 ? '' : 'S'} · PAGE ${tvPageIndex + 1}/${pageCount}`.toUpperCase();
+  document.querySelector('#tvPreviewTitle').textContent = liveVisualQa?.active ? 'Visual QA board' : liveWorkspaceName ? `${liveWorkspaceName} dashboard` : 'Dashboard';
+  document.querySelector('#tvPreviewEyebrow').textContent = `${liveWorkspaceName || 'CURRENT WORKSPACE'} · ${visibleKpis.length} ${liveVisualQa?.active ? 'SYNTHETIC CARDS' : `LIVE KPI${visibleKpis.length === 1 ? '' : 'S'}`} · PAGE ${tvPageIndex + 1}/${pageCount}`.toUpperCase();
   const brandMark = document.querySelector('.tv-customer-logo');
   if (brandMark) brandMark.textContent = (liveBrand?.name || liveWorkspaceName || 'W').trim().charAt(0).toUpperCase();
   grid.dataset.pageItems = String(pageKpis.length);
@@ -3353,9 +3494,9 @@ function renderTvMode() {
     return card;
   }));
   const freshest = visibleKpis.reduce((latest, kpi) => !latest || new Date(kpi.fetchedAt) > new Date(latest.fetchedAt) ? kpi : latest, null);
-  document.querySelector('#tvDashboardContext strong').textContent = `${visibleKpis.length} workspace KPI${visibleKpis.length === 1 ? '' : 's'} shown in the saved dashboard order`;
-  document.querySelector('#tvDashboardContext .tv-source-summary').innerHTML = `<span>Verified metrics</span><span>${escapeHtml(liveWorkspaceName)}</span><span>${escapeHtml(freshest?.status || 'unknown')}</span>`;
-  document.querySelector('#tvFreshness').textContent = `Live · freshest update ${timeAgo(freshest?.fetchedAt)}`;
+  document.querySelector('#tvDashboardContext strong').textContent = liveVisualQa?.active ? `${visibleKpis.length} synthetic cards shown in deterministic fixture order` : `${visibleKpis.length} workspace KPI${visibleKpis.length === 1 ? '' : 's'} shown in the saved dashboard order`;
+  document.querySelector('#tvDashboardContext .tv-source-summary').innerHTML = liveVisualQa?.active ? '<span>Synthetic fixtures</span><span>Read only</span><span>Tenant isolated</span>' : `<span>Verified metrics</span><span>${escapeHtml(liveWorkspaceName)}</span><span>${escapeHtml(freshest?.status || 'unknown')}</span>`;
+  document.querySelector('#tvFreshness').textContent = liveVisualQa?.active ? 'Synthetic QA fixture · read only' : `Live · freshest update ${timeAgo(freshest?.fetchedAt)}`;
   updateTvClock();
 }
 
@@ -3451,7 +3592,7 @@ document.querySelector('#openTvMode').addEventListener('click', (event) => openF
 document.querySelector('#previewLoopButton').addEventListener('click', (event) => openFeatureModal('tvPreviewModal', event.currentTarget));
 document.querySelector('#openDedicatedTv').addEventListener('click', () => {
   if (dedicatedTvRuntime) location.assign('/app');
-  else window.open('/tv', '_blank', 'noopener');
+  else window.open(visualQaRequested ? '/tv?board=visual-qa' : '/tv', '_blank', 'noopener');
 });
 document.querySelector('#tvFullscreen').addEventListener('click', toggleTvFullscreen);
 document.querySelector('#tvPreviousPage').addEventListener('click', () => moveTvPage(-1));
@@ -4050,7 +4191,7 @@ syncCelebrationPreview();
 const integrationResult = new URLSearchParams(location.search).get('status');
 if (integrationResult === 'connected') showToast('Google Sheets connected', 'Choose a spreadsheet and exact range to build the first live KPI.');
 else if (integrationResult && integrationResult !== 'connected') showToast('Google connection not completed', 'Start a new consent attempt from Integrations.');
-if (location.search && !dedicatedTvRuntime) history.replaceState(null, '', `/app${location.hash || ''}`);
+if (location.search && !dedicatedTvRuntime && !visualQaRequested) history.replaceState(null, '', `/app${location.hash || ''}`);
 (async () => {
   if (dedicatedTvRuntime) {
     document.body.dataset.tvRuntime = 'true';

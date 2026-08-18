@@ -11,6 +11,7 @@ import { createGoogleProvider } from './lib/google-provider.mjs';
 import { createGoogleIntegration } from './lib/google-integration.mjs';
 import { createDisplayRuntime } from './lib/display-runtime.mjs';
 import { classifyAutomationWorkerHealth, createAutomationRuntime } from './lib/automation-runtime.mjs';
+import { createVisualQaBoard, visualQaAccess, visualQaNow } from './lib/visual-qa-fixture.mjs';
 
 const { Pool } = pg;
 const appRoot = resolve(fileURLToPath(new URL('.', import.meta.url)));
@@ -46,6 +47,7 @@ const automationEventProducerReady = process.env.AXOBOARD_ENGAGEMENT_CORE_ENABLE
 const displayRuntime = createDisplayRuntime({
   pool, env: process.env, sendJson, readJson, sameOrigin, isRateLimited,
   loadWorkspaceDisplay: googleIntegration.displaySnapshot,
+  loadVisualQaDisplay,
   loadAutomationEvents: automationRuntime.listTvEvents
 });
 const automationWorkerState = {
@@ -143,6 +145,21 @@ const displayFiles = new Map([
 const paidAccessRedirect = '/pricing?access=subscription_required';
 
 const rateBuckets = new Map();
+
+async function loadVisualQaDisplay(workspaceId) {
+  if (!pool) return null;
+  const row = (await pool.query(`SELECT w.id,w.name,b.id AS brand_id,b.version AS brand_version,b.name AS brand_name,b.tokens,b.published_at
+    FROM workspaces w LEFT JOIN LATERAL (
+      SELECT id,version,name,tokens,published_at FROM brand_packages
+      WHERE workspace_id=w.id AND status='published' LIMIT 1
+    ) b ON TRUE WHERE w.id=$1 LIMIT 1`, [workspaceId])).rows[0];
+  if (!row || !visualQaAccess(process.env, { workspace_id: row.id, workspace_name: row.name, role: 'owner' }).allowed) return null;
+  const brand = row.brand_id ? {
+    id: row.brand_id, version: row.brand_version, name: row.brand_name,
+    tokens: row.tokens, published_at: row.published_at
+  } : null;
+  return createVisualQaBoard({ workspaceId: row.id, workspaceName: row.name, brand, now: visualQaNow(process.env) });
+}
 
 function sendJson(res, status, payload, headers = {}) {
   const body = JSON.stringify(payload);
