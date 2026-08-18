@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="AxoBoard celebration and customization product prototype" />
+  <meta name="description" content="AxoBoard workspace dashboards, certified metrics, automations, and customer-branded TV displays" />
   <title>AxoBoard — Dashboard Builder</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -16,7 +16,12 @@
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to content</a>
-  <div class="app-shell">
+  <div class="bootstrap-gate" id="bootstrapGate" role="status" aria-live="polite" data-state="loading">
+    <span class="bootstrap-gate-mark" aria-hidden="true">•ᴗ•</span>
+    <div><small>SECURE WORKSPACE</small><h1>Loading your workspace</h1><p id="bootstrapGateMessage">Verifying your session and tenant-scoped data…</p></div>
+    <button class="button button-primary" id="reloadApplication" type="button" hidden>Reload AxoBoard</button>
+  </div>
+  <div class="app-shell" id="appShell" hidden>
     <aside class="sidebar" aria-label="Product navigation">
       <button class="brand" type="button" data-screen="dashboard" aria-label="Open Dashboard Builder">
         <img class="brand-logo" src="/assets/favicon/favicon-192.png?v=4" width="42" height="42" alt="" />
@@ -52,9 +57,9 @@
       </div>
 
       <div class="sidebar-user">
-        <span class="user-avatar">JL</span>
-        <span><strong>Jordan Lee</strong><small>Workspace owner</small></span>
-        <button type="button" aria-label="Open profile menu">•••</button>
+        <span class="user-avatar">—</span>
+        <span><strong>Loading account…</strong><small>Verifying workspace</small></span>
+        <button type="button" aria-label="Profile management unavailable" title="Profile management is not available yet" disabled>•••</button>
       </div>
     </aside>
 
@@ -62,12 +67,20 @@
       <section class="screen is-active" data-screen-panel="dashboard" aria-labelledby="dashboardTitle">
         <header class="page-header dashboard-header">
           <div><small>LIVE PERFORMANCE</small><h1 id="dashboardTitle">Sales command pond</h1><p>Custom KPIs, trusted sources, and a clear view of what needs attention.</p></div>
-          <div class="header-actions"><button class="button button-ghost" id="editLayoutButton" type="button">Change layout</button><button class="button button-ghost" id="templateGalleryButton" type="button">▤ Templates</button><button class="button button-ghost" id="shareDashboardButton" type="button">↗ Share</button><button class="button button-primary" id="addKpiButton" type="button">＋ Add KPI</button></div>
+          <div class="header-actions"><button class="button button-ghost" id="editLayoutButton" type="button">Change layout</button><button class="button button-ghost" id="templateGalleryButton" type="button" disabled title="Dashboard templates are not persisted yet">▤ Templates · preview</button><button class="button button-ghost" id="shareDashboardButton" type="button" disabled title="Secure sharing is not available yet">↗ Share · unavailable</button><button class="button button-primary" id="addKpiButton" type="button">＋ Add KPI</button></div>
         </header>
+
+        <aside class="surface kpi-automation-prompt" id="kpiAutomationPrompt" aria-live="polite" hidden>
+          <span aria-hidden="true">ϟ</span>
+          <div><strong id="kpiAutomationPromptTitle">KPI created</strong><p>This KPI now has a stable certified metric. Add a controlled automation now or return later from Edit KPI.</p></div>
+          <button class="button button-primary" id="createPromptAutomation" type="button">Add automation</button>
+          <button class="button button-ghost" id="dismissPromptAutomation" type="button">Not now</button>
+        </aside>
+        <aside class="surface preview-boundary"><b>Production boundary</b><span>KPI, layout, and TV assignments use workspace APIs. Templates, secure share links, and scheduled snapshots are previews and cannot be published yet.</span></aside>
 
         <div class="dashboard-toolbar surface">
           <div><span class="live-dot"></span><strong>Sales performance</strong><small>4 KPIs · refreshed 2m ago</small></div>
-          <div><button type="button">Today⌄</button><button id="openTvMode" type="button">TV mode ↗</button></div>
+          <div><button type="button" disabled title="Dashboard time-window controls are not connected yet">Time window unavailable</button><button id="openTvMode" type="button">TV mode ↗</button></div>
         </div>
 
         <aside class="surface trust-summary" aria-label="Certified metric health">
@@ -116,12 +129,12 @@
         </header>
         <div class="display-layout">
           <section class="display-main">
-            <div class="display-summary surface"><div><span class="status-orb good"></span><strong>3 screens online</strong><small>Last heartbeat 18s ago</small></div><div><b>2</b><span>Active loops</span></div><div><b>99.98%</b><span>30-day uptime</span></div><button type="button">Manage access</button></div>
+            <div class="display-summary surface"><div><span class="status-orb info"></span><strong>Loading screens…</strong><small>Waiting for workspace display data</small></div><div><b>—</b><span>Active screens</span></div><div><b>—</b><span>Uptime not reported</span></div><button type="button">Manage access</button></div>
             <article class="surface runtime-contract">
-              <header><div><small>WHITE-LABEL DISPLAY RUNTIME</small><h2>Customer brand, resilient playback</h2></div><span class="compatibility-score">8/8 checks</span></header>
+              <header><div><small>WHITE-LABEL DISPLAY RUNTIME</small><h2>Customer brand, resilient playback</h2></div><span class="compatibility-score">Design targets</span></header>
               <div class="runtime-contract-grid">
-                <div class="runtime-brand-preview" id="runtimeBrandPreview"><span class="workspace-avatar">N</span><span><strong data-customer-brand-name>Customer workspace</strong><small>Customer-facing output</small></span><b>LIVE</b></div>
-                <ul><li><span>✓</span><div><strong>Viewport</strong><small>720p · 1080p · 4K · responsive</small></div></li><li><span>✓</span><div><strong>Fallback</strong><small>Last-good dashboard cached</small></div></li><li><span>✓</span><div><strong>Accessibility</strong><small>Reduced motion · silent captions</small></div></li><li><span>✓</span><div><strong>Recovery</strong><small>Retry → cache → branded offline state</small></div></li></ul>
+                <div class="runtime-brand-preview" id="runtimeBrandPreview"><span class="workspace-avatar">N</span><span><strong data-customer-brand-name>Customer workspace</strong><small>Customer-facing output preview</small></span><b>PREVIEW</b></div>
+                <ul><li><span>•</span><div><strong>Viewport target</strong><small>720p · 1080p · 4K · responsive</small></div></li><li><span>•</span><div><strong>Fallback target</strong><small>Last-good dashboard cache</small></div></li><li><span>•</span><div><strong>Accessibility target</strong><small>Reduced motion · silent captions</small></div></li><li><span>•</span><div><strong>Recovery target</strong><small>Retry → cache → branded offline state</small></div></li></ul>
               </div>
               <footer><span>Admin chrome stays AxoBoard. The paired screen shows only the customer brand.</span><button id="previewRuntimeCompatibility" type="button">Preview compatibility</button></footer>
             </article>
@@ -132,46 +145,64 @@
               <article class="surface screen-device is-scheduled"><div class="device-preview executive-mini"><span>2.7×</span><i></i><i></i><i></i></div><div class="device-copy"><span class="schedule-pill">◷ Sleeping</span><h3>Executive Display</h3><p>Conference room · 4K · Apple TV</p><dl><div><dt>Next wake</dt><dd>Tomorrow · 7:00 AM</dd></div><div><dt>Loop</dt><dd>Executive daily · 4 views</dd></div><div><dt>Schedule</dt><dd>Mon–Fri · 7 AM–6 PM</dd></div></dl></div><footer><button type="button">Wake screen</button><button type="button">•••</button></footer></article>
             </div>
           </section>
-          <aside class="surface loop-builder"><div class="panel-heading"><div><small>DASHBOARD LOOP</small><h2>Revenue pulse</h2></div><span class="autosave">● Live</span></div><p>Drag views or use the move buttons to change their rotation order.</p><ol id="loopSequence"><li draggable="true"><b>1</b><span><strong>Sales performance</strong><small>45 seconds</small></span><button type="button" data-move-loop aria-label="Move Sales performance down">↓</button></li><li draggable="true"><b>2</b><span><strong>Pipeline health</strong><small>30 seconds</small></span><button type="button" data-move-loop aria-label="Move Pipeline health down">↓</button></li><li draggable="true"><b>3</b><span><strong>Team Challenge</strong><small>20 seconds</small></span><button type="button" data-move-loop aria-label="Move Team Challenge to top">↑</button></li></ol><button class="add-loop-view" type="button">＋ Add dashboard or game</button><div class="loop-settings"><label>Transition<select><option>Gentle fade</option><option>Aquatic slide</option><option>Instant</option></select></label><label>Active hours<select><option>Mon–Fri · 7 AM–8 PM</option><option>Always on</option><option>Custom schedule</option></select></label></div><button class="button button-primary full" id="saveLoopButton" type="button">Save loop</button></aside>
+          <aside class="surface loop-builder"><div class="panel-heading"><div><small>DASHBOARD LOOP</small><h2>Rotation designer</h2></div><span class="neutral-pill">Preview only</span></div><p class="preview-boundary compact"><b>Not saved</b><span>Multi-dashboard loops and schedules are a design preview. Current paired screens persist only full-dashboard or selected-KPI assignments.</span></p><ol id="loopSequence"><li><b>1</b><span><strong>Dashboard view</strong><small>Example rotation item</small></span><button type="button" disabled aria-label="Loop reordering unavailable">↓</button></li><li><b>2</b><span><strong>Selected KPIs</strong><small>Example rotation item</small></span><button type="button" disabled aria-label="Loop reordering unavailable">↓</button></li></ol><button class="add-loop-view" type="button" disabled>＋ Add view · unavailable</button><div class="loop-settings"><label>Transition<select disabled><option>Gentle fade</option></select></label><label>Active hours<select disabled><option>Scheduling unavailable</option></select></label></div><button class="button button-primary full" id="saveLoopButton" type="button" disabled>Save loop · unavailable</button></aside>
         </div>
       </section>
 
       <section class="screen" data-screen-panel="automations" aria-labelledby="automationsTitle">
         <header class="page-header">
-          <div><small>FROM SIGNAL TO ACTION</small><h1 id="automationsTitle">Automations</h1><p>One trusted KPI event can alert the team, celebrate a win, and move the game.</p></div>
+          <div><small>FROM SIGNAL TO CONTROLLED ACTION</small><h1 id="automationsTitle">Automations</h1><p>Create versioned rules from certified metrics, test them without side effects, and inspect every decision.</p></div>
           <div class="header-actions"><button class="button button-primary" id="newAutomationButton" type="button">＋ New automation</button></div>
         </header>
         <div class="automation-layout">
           <section class="automation-main">
-            <div class="automation-summary surface"><div><strong>5</strong><span>Active rules</span></div><div><strong>128</strong><span>Runs this month</span></div><div><strong>100%</strong><span>Successful today</span></div><div><strong>0</strong><span>Duplicate events</span></div></div>
-            <h2 class="section-title">Active rules</h2>
-            <div class="rule-list">
-              <article class="surface rule-card" data-rule="sales-goal"><header><span class="rule-icon goal">◎</span><div><h3>Sales goal crossed</h3><p>When Net sales today reaches 100% of goal</p></div><label class="toggle"><input type="checkbox" checked /><span></span></label></header><div class="rule-flow"><div><small>WHEN</small><strong>Net sales today ≥ $65,000</strong></div><i>→</i><div><small>THEN</small><span class="action-chip celebration">✦ Celebrate</span><span class="action-chip slack"># Slack</span><span class="action-chip competition">⚔ +100 competition pts</span></div></div><footer><span>Last ran Aug 11 · 4:42 PM</span><button type="button">Edit rule</button></footer></article>
-              <article class="surface rule-card" data-rule="coverage"><header><span class="rule-icon warning">!</span><div><h3>Pipeline coverage needs attention</h3><p>When coverage stays below 3× for 30 minutes</p></div><label class="toggle"><input type="checkbox" checked /><span></span></label></header><div class="rule-flow"><div><small>WHEN</small><strong>Pipeline coverage &lt; 3× for 30m</strong></div><i>→</i><div><small>THEN</small><span class="action-chip slack"># Slack</span><span class="action-chip email">✉ Email</span><span class="action-chip owner">◎ Owner</span></div></div><footer><span>Last ran today · 10:18 AM</span><button type="button">Edit rule</button></footer></article>
-              <article class="surface rule-card" data-rule="deal"><header><span class="rule-icon deal">$</span><div><h3>Big deal landed</h3><p>When a HubSpot deal closes over $15,000</p></div><label class="toggle"><input type="checkbox" checked /><span></span></label></header><div class="rule-flow"><div><small>WHEN</small><strong>Closed won amount ≥ $15,000</strong></div><i>→</i><div><small>THEN</small><span class="action-chip celebration">✦ Celebrate</span><span class="action-chip sound">♫ Sound</span><span class="action-chip competition">⚔ +50 competition pts</span></div></div><footer><span>Last ran today · 1:06 PM</span><button type="button">Edit rule</button></footer></article>
+            <div class="automation-tabs surface" role="tablist" aria-label="Automation registry">
+              <button id="automationRulesTab" class="is-active" type="button" role="tab" aria-selected="true" aria-controls="automationRulesPanel" data-automation-tab="rules">Rules</button>
+              <button id="automationRunsTab" type="button" role="tab" aria-selected="false" aria-controls="automationRunsPanel" data-automation-tab="runs">Runs</button>
             </div>
+
+            <section id="automationRulesPanel" role="tabpanel" aria-labelledby="automationRulesTab" data-automation-panel="rules">
+              <div class="automation-summary surface" aria-label="Automation rule totals"><div><strong id="automationActiveCount">—</strong><span>Active rules</span></div><div><strong id="automationDraftCount">—</strong><span>Draft rules</span></div><div><strong id="automationPausedCount">—</strong><span>Paused rules</span></div><div><strong id="automationAttentionCount">—</strong><span>Need attention</span></div></div>
+              <div class="automation-filter-bar surface">
+                <label><span>Search</span><input id="automationRuleSearch" type="search" placeholder="Rule or metric" autocomplete="off" /></label>
+                <label><span>Status</span><select id="automationRuleStatusFilter"><option value="">All statuses</option><option value="active">Active</option><option value="draft">Draft</option><option value="paused">Paused</option><option value="degraded">Degraded</option><option value="archived">Archived</option></select></label>
+                <label><span>Metric</span><select id="automationMetricFilter"><option value="">All certified metrics</option></select></label>
+              </div>
+              <div class="automation-api-state surface" id="automationRulesState" role="status" aria-live="polite" aria-busy="true"><span class="automation-state-icon" aria-hidden="true">ϟ</span><div><strong>Loading automation rules…</strong><p>Reading this workspace’s published and draft versions.</p></div></div>
+              <div class="rule-list" id="automationRuleList" aria-live="polite"></div>
+            </section>
+
+            <section id="automationRunsPanel" role="tabpanel" aria-labelledby="automationRunsTab" data-automation-panel="runs" hidden>
+              <div class="automation-filter-bar surface">
+                <label><span>Outcome</span><select id="automationRunStatusFilter"><option value="">All outcomes</option><option value="queued">Queued</option><option value="processing">Processing</option><option value="succeeded">Succeeded</option><option value="failed">Failed</option><option value="suppressed">Suppressed</option><option value="dead_letter">Dead letter</option><option value="canceled">Canceled</option></select></label>
+                <label><span>Rule</span><select id="automationRunRuleFilter"><option value="">All rules</option></select></label>
+                <button class="button button-ghost" id="refreshAutomationRuns" type="button">↻ Refresh runs</button>
+              </div>
+              <div class="automation-api-state surface" id="automationRunsState" role="status" aria-live="polite" aria-busy="true"><span class="automation-state-icon" aria-hidden="true">↻</span><div><strong>Loading run history…</strong><p>Evaluations, suppressions, deliveries, and retries appear here.</p></div></div>
+              <div class="automation-run-list" id="automationRunList" aria-live="polite"></div>
+            </section>
           </section>
-          <aside class="surface automation-guardrails"><div class="panel-heading"><div><small>TRUST & CONTROL</small><h2>Built not to spam</h2></div><span class="autosave">✓ Safe</span></div><ul><li><span>↻</span><div><strong>Event deduplication</strong><p>Stable event IDs prevent repeat alerts, points, and celebrations.</p></div></li><li><span>◷</span><div><strong>Cooldowns & quiet hours</strong><p>Limit frequency by rule, person, channel, or screen.</p></div></li><li><span>⌁</span><div><strong>Source lineage</strong><p>Every run links back to the KPI snapshot and provider record.</p></div></li><li><span>↶</span><div><strong>Replay and rollback</strong><p>Retry failed destinations without replaying successful ones.</p></div></li></ul><button class="button button-soft full" id="viewRunLogButton" type="button">View run log</button></aside>
+          <aside class="surface automation-guardrails"><div class="panel-heading"><div><small>TRUST & CONTROL</small><h2>Automation guardrails</h2></div><span class="autosave">Policy</span></div><ul><li><span>↻</span><div><strong>Idempotent decisions</strong><p>One rule version and source event produce at most one run.</p></div></li><li><span>◷</span><div><strong>Freshness and cooldowns</strong><p>Published rules can suppress stale input and repeated matches.</p></div></li><li><span>⌁</span><div><strong>Source lineage</strong><p>Every run retains its certified metric and source-event reference.</p></div></li><li><span>↶</span><div><strong>Independent retries</strong><p>Retry one failed action without replaying successful actions.</p></div></li></ul><button class="button button-soft full" id="viewRunLogButton" type="button">Open run log</button></aside>
         </div>
       </section>
 
       <section class="screen" data-screen-panel="workspace" aria-labelledby="workspaceTitle">
         <header class="page-header">
           <div><small>YOUR AXOBOARD SERVICE</small><h1 id="workspaceTitle">Workspace Admin</h1><p>Onboard your team, control access, monitor plan usage, and keep the workspace launch-ready.</p></div>
-          <div class="header-actions"><button class="button button-ghost" id="inviteMemberButton" type="button">＋ Invite member</button><button class="button button-primary" id="launchChecklistButton" type="button">✓ Launch checklist</button></div>
+          <div class="header-actions"><button class="button button-ghost" type="button" disabled>Invitations unavailable</button></div>
         </header>
         <div class="service-layout">
           <section class="service-main">
-            <article class="surface customer-hero"><div><span class="workspace-avatar large">A</span><div><small>DESIGN-PARTNER WORKSPACE</small><h2 id="serviceWorkspaceName">Acme Sales</h2><p>Customer-facing beta · tenant isolated · mobile ready</p></div></div><span class="readiness-ring"><b id="readinessPercent">72%</b><small>launch ready</small></span></article>
+            <article class="surface customer-hero"><div><span class="workspace-avatar large">—</span><div><small>CURRENT WORKSPACE</small><h2 id="serviceWorkspaceName">Loading workspace…</h2><p>Operational values appear only when a workspace API reports them.</p></div></div><span class="workspace-live-badge">Workspace scoped</span></article>
             <div class="service-grid">
-              <article class="surface launch-card"><header><div><small>GET TO VALUE FAST</small><h2>Launch checklist</h2></div><b id="launchStepCount">5 of 7</b></header><ul id="launchChecklist"><li class="complete"><span>✓</span><div><strong>Create your workspace</strong><small>Identity, timezone, and owner</small></div><button type="button" data-service-action="workspace">Review</button></li><li class="complete"><span>✓</span><div><strong>Apply your brand</strong><small>Logo, color, and language</small></div><button type="button" data-screen="brand">Review</button></li><li class="complete"><span>✓</span><div><strong>Connect Google Sheets</strong><small>Two healthy KPI mappings</small></div><button type="button" data-screen="integrations">Review</button></li><li class="complete"><span>✓</span><div><strong>Invite your team</strong><small>4 active members</small></div><button type="button" data-service-action="members">Manage</button></li><li class="complete"><span>✓</span><div><strong>Publish a dashboard</strong><small>Sales performance is live</small></div><button type="button" data-screen="dashboard">Review</button></li><li><span>6</span><div><strong>Pair a team display</strong><small>Put AxoBoard where the team works</small></div><button type="button" data-screen="displays">Set up</button></li><li><span>7</span><div><strong>Test a celebration rule</strong><small>Confirm sound, audience, and quiet hours</small></div><button type="button" data-screen="automations">Set up</button></li></ul></article>
-              <article class="surface plan-card"><header><div><small>PLAN & USAGE</small><h2>Growth beta</h2></div><span class="connection-pill">● Active</span></header><p>Design-partner access to the complete Growth package.</p><div class="usage-meter"><span><b>Editors</b><small>2 of 5</small></span><i><b style="width:40%"></b></i></div><div class="usage-meter"><span><b>TV screens</b><small>3 of 5</small></span><i><b style="width:60%"></b></i></div><div class="usage-meter"><span><b>Connected accounts</b><small>2 of 10</small></span><i><b style="width:20%"></b></i></div><div class="usage-meter"><span><b>Automation runs</b><small>128 of 10,000</small></span><i><b style="width:2%"></b></i></div><button class="button button-soft full" id="managePlanButton" type="button" data-screen="plans">Manage plan & billing</button></article>
+              <article class="surface launch-card"><header><div><small>PRODUCTION SETUP</small><h2>Workspace surfaces</h2></div><b>No inferred status</b></header><ul><li><span>⌁</span><div><strong>Connections and KPIs</strong><small>Review the source-level status reported by the integration API.</small></div><button type="button" data-screen="integrations">Open</button></li><li><span>▦</span><div><strong>Dashboard metrics</strong><small>Review the current workspace’s persisted KPI cards.</small></div><button type="button" data-screen="dashboard">Open</button></li><li><span>▣</span><div><strong>TV displays</strong><small>Review pairing state and each device’s last heartbeat.</small></div><button type="button" data-screen="displays">Open</button></li><li><span>ϟ</span><div><strong>Automations</strong><small>Review real rule versions, decisions, and action attempts.</small></div><button type="button" data-screen="automations">Open</button></li></ul></article>
+              <article class="surface plan-card"><header><div><small>PLAN & USAGE</small><h2>Usage metering unavailable</h2></div><span class="neutral-pill">Not reported</span></header><p>AxoBoard is not showing estimated limits or fabricated consumption. Plan and metered usage will appear here only after the billing API supplies them.</p><button class="button button-soft full" id="managePlanButton" type="button" data-screen="plans">Open plans & billing</button></article>
             </div>
-            <article class="surface members-card"><header><div><small>PEOPLE & PERMISSIONS</small><h2>Workspace members</h2></div><button type="button" id="manageRolesButton">Manage roles</button></header><div class="member-row member-head"><span>Person</span><span>Role</span><span>Last active</span><span>Status</span></div><div class="member-row"><span><b>JL</b><strong>Jordan Lee<small>jordan@acme.co</small></strong></span><span>Owner</span><span>Now</span><span class="healthy-text">Active</span></div><div class="member-row"><span><b>MP</b><strong>Maya Patel<small>maya@acme.co</small></strong></span><span>Editor</span><span>12m ago</span><span class="healthy-text">Active</span></div><div class="member-row"><span><b>EB</b><strong>Ethan Brooks<small>ethan@acme.co</small></strong></span><span>Viewer</span><span>1h ago</span><span class="healthy-text">Active</span></div><div class="member-row"><span><b>SM</b><strong>Sofia Martinez<small>sofia@acme.co</small></strong></span><span>Viewer</span><span>Yesterday</span><span class="healthy-text">Active</span></div></article>
+            <article class="surface members-card unavailable-admin-card"><header><div><small>PEOPLE & PERMISSIONS</small><h2>Member administration is not available</h2></div><span class="neutral-pill">Unavailable</span></header><div class="admin-unavailable-copy"><span aria-hidden="true">◎</span><div><strong>No member directory is being inferred</strong><p>Invitations, member lists, role changes, and session revocation require a dedicated workspace-members API and audit trail.</p></div></div></article>
           </section>
           <aside class="service-side">
-            <article class="surface service-health"><div class="panel-heading"><div><small>SERVICE HEALTH</small><h2>Ready and observable</h2></div><span class="autosave">● Healthy</span></div><ul><li><span>⌁</span><div><strong>Data sources</strong><small>2 connected · all fresh</small></div><b>✓</b></li><li><span>▣</span><div><strong>Displays</strong><small>3 online · 99.98% uptime</small></div><b>✓</b></li><li><span>ϟ</span><div><strong>Automations</strong><small>128 runs · 0 duplicates</small></div><b>✓</b></li><li><span>◉</span><div><strong>Mobile readiness</strong><small>All routes passed</small></div><b>✓</b></li></ul></article>
-            <article class="surface support-card"><span class="mini-axo large">•ᴗ•</span><small>CUSTOMER SUCCESS</small><h2>Need a hand?</h2><p>Open setup guidance, report a problem, or prepare a support request with diagnostic context.</p><button class="button button-primary full" id="supportButton" type="button">Contact support</button><button class="button button-ghost full" id="setupGuideButton" type="button">Open setup guide</button></article>
+            <article class="surface service-health"><div class="panel-heading"><div><small>SERVICE HEALTH</small><h2>Workspace diagnostics</h2></div><span class="neutral-pill">No aggregate feed</span></div><ul><li><span>⌁</span><div><strong>Data sources</strong><small>Open Integrations for provider-reported freshness.</small></div><b>→</b></li><li><span>▣</span><div><strong>Displays</strong><small>Open TV & Displays for each device heartbeat.</small></div><b>→</b></li><li><span>ϟ</span><div><strong>Automations</strong><small>Open Runs for evaluations, suppressions, and failures.</small></div><b>→</b></li><li><span>◉</span><div><strong>Platform status</strong><small>No customer-facing status or SLA feed is configured.</small></div><b>—</b></li></ul></article>
+            <article class="surface support-card"><span class="mini-axo large">•ᴗ•</span><small>CUSTOMER SUCCESS</small><h2>Need a hand?</h2><p>Preview setup guidance here. A support request channel is not connected yet.</p><button class="button button-primary full" id="supportButton" type="button" disabled>Support handoff unavailable</button><button class="button button-ghost full" id="setupGuideButton" type="button">Preview setup guide</button></article>
           </aside>
         </div>
       </section>
@@ -182,14 +213,16 @@
           <div class="billing-cycle" role="group" aria-label="Billing cycle"><button class="is-active" type="button" data-plan-cycle="monthly">Monthly</button><button type="button" data-plan-cycle="annual">Annual <span>Save up to 20%</span></button></div>
         </header>
 
-        <aside class="surface pricing-principle"><span>✓</span><div><strong>Capacity-based plans, not viewer-seat pricing.</strong><p>Plan limits and billing terms are shown before checkout. AxoBoard will not add usage charges without an explicit choice.</p></div><button class="button button-ghost" type="button" data-plan-action="compare">Compare every feature</button></aside>
+        <aside class="surface preview-boundary"><b>Commercial preview · no billing changes</b><span>Prices, features, limits, and annual savings below are illustrative roadmap packaging—not your live entitlement, usage, invoice, or checkout terms. Only a connected billing service can make those claims authoritative.</span></aside>
+
+        <aside class="surface pricing-principle"><span>◇</span><div><strong>Capacity-based packaging concept.</strong><p>Use this preview to compare the intended model. It does not start a subscription, change a plan, or create a charge.</p></div><button class="button button-ghost" type="button" data-plan-action="compare">Compare preview features</button></aside>
 
         <section class="pricing-grid" aria-label="AxoBoard subscription plans">
           <article class="surface pricing-card" data-plan="starter">
             <header><span class="plan-icon">◌</span><div><small>GET VISIBLE</small><h2>Starter</h2></div></header>
             <p>One team replacing spreadsheet screenshots with a trusted live scoreboard.</p>
             <div class="plan-price"><strong data-monthly="$99" data-annual="$79">$99</strong><span>/month</span><small data-price-note>Billing terms at checkout</small></div>
-            <button class="button button-ghost full" type="button" data-plan-action="starter">Review Starter</button>
+            <button class="button button-ghost full" type="button" data-plan-action="starter" disabled>Plan change unavailable</button>
             <div class="plan-capacity"><span><b>3</b> connected accounts</span><span><b>2</b> editors</span><span><b>1</b> TV screen</span><span><b>15m</b> refresh</span></div>
             <ul><li>Unlimited dashboards and viewers</li><li>Responsive web, mobile, and TV layouts</li><li>KPI goals, comparisons, drilldowns, and freshness</li><li>Secure share links and scheduled snapshots</li><li>Basic alerts and 1,000 automation runs</li><li>Starter celebration templates and stock sounds</li><li>90-day metric history</li><li>Community and email support</li></ul>
             <div class="not-included"><small>UPGRADE FOR</small><p>Custom sound uploads, Team Competitions, advanced branding, and multi-channel actions.</p></div>
@@ -200,7 +233,7 @@
             <header><span class="plan-icon">✦</span><div><small>CREATE MOMENTUM</small><h2>Growth</h2></div></header>
             <p>The full AxoBoard experience for teams that want visibility to drive behavior.</p>
             <div class="plan-price"><strong data-monthly="$249" data-annual="$199">$249</strong><span>/month</span><small data-price-note>Billing terms at checkout</small></div>
-            <button class="button button-primary full" type="button" data-plan-action="growth">Review Growth</button>
+            <button class="button button-primary full" type="button" data-plan-action="growth" disabled>Plan change unavailable</button>
             <div class="plan-capacity"><span><b>10</b> connected accounts</span><span><b>5</b> editors</span><span><b>5</b> TV screens</span><span><b>5m</b> refresh</span></div>
             <ul><li>Everything in Starter</li><li>Celebration HQ with custom templates</li><li>My Sounds uploads, playlists, and quiet hours</li><li>Team Competitions with teams, scoring, arenas, and win rules</li><li>Custom logo, colors, language, and display branding</li><li>Email, Slack, and webhook actions</li><li>10,000 automation runs with retry history</li><li>Two-year metric history and standard support</li></ul>
           </article>
@@ -209,7 +242,7 @@
             <header><span class="plan-icon">◇</span><div><small>RUN THE OPERATION</small><h2>Scale</h2></div></header>
             <p>Multiple teams or locations with stronger controls, faster signals, and more capacity.</p>
             <div class="plan-price"><strong data-monthly="$599" data-annual="$499">$599</strong><span>/month</span><small data-price-note>Billing terms at checkout</small></div>
-            <button class="button button-ghost full" type="button" data-plan-action="scale">Talk through your rollout</button>
+            <button class="button button-ghost full" type="button" data-plan-action="scale" disabled>Plan change unavailable</button>
             <div class="plan-capacity"><span><b>30</b> connected accounts</span><span><b>15</b> editors</span><span><b>20</b> TV screens</span><span><b>1m</b> refresh*</span></div>
             <ul><li>Everything in Growth</li><li>Three isolated workspaces</li><li>Full white-label dashboards, shares, and displays</li><li>Advanced roles, publishing approvals, and audit history</li><li>50,000 automation runs and operational actions</li><li>Five-year metric history</li><li>Priority support and guided rollout</li><li>Usage export and workspace-level governance</li></ul>
             <div class="not-included"><small>* PROVIDER DEPENDENT</small><p>Refresh speed respects source API limits and is never presented as fake real-time data.</p></div>
@@ -219,7 +252,7 @@
             <header><span class="plan-icon">◎</span><div><small>SECURITY & CONTRACT</small><h2>Enterprise</h2></div></header>
             <p>Contracted security, capacity, and service terms for larger organizations.</p>
             <div class="plan-price"><strong>Custom</strong><small>From $1,500/month · annual contract</small></div>
-            <button class="button button-ghost full" type="button" data-plan-action="enterprise">Contact AxoBoard</button>
+            <button class="button button-ghost full" type="button" data-plan-action="enterprise" disabled>Sales handoff unavailable</button>
             <div class="enterprise-features"><span>SSO / SAML</span><span>User provisioning</span><span>Contracted SLA</span><span>Custom retention</span><span>Security review</span><span>Dedicated success</span><span>Optional isolation</span><span>Custom capacity</span></div>
           </article>
         </section>
@@ -244,12 +277,14 @@
       <section class="screen" data-screen-panel="celebrations" aria-labelledby="celebrationsTitle">
         <header class="page-header celebration-header">
           <div><small>THIS WEEK</small><h1 id="celebrationsTitle">Sales Celebration HQ <span>✦</span></h1><p>Big wins. Shared loud. Momentum that lasts.</p></div>
-          <div class="header-actions"><button class="button button-ghost" type="button">This week⌄</button><button class="button button-primary" id="celebrateButton" type="button">＋ Celebrate win</button></div>
+          <div class="header-actions"><button class="button button-ghost" type="button" disabled>This week · preview</button><button class="button button-primary" id="celebrateButton" type="button" disabled>＋ Send unavailable</button></div>
         </header>
+
+        <aside class="surface preview-boundary"><b>Preview · nothing saved or delivered</b><span>Moments, people, totals, styles, and delivery policies on this screen are sample visualization data. The event ledger switches to tenant API data when permitted; the remaining controls do not publish celebrations.</span></aside>
 
         <nav class="surface celebration-view-tabs" aria-label="Celebration HQ views">
           <button class="is-active" type="button" data-celebration-view="moments">Moments</button>
-          <button type="button" data-celebration-view="ledger">Event ledger <span>24</span></button>
+          <button type="button" data-celebration-view="ledger">Event ledger <span>—</span></button>
           <button type="button" data-celebration-view="rules">Delivery rules</button>
           <small>Immutable source events · deduplicated delivery</small>
         </nav>
@@ -299,7 +334,7 @@
           </div>
 
           <aside class="surface celebration-controls" aria-label="Celebration preferences">
-            <div class="panel-heading"><div><small>LIVE PREVIEW</small><h2>Celebration style</h2></div><span class="autosave">● Saved</span></div>
+            <div class="panel-heading"><div><small>LOCAL PREVIEW</small><h2>Celebration style</h2></div><span class="autosave">Preview only</span></div>
             <div class="style-grid" role="group" aria-label="Celebration visual style">
               <button class="is-active" type="button" data-celebration-style="Confetti"><span>✦</span>Confetti</button>
               <button type="button" data-celebration-style="Fireworks"><span>✺</span>Fireworks</button>
@@ -310,36 +345,36 @@
             <label class="field-label">Sound<select id="celebrationSound"><option>Victory Splash</option><option>Confetti Burst</option><option>High Five</option><option>Silent</option></select></label>
             <label class="field-label">Apply to<select><option>All team celebrations</option><option>Deal won only</option><option>Goals and records</option></select></label>
             <button class="button button-soft full" id="previewCelebration" type="button">▷ Preview celebration</button>
-            <p class="helper-copy"><span>✓</span> Changes preview instantly. Nothing goes live until you publish.</p>
+            <p class="helper-copy"><span>◇</span> Changes preview locally; they are not saved or delivered.</p>
           </aside>
         </div>
         <section class="surface event-ledger" data-celebration-panel="ledger" hidden aria-labelledby="eventLedgerTitle">
-          <header><div><small>IMMUTABLE EVENT HISTORY</small><h2 id="eventLedgerTitle">Celebration event ledger</h2><p>Inspect source identity, deduplication, brand version, and every delivery attempt.</p></div><div><label>Result<select id="eventResultFilter"><option>All results</option><option>Delivered</option><option>Deduplicated</option><option>Quiet hours</option><option>Failed</option></select></label><button id="exportEventLedger" type="button">Export audit</button></div></header>
-          <div class="ledger-summary"><div><strong>24</strong><span>Source events</span></div><div><strong>31</strong><span>Deliveries</span></div><div><strong>3</strong><span>Duplicates blocked</span></div><div><strong>100%</strong><span>Traceable</span></div></div>
+          <header><div><small>TENANT EVENT HISTORY</small><h2 id="eventLedgerTitle">Celebration event ledger</h2><p>API-backed source events appear here when this role is permitted to read them. Delivery confirmation is reported only when a destination acknowledges it.</p></div><div><label>Result<select id="eventResultFilter"><option>All results</option><option>Recorded</option><option>Suppressed</option><option>Failed</option></select></label><button id="exportEventLedger" type="button" disabled>Export unavailable</button></div></header>
+          <div class="ledger-summary"><div><strong>—</strong><span>Source events</span></div><div><strong>—</strong><span>Pending</span></div><div><strong>—</strong><span>Duplicates blocked</span></div><div><strong>—</strong><span>Traceability not measured</span></div></div>
           <div class="event-ledger-table" role="table" aria-label="Celebration events">
             <div class="event-ledger-row event-ledger-head" role="row"><span>Time / event ID</span><span>Normalized event</span><span>Decision</span><span>Destinations</span><span>Brand</span><span>Action</span></div>
-            <div class="event-ledger-row" role="row"><span><b>10:42:18</b><small>evt_8F3A…</small></span><span><b>deal.won</b><small>Maya · $18,420</small></span><span><i class="ledger-status delivered">Delivered</i><small>2 of 2 targets</small></span><span><b>TV + Web</b><small>Audio + captions</small></span><span><b><span data-customer-brand-name>Customer workspace</span> v7</b><small>Customer-facing</small></span><button type="button" data-ledger-replay="evt_8F3A">Replay</button></div>
-            <div class="event-ledger-row" role="row"><span><b>10:42:17</b><small>evt_8F3A…</small></span><span><b>deal.won</b><small>Same source event</small></span><span><i class="ledger-status blocked">Deduplicated</i><small>No recount</small></span><span><b>—</b><small>Safely blocked</small></span><span><b><span data-customer-brand-name>Customer workspace</span> v7</b><small>Rule v12</small></span><button type="button" data-ledger-inspect="evt_8F3A">Inspect</button></div>
-            <div class="event-ledger-row" role="row"><span><b>10:31:04</b><small>evt_7C21…</small></span><span><b>goal.milestone.90</b><small>Team revenue</small></span><span><i class="ledger-status held">Quiet hours</i><small>TV held</small></span><span><b>Web only</b><small>Release at 7:00 AM</small></span><span><b><span data-customer-brand-name>Customer workspace</span> v7</b><small>Reduced motion</small></span><button type="button" data-ledger-release="evt_7C21">Release</button></div>
+            <div class="event-ledger-row" role="row"><span><b>Loading…</b><small>Tenant-scoped events</small></span><span><b>—</b><small>No fixture rows shown</small></span><span><i class="ledger-status held">Pending</i></span><span><b>—</b></span><span><b>—</b></span><button type="button" disabled>Inspect</button></div>
           </div>
           <footer><span>Replays create a new delivery attempt and never mutate or recount the source event.</span><button id="openEventContract" type="button">View event contract →</button></footer>
         </section>
         <section class="surface delivery-rules-panel" data-celebration-panel="rules" hidden>
           <div><small>DELIVERY POLICY</small><h2>One event, controlled everywhere</h2><p>Previewable customer-branded delivery with caps, quiet hours, captions, and destination-level retries.</p></div>
           <ul><li><span>✓</span><div><strong>Idempotency</strong><small>Workspace + source event + rule version</small></div></li><li><span>◷</span><div><strong>Quiet hours</strong><small>TV muted 8 PM–7 AM · web remains visible</small></div></li><li><span>CC</span><div><strong>Silent compatibility</strong><small>Captions and visual pulse replace audio</small></div></li><li><span>↻</span><div><strong>Destination retries</strong><small>Retry failed targets without replaying successful ones</small></div></li></ul>
-          <button class="button button-primary" id="testDeliveryPolicy" type="button">Test delivery policy</button>
+          <button class="button button-primary" id="testDeliveryPolicy" type="button" disabled>Delivery test unavailable</button>
         </section>
       </section>
 
       <section class="screen" data-screen-panel="sounds" aria-labelledby="soundsTitle">
         <header class="page-header">
           <div><small>PERSONALIZE THE MOMENT</small><h1 id="soundsTitle">My Sounds</h1><p>Make every win sound like your team.</p></div>
-          <div class="header-actions"><button class="button button-ghost" type="button">? Help</button><button class="button button-primary" id="uploadSoundButton" type="button">↑ Upload sound</button></div>
+          <div class="header-actions"><button class="button button-ghost" type="button" disabled>? Help unavailable</button><button class="button button-primary" id="uploadSoundButton" type="button" disabled>↑ Upload unavailable</button></div>
         </header>
+
+        <aside class="surface preview-boundary"><b>Sample library · not saved</b><span>The sounds, assignments, usage counts, and controls below are a local product preview. Uploading, favoriting, assigning, and saving audio are unavailable until tenant asset storage and validation are connected.</span></aside>
 
         <div class="sounds-layout">
           <section class="sounds-library">
-            <button class="upload-zone" type="button" id="uploadZone"><span>↑</span><strong>Upload a sound</strong><small>Drag and drop, or click to browse · MP3, WAV, M4A up to 25MB</small></button>
+            <button class="upload-zone" type="button" id="uploadZone" disabled><span>↑</span><strong>Upload unavailable</strong><small>Preview target: MP3, WAV, M4A up to 25MB</small></button>
             <div class="library-toolbar"><label class="search-box"><span>⌕</span><input type="search" placeholder="Search sounds…" /></label><select aria-label="Filter sounds by tag"><option>All tags</option><option>Wins</option><option>Goals</option><option>Games</option></select><select aria-label="Sort sounds"><option>Recently added</option><option>A–Z</option><option>Most used</option></select></div>
             <div class="sound-table" role="list" aria-label="Sound library">
               <button class="sound-row is-selected" type="button" role="listitem" data-sound="Victory Splash" data-duration="00:03" data-tags="Win · Water"><span class="play-control">▶</span><span class="sound-meta"><strong>Victory Splash</strong><small>Win · Water</small></span><span class="waveform"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><time>00:03</time><span class="assignment-count">2 events</span><b>★</b></button>
@@ -357,8 +392,8 @@
             <label class="field-label">Team scope<select><option>Everyone in team</option><option>Selected people</option><option>Private to winner</option></select></label>
             <label class="range-field"><span><b>Volume</b><output id="volumeOutput">80%</output></span><input id="volumeRange" type="range" min="0" max="100" value="80" /></label>
             <div class="sound-preview-strip"><button id="wavePlay" type="button" aria-label="Preview selected sound">▶</button><span class="waveform large"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><time id="soundDurationSecondary">00:03</time></div>
-            <button class="button button-primary full" id="saveSound" type="button">✓ Save sound</button>
-            <p class="success-message">✓ Your sound will be available to your team right away.</p>
+            <button class="button button-primary full" id="saveSound" type="button" disabled>Save unavailable</button>
+            <p class="success-message">◇ Preview only — no sound or assignment is saved.</p>
           </aside>
         </div>
       </section>
@@ -366,11 +401,13 @@
       <section class="screen" data-screen-panel="competitions" aria-labelledby="competitionsTitle">
         <header class="page-header compact-header">
           <div><small>BUILD HEALTHY TEAM COMPETITIONS</small><h1 id="competitionsTitle">Team Competitions <span>✦</span></h1><p>Create a competition, define the score, customize the experience, and make every win visible.</p></div>
-          <div class="header-actions"><label class="preset-picker">Preset<select><option>Team Challenge</option><option>Blank competition</option></select></label><span class="autosave">● All changes saved</span></div>
+          <div class="header-actions"><label class="preset-picker">Preset<select><option>Team Challenge</option><option>Blank competition</option></select></label><span class="autosave">Preview · not saved</span></div>
         </header>
 
+        <aside class="surface preview-boundary"><b>Synthetic competition preview · not published</b><span>Names, scores, teams, assets, scoring tests, and compatibility claims below are local visualization fixtures. Preview calculations do not create score events, versions, or customer-visible competitions.</span></aside>
+
         <article class="surface competition-contract">
-          <header><div><small>GENERIC SCORING CONTRACT</small><h2>Certified data in. Deterministic score out.</h2></div><span class="contract-status">✓ Compatible</span></header>
+          <header><div><small>GENERIC SCORING CONTRACT</small><h2>Certified data in. Deterministic score out.</h2></div><span class="contract-status">Design contract</span></header>
           <div class="competition-contract-grid">
             <label>Certified metric<select id="competitionMetric"><option>Net sales · currency · healthy</option><option>Deals won · count · healthy</option><option>Customer reviews · count · healthy</option></select></label>
             <label>Group score by<select id="competitionGroup"><option>Team assignment</option><option>Owner</option><option>Region</option><option>Source label</option></select></label>
@@ -406,13 +443,13 @@
           <aside class="surface game-inspector" aria-label="Competition configuration">
             <div class="inspector-scroll">
               <fieldset><legend>✎ Competition identity</legend><label>Competition name<input id="gameNameInput" type="text" value="Team Challenge" maxlength="40" /></label><div class="field-row"><label>Team 1 name<input id="teamOneInput" type="text" value="Bluefin" maxlength="20" /></label><label>Team 2 name<input id="teamTwoInput" type="text" value="Coral Crew" maxlength="20" /></label></div></fieldset>
-              <fieldset><legend>▣ Scoring rules</legend><div class="field-row"><label>Every increment<input id="scoreIncrement" type="number" min="1" value="500" /></label><label>Awards points<input id="pointsInput" type="number" min="1" value="15" /></label></div><label>Direction<select><option>Higher is better</option><option>Lower is better</option></select></label><label>Win condition<select id="winCondition"><option value="100">First to 100</option><option value="250">First to 250</option><option value="500">First to 500</option><option value="time">Highest score by deadline</option></select></label><div class="scoring-test"><small>TEST SNAPSHOT</small><p id="scoreTestFormula">$1,500 ÷ $500 × 15 = <b>45 points</b></p><div><button id="testScoreEvent" type="button">Run test event</button><button id="resetScoreTest" type="button">Reset</button></div></div></fieldset>
+              <fieldset><legend>▣ Scoring rules</legend><div class="field-row"><label>Every increment<input id="scoreIncrement" type="number" min="1" value="500" /></label><label>Awards points<input id="pointsInput" type="number" min="1" value="15" /></label></div><label>Direction<select><option>Higher is better</option><option>Lower is better</option></select></label><label>Win condition<select id="winCondition"><option value="100">First to 100</option><option value="250">First to 250</option><option value="500">First to 500</option><option value="time">Highest score by deadline</option></select></label><div class="scoring-test"><small>LOCAL CALCULATION PREVIEW</small><p id="scoreTestFormula">$1,500 ÷ $500 × 15 = <b>45 points</b></p><div><button id="testScoreEvent" type="button">Preview calculation</button><button id="resetScoreTest" type="button">Reset</button></div></div></fieldset>
               <fieldset><legend>👾 Team avatars</legend><div class="sprite-pickers"><button type="button"><span class="sprite blue">C</span><small>Team 1 avatar</small><b>Change</b></button><button type="button"><span class="sprite coral">M</span><small>Team 2 avatar</small><b>Change</b></button></div></fieldset>
               <fieldset><legend>▧ Arena</legend><div class="arena-options"><button type="button">🌊</button><button type="button">🏟</button><button class="is-active" type="button">🌌</button><button type="button">🏢</button><button type="button">＋</button></div></fieldset>
               <fieldset><legend>◉ Team colors</legend><div class="color-pickers"><label>Team 1<input id="teamOneColor" type="color" value="#38A8EA" /></label><label>Team 2<input id="teamTwoColor" type="color" value="#F55286" /></label></div></fieldset>
               <fieldset><legend>♫ Sounds</legend><label>Victory fanfare<select><option>Victory Splash</option><option>Cheerful Win</option><option>Level Up</option><option>Silent</option></select></label></fieldset>
             </div>
-            <footer><span class="version-chip">Draft v4 · rollback ready</span><button class="button button-ghost" id="previewGame" type="button">▷ Preview</button><button class="button button-primary" id="publishGame" type="button">↗ Publish v4</button></footer>
+            <footer><span class="version-chip">Local preview · no version saved</span><button class="button button-ghost" id="previewGame" type="button">▷ Preview</button><button class="button button-primary" id="publishGame" type="button" disabled>Publish unavailable</button></footer>
           </aside>
         </div>
       </section>
@@ -420,17 +457,18 @@
       <section class="screen" data-screen-panel="brand" aria-labelledby="brandTitle">
         <header class="page-header">
           <div><div class="eyebrow-row"><small>WHITE-LABEL FOUNDATION</small><span class="gfp-chip">AQUATIC + GFP</span></div><h1 id="brandTitle">Brand Studio</h1><p>One theme powers dashboards, celebrations, sounds, and games.</p></div>
-          <div class="header-actions"><span class="autosave">● Draft saved</span><button class="button button-primary" id="publishBrand" type="button">Publish brand</button></div>
+          <div class="header-actions"><span class="autosave">Preview only</span><button class="button button-primary" id="publishBrand" type="button" disabled>Publish unavailable</button></div>
         </header>
+        <aside class="surface preview-boundary"><b>Live visual preview · no brand version saved</b><span>Edits below update this browser preview only. Logo replacement, accessibility certification, version publishing, rollback, and runtime coverage require production brand APIs and validation.</span></aside>
         <div class="brand-layout">
           <section class="surface brand-form">
             <div class="panel-heading"><div><small>BRAND BASICS</small><h2>Your workspace identity</h2></div><span class="step-pill">Step 1 of 3</span></div>
             <label class="field-label">Workspace name<input id="workspaceName" type="text" value="Customer Workspace" /></label>
-            <label class="field-label">Logo<div class="logo-drop"><span class="customer-logo">N</span><span><strong data-customer-logo-name>customer-mark.svg</strong><small>Customer-owned vector mark</small></span><button type="button">Replace</button></div></label>
+            <label class="field-label">Logo<div class="logo-drop"><span class="customer-logo">N</span><span><strong data-customer-logo-name>customer-mark.svg</strong><small>Preview placeholder</small></span><button type="button" disabled>Replace unavailable</button></div></label>
             <div class="field-row"><label class="field-label">Primary color<input id="brandColor" type="color" value="#E96F98" /></label><label class="field-label">Personality<select><option>Playful & polished</option><option>Bold & competitive</option><option>Calm & professional</option></select></label></div>
             <label class="field-label">Celebration language<input id="celebrationLanguage" type="text" value="Big win!" /></label>
-            <div class="accessibility-check"><span>✓</span><div><strong>Contrast check passed</strong><small>Your text and controls meet WCAG AA.</small></div></div>
-            <button class="button button-primary full" type="button">Save and continue →</button>
+            <div class="accessibility-check"><span>◇</span><div><strong>Accessibility target</strong><small>Automated and manual WCAG checks are not connected to this preview.</small></div></div>
+            <button class="button button-primary full" type="button" disabled>Save unavailable</button>
           </section>
           <aside class="brand-preview" id="brandPreview">
             <div class="preview-browser"><span></span><span></span><span></span><small>Live preview</small></div>
@@ -439,8 +477,8 @@
           </aside>
         </div>
         <article class="surface brand-coverage">
-          <header><div><small>CUSTOMER-FACING COVERAGE</small><h2>One brand package, every runtime</h2><p>The admin editor stays AxoBoard. Everything your audience sees uses <span data-customer-brand-name>the customer workspace</span>.</p></div><button id="previewAllBrandSurfaces" type="button">Preview all surfaces</button></header>
-          <div class="brand-coverage-grid"><span>✓ Dashboard</span><span>✓ Shared view</span><span>✓ TV display</span><span>✓ Celebration</span><span>✓ Competition</span><span>✓ Offline state</span></div>
+          <header><div><small>CUSTOMER-FACING COVERAGE · DESIGN TARGETS</small><h2>One brand package, every runtime</h2><p>The admin editor stays AxoBoard. These tiles describe intended coverage, not completed compatibility checks.</p></div><button id="previewAllBrandSurfaces" type="button">Preview TV surface</button></header>
+          <div class="brand-coverage-grid"><span>◇ Dashboard</span><span>◇ Shared view</span><span>◇ TV display</span><span>◇ Celebration</span><span>◇ Competition</span><span>◇ Offline state</span></div>
           <div class="compatibility-grid"><span><b>AA</b>Contrast</span><span><b>↝</b>Reduced motion</span><span><b>CC</b>Silent captions</span><span><b>720</b>720p</span><span><b>1080</b>1080p</span><span><b>4K</b>4K</span><span><b>▯</b>Mobile</span></div>
         </article>
       </section>
@@ -529,13 +567,81 @@
     </section>
   </div>
 
+  <div class="feature-overlay" id="automationEditorModal" role="dialog" aria-modal="true" aria-labelledby="automationEditorTitle" aria-describedby="automationEditorDescription" aria-hidden="true">
+    <section class="feature-modal automation-editor-modal">
+      <header><div><small>VERSIONED AUTOMATION</small><h2 id="automationEditorTitle">Create automation</h2><p id="automationEditorDescription">Configure a certified trigger, one supported action, and the guardrails that control delivery.</p></div><button class="feature-close" type="button" data-close-feature="automationEditorModal" aria-label="Close automation editor">×</button></header>
+      <div class="automation-editor-steps" role="tablist" aria-label="Automation setup stages">
+        <button id="automationStepTab1" class="is-active" type="button" role="tab" aria-selected="true" aria-controls="automationStepPanel1" data-automation-editor-step="1"><b>1</b><span>Trigger</span></button>
+        <button id="automationStepTab2" type="button" role="tab" aria-selected="false" aria-controls="automationStepPanel2" data-automation-editor-step="2"><b>2</b><span>Action</span></button>
+        <button id="automationStepTab3" type="button" role="tab" aria-selected="false" aria-controls="automationStepPanel3" data-automation-editor-step="3"><b>3</b><span>Guardrails</span></button>
+        <button id="automationStepTab4" type="button" role="tab" aria-selected="false" aria-controls="automationStepPanel4" data-automation-editor-step="4"><b>4</b><span>Test & publish</span></button>
+      </div>
+      <form id="automationRuleForm" novalidate>
+        <input id="automationRuleId" type="hidden" />
+        <input id="automationRuleRevision" type="hidden" />
+        <div class="automation-editor-body">
+          <section class="automation-editor-panel is-active" id="automationStepPanel1" role="tabpanel" aria-labelledby="automationStepTab1" data-automation-editor-panel="1">
+            <div class="builder-copy"><small>TRIGGER</small><h3>What should AxoBoard watch?</h3><p>Rules evaluate certified metric snapshots, never a value scraped from the browser.</p></div>
+            <div class="automation-form-grid">
+              <label class="automation-field-wide"><span>Rule name</span><input id="automationRuleName" maxlength="120" required placeholder="Revenue goal reached" /></label>
+              <label><span>Certified metric</span><select id="automationMetricId" required aria-describedby="automationMetricBindingHelp"><option value="">Choose a certified metric</option></select><small id="automationMetricBindingHelp">A published rule stays bound to this stable metric identity.</small></label>
+              <label><span>Operator</span><select id="automationOperator"><option value="gte">At least (≥)</option><option value="gt">Greater than (&gt;)</option><option value="lte">At most (≤)</option><option value="lt">Less than (&lt;)</option><option value="eq">Exactly (=)</option></select></label>
+              <label id="automationScalarSelectorField" class="automation-field-wide" hidden><span>Structured-card automation unavailable</span><select id="automationScalarSelector" disabled><option value="">Create a separate certified scalar KPI</option></select><small>Dimension-aware snapshots are required before AxoBoard can evaluate an individual row, stage, category, or field truthfully.</small></label>
+              <label><span>Threshold</span><select id="automationThresholdMode"><option value="absolute">Absolute value</option><option value="goal_percent">Percent of configured goal</option></select></label>
+              <label><span>Threshold value</span><input id="automationThresholdValue" type="number" step="any" required placeholder="100" /></label>
+              <fieldset class="automation-radio-field automation-field-wide"><legend>Match behavior</legend><label><input type="radio" name="automationBehavior" value="edge" checked /><span><strong>Crossing</strong><small>Run only when the value moves across the threshold.</small></span></label><label><input type="radio" name="automationBehavior" value="level" /><span><strong>Level</strong><small>Run while the condition remains true, subject to cooldown.</small></span></label></fieldset>
+              <label><span>Condition duration</span><select id="automationDurationSeconds"><option value="0">Immediately</option><option value="300">For 5 minutes</option><option value="900">For 15 minutes</option><option value="1800">For 30 minutes</option><option value="3600">For 1 hour</option></select></label>
+            </div>
+          </section>
+
+          <section class="automation-editor-panel" id="automationStepPanel2" role="tabpanel" aria-labelledby="automationStepTab2" data-automation-editor-panel="2" hidden>
+            <div class="builder-copy"><small>ACTION</small><h3>What should happen?</h3><p>Only actions backed by a production destination are selectable.</p></div>
+            <div class="automation-action-options">
+              <label class="is-supported"><input id="automationTvAction" type="checkbox" checked required /><span aria-hidden="true">▣</span><div><strong>Internal TV celebration</strong><small>Queue a branded celebration for eligible paired displays.</small></div><b>Available</b></label>
+              <label aria-disabled="true"><input type="checkbox" disabled /><span aria-hidden="true">#</span><div><strong>Slack message</strong><small>OAuth destination and delivery policy are not available yet.</small></div><b>Unavailable</b></label>
+              <label aria-disabled="true"><input type="checkbox" disabled /><span aria-hidden="true">✉</span><div><strong>Email notification</strong><small>Recipient governance and delivery tracking are not available yet.</small></div><b>Unavailable</b></label>
+            </div>
+          </section>
+
+          <section class="automation-editor-panel" id="automationStepPanel3" role="tabpanel" aria-labelledby="automationStepTab3" data-automation-editor-panel="3" hidden>
+            <div class="builder-copy"><small>GUARDRAILS</small><h3>Keep the rule useful and quiet</h3><p>Freshness, cooldown, rate caps, and local quiet hours are stored with the published version.</p></div>
+            <div class="automation-form-grid">
+              <label class="automation-check-field automation-field-wide"><input id="automationRequireFresh" type="checkbox" checked /><span><strong>Require fresh input</strong><small>Suppress this rule when its certified metric is older than the allowed age.</small></span></label>
+              <label><span>Maximum metric age</span><select id="automationFreshnessSeconds"><option value="300">5 minutes</option><option value="900" selected>15 minutes</option><option value="1800">30 minutes</option><option value="3600">1 hour</option></select></label>
+              <label><span>Cooldown</span><select id="automationCooldownSeconds"><option value="0">No cooldown</option><option value="900">15 minutes</option><option value="3600" selected>1 hour</option><option value="14400">4 hours</option><option value="86400">24 hours</option></select></label>
+              <label><span>Maximum runs per day</span><input id="automationMaxRunsPerDay" type="number" min="1" max="100" value="10" required /></label>
+              <label><span>Timezone</span><select id="automationTimezone"><option value="America/Denver">America/Denver</option><option value="America/New_York">America/New_York</option><option value="America/Chicago">America/Chicago</option><option value="America/Los_Angeles">America/Los_Angeles</option><option value="UTC">UTC</option></select></label>
+              <label class="automation-check-field automation-field-wide"><input id="automationQuietHoursEnabled" type="checkbox" /><span><strong>Use quiet hours</strong><small>Matching events are suppressed during this local time window.</small></span></label>
+              <div class="automation-form-grid automation-field-wide" id="automationQuietHoursFields" hidden><label><span>Quiet starts</span><input id="automationQuietStart" type="time" value="20:00" /></label><label><span>Quiet ends</span><input id="automationQuietEnd" type="time" value="07:00" /></label></div>
+            </div>
+          </section>
+
+          <section class="automation-editor-panel" id="automationStepPanel4" role="tabpanel" aria-labelledby="automationStepTab4" data-automation-editor-panel="4" hidden>
+            <div class="builder-copy"><small>TEST & PUBLISH</small><h3>Prove the rule before it can act</h3><p>A dry run evaluates retained snapshots without creating action attempts or sending anything.</p></div>
+            <div class="automation-review-card surface" id="automationReviewSummary"></div>
+            <div class="automation-dry-run surface"><div><strong>Historical dry run</strong><p>Evaluate up to 30 days of retained certified snapshots. This never delivers actions.</p></div><label><span>Lookback</span><select id="automationDryRunDays"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option></select></label><button class="button button-soft" id="automationDryRunButton" type="button">Run dry test</button></div>
+            <div class="automation-dry-run-result" id="automationDryRunResult" role="status" aria-live="polite"><strong>Not tested yet</strong><p>Save the draft, then run a no-side-effect evaluation.</p></div>
+            <label class="automation-publish-confirm"><input id="automationPublishConfirm" type="checkbox" /><span><strong>I reviewed the metric, threshold, action, and guardrails.</strong><small>Publishing activates a new immutable rule version for future events only.</small></span></label>
+          </section>
+        </div>
+        <footer class="automation-editor-footer"><button class="button button-ghost" type="button" data-close-feature="automationEditorModal">Cancel</button><span id="automationEditorStatus" role="status" aria-live="polite">Nothing saved yet</span><button class="button button-soft" id="automationSaveDraftButton" type="button">Save draft</button><button class="button button-ghost" id="automationEditorBack" type="button" disabled>← Back</button><button class="button button-primary" id="automationEditorNext" type="button">Action →</button></footer>
+        <div class="automation-form-error" id="automationFormError" role="alert" hidden></div>
+      </form>
+    </section>
+  </div>
+
   <div class="builder-overlay" id="kpiBuilderModal" role="dialog" aria-modal="true" aria-labelledby="kpiBuilderTitle" aria-hidden="true">
     <div class="builder-modal">
       <header class="builder-modal-header"><div><small id="kpiBuilderEyebrow">NEW DASHBOARD METRIC</small><h2 id="kpiBuilderTitle">Build a KPI</h2></div><button id="closeKpiBuilder" type="button" aria-label="Close KPI builder">×</button></header>
-      <div class="builder-steps" aria-label="KPI builder progress"><span class="is-active" data-builder-step-label="1"><b>1</b>Source</span><i></i><span data-builder-step-label="2"><b>2</b>Data</span><i></i><span data-builder-step-label="3"><b>3</b>Display</span></div>
+      <div class="builder-steps" role="tablist" aria-label="KPI builder steps">
+        <button class="is-active" id="kpiBuilderTab1" type="button" role="tab" aria-selected="true" aria-controls="kpiBuilderPanel1" data-builder-step-label="1"><b>1</b>Source</button><i aria-hidden="true"></i>
+        <button id="kpiBuilderTab2" type="button" role="tab" aria-selected="false" aria-controls="kpiBuilderPanel2" data-builder-step-label="2"><b>2</b>Data</button><i aria-hidden="true"></i>
+        <button id="kpiBuilderTab3" type="button" role="tab" aria-selected="false" aria-controls="kpiBuilderPanel3" data-builder-step-label="3"><b>3</b>Display</button><i aria-hidden="true"></i>
+        <button id="kpiBuilderTab4" type="button" role="tab" aria-selected="false" aria-controls="kpiBuilderPanel4" aria-disabled="true" disabled data-builder-step-label="4"><b>4</b>Automations</button>
+      </div>
 
       <div class="builder-body">
-        <section class="builder-step is-active" data-builder-step="1">
+        <section class="builder-step is-active" id="kpiBuilderPanel1" role="tabpanel" aria-labelledby="kpiBuilderTab1" data-builder-step="1">
           <div class="builder-copy"><small>STEP 1</small><h3>Where does this number live?</h3><p>Choose a connected source. AxoBoard only asks for the access needed to build this KPI.</p></div>
           <div class="source-choice-grid">
             <button class="source-choice is-selected" type="button" data-kpi-source="google"><span class="integration-logo google">G</span><div><strong>Google Sheets</strong><small>Choose a recent spreadsheet, sheet, and exact range.</small></div><i id="googleConnectionLabel">Connection required</i></button>
@@ -544,7 +650,7 @@
           <div class="oauth-note"><span>🔒</span><div><strong>OAuth connection</strong><p>Tokens stay server-side and encrypted. Disconnecting revokes future syncs and starts the configured data-deletion workflow.</p></div><button id="reconnectSource" type="button">Reconnect</button></div>
         </section>
 
-        <section class="builder-step" data-builder-step="2">
+        <section class="builder-step" id="kpiBuilderPanel2" role="tabpanel" aria-labelledby="kpiBuilderTab2" data-builder-step="2" hidden>
           <div class="builder-copy"><small>STEP 2</small><h3 id="dataStepTitle">Choose cells to watch</h3><p id="dataStepCopy">Select a spreadsheet, sheet, and one or more cell ranges.</p></div>
           <div class="source-config is-active" data-source-config="google">
             <div class="config-grid"><label>Spreadsheet<button class="drive-file-trigger" id="openSpreadsheetPicker" type="button" disabled><span class="drive-sheet-icon" aria-hidden="true">▦</span><span><strong id="selectedSpreadsheetName">Loading spreadsheets…</strong><small id="selectedSpreadsheetMeta">Google Drive</small></span><b>Select file</b></button><select id="sheetFile" hidden disabled aria-label="Selected spreadsheet"><option value="">Loading your spreadsheets…</option></select><small class="field-help" id="spreadsheetPickerHelp">Sorted by most recently updated</small></label><label>Sheet<select id="sheetTab" disabled><option value="">Choose a spreadsheet first</option></select><small class="field-help">A sheet is a tab inside the spreadsheet</small></label></div>
@@ -561,7 +667,7 @@
           </div>
         </section>
 
-        <section class="builder-step" data-builder-step="3">
+        <section class="builder-step" id="kpiBuilderPanel3" role="tabpanel" aria-labelledby="kpiBuilderTab3" data-builder-step="3" hidden>
           <div class="builder-copy"><small>STEP 3</small><h3>Choose the clearest display</h3><p>Match the display to the shape of the selected data, then add optional goals or comparisons.</p></div>
           <fieldset class="display-type-fieldset"><legend>Display type</legend><div class="display-type-grid">
             <button class="is-selected" type="button" data-display-type="scorecard"><span>123</span><strong>Scorecard</strong><small>Value or rep + goal</small></button>
@@ -591,6 +697,14 @@
           </div>
           <aside class="builder-preview-panel"><small>ACCURATE CARD PREVIEW</small><div id="builderAccuratePreview"><div class="builder-preview-empty"><span>▦</span><strong>Your finished card appears here</strong><small>Choose compatible Google Sheets cells to render real data.</small></div></div><div class="builder-preview-meta"><span id="previewFreshness">Waiting for source</span><b id="previewLineage">No range selected</b></div><span class="source-mark google" id="previewSourceMark" hidden>G</span><p id="previewKpiName" hidden>My Google Sheets KPI</p><strong id="previewKpiValue" hidden>—</strong><div class="structured-preview" id="previewStructured" hidden></div><div class="kpi-comparison-preview" id="previewComparison" hidden></div></aside>
         </section>
+
+        <section class="builder-step" id="kpiBuilderPanel4" role="tabpanel" aria-labelledby="kpiBuilderTab4" data-builder-step="4" hidden>
+          <div class="builder-copy"><small>STEP 4</small><h3>Automations for this KPI</h3><p>Rules bind to the certified metric behind this card, so they keep working if the dashboard layout changes.</p></div>
+          <aside class="structured-automation-note" id="structuredAutomationNote" hidden><span aria-hidden="true">⌁</span><div><strong>A scalar selection is required</strong><p>This card contains multiple values. Choose the exact row, stage, category, or numeric field inside the rule editor before publishing.</p></div></aside>
+          <div class="kpi-automation-heading"><div><strong id="kpiAutomationMetricName">Certified metric</strong><small id="kpiAutomationMetricMeta">Loading linked rules…</small></div><button class="button button-primary" id="createKpiAutomation" type="button">＋ Create automation</button></div>
+          <div class="automation-api-state surface" id="kpiAutomationState" role="status" aria-live="polite" aria-busy="true"><span class="automation-state-icon" aria-hidden="true">ϟ</span><div><strong>Loading linked automations…</strong><p>Reading only rules bound to this certified metric.</p></div></div>
+          <div class="kpi-linked-rule-list" id="kpiAutomationList"></div>
+        </section>
       </div>
 
       <footer class="builder-modal-footer"><button class="button button-ghost" id="builderBack" type="button" disabled>← Back</button><span id="builderStatus">Draft changes only</span><button class="button button-primary" id="builderNext" type="button">Choose data →</button></footer>
@@ -615,7 +729,7 @@
     </div>
   </div>
 
-  <div class="celebration-overlay" id="celebrationOverlay" role="dialog" aria-modal="true" aria-labelledby="winTitle">
+  <div class="celebration-overlay" id="celebrationOverlay" role="dialog" aria-modal="true" aria-labelledby="winTitle" aria-hidden="true" inert>
     <div class="confetti" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
     <div class="win-modal">
       <button class="close-win" id="closeWin" type="button" aria-label="Close celebration">×</button>

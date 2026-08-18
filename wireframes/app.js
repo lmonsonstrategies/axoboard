@@ -114,7 +114,14 @@ function showToast(title, detail) {
 function showScreen(name) {
   name = name === 'kombat' ? 'competitions' : name;
   screens.forEach((screen) => screen.classList.toggle('is-active', screen.dataset.screenPanel === name));
-  navButtons.forEach((button) => button.classList.toggle('is-active', button.dataset.screen === name));
+  navButtons.forEach((button) => {
+    const active = button.dataset.screen === name;
+    button.classList.toggle('is-active', active);
+    if (button.classList.contains('nav-item')) {
+      if (active) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    }
+  });
   const activeNav = navButtons.find((button) => button.dataset.screen === name && button.classList.contains('nav-item'));
   if (activeNav && window.matchMedia('(max-width: 700px)').matches) activeNav.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   history.replaceState(null, '', `#${name}`);
@@ -144,9 +151,10 @@ function applyDashboardLayout(layout = betaState.dashboardLayout) {
     const card = [...dashboardKpiGrid.querySelectorAll('.kpi-card')].find((item) => item.dataset.cardKey === key);
     if (card) dashboardKpiGrid.append(card);
   });
-  dashboardTrendPanel.hidden = !normalized.showTrend;
-  dashboardActionCenter.hidden = !normalized.showActionCenter;
-  const visiblePanels = Number(normalized.showTrend) + Number(normalized.showActionCenter);
+  const liveDataUnavailable = Boolean(liveWorkspaceId);
+  dashboardTrendPanel.hidden = liveDataUnavailable || !normalized.showTrend;
+  dashboardActionCenter.hidden = liveDataUnavailable || !normalized.showActionCenter;
+  const visiblePanels = liveDataUnavailable ? 0 : Number(normalized.showTrend) + Number(normalized.showActionCenter);
   dashboardLowerGrid.hidden = visiblePanels === 0;
   dashboardLowerGrid.dataset.visiblePanels = visiblePanels === 1 ? 'one' : 'two';
   const presetName = { balanced: 'Balanced', 'kpi-focus': 'KPI focus', compact: 'Compact' }[normalized.preset];
@@ -282,13 +290,17 @@ function syncCelebrationPreview() {
 
 function openCelebration() {
   syncCelebrationPreview();
+  overlay.inert = false;
+  overlay.setAttribute('aria-hidden', 'false');
   overlay.classList.add('is-visible');
   document.querySelector('#closeWin').focus();
 }
 
 function closeCelebration() {
   overlay.classList.remove('is-visible');
-  document.querySelector('#celebrateButton').focus();
+  overlay.setAttribute('aria-hidden', 'true');
+  overlay.inert = true;
+  document.querySelector('#previewCelebration').focus();
 }
 
 styleButtons.forEach((button) => button.addEventListener('click', () => {
@@ -461,6 +473,21 @@ let liveWorkspaceName = '';
 let liveDashboardLayout = null;
 let liveEngagement = { summary: {}, events: [] };
 let liveBrand = null;
+let liveAutomationRules = [];
+let liveAutomationRuns = [];
+let automationPermissions = { canRead: false, canEdit: false, canPublish: false };
+let liveCapabilities = {};
+let automationsLoaded = false;
+let automationRulesError = '';
+let automationRunsError = '';
+let activeAutomationEditorStep = 1;
+let activeAutomationRule = null;
+let automationEditorKpi = null;
+let pendingPromptKpi = null;
+let automationLoadRequest = 0;
+let automationRunsRequest = 0;
+let bootstrapReady = false;
+const structuredAutomationTypes = new Set(['rep_cards', 'leaderboard', 'trend', 'category_bar', 'funnel', 'pipeline', 'activity_feed', 'heatmap', 'table']);
 let activeGoogleConnection = null;
 let availableSpreadsheets = [];
 let spreadsheetPickerSelection = '';
@@ -499,8 +526,31 @@ function escapeHtml(value) {
 async function apiJson(path, options = {}) {
   const response = await fetch(path, { credentials: 'same-origin', ...options, headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || 'AxoBoard could not complete that request.');
+  if (!response.ok) {
+    const error = new Error(payload.error || 'AxoBoard could not complete that request.');
+    error.code = payload.code || '';
+    error.details = payload.details || null;
+    error.status = response.status;
+    throw error;
+  }
   return payload;
+}
+
+function setBootstrapState(state, message = '') {
+  const gate = document.querySelector('#bootstrapGate');
+  const app = document.querySelector('#appShell');
+  const reload = document.querySelector('#reloadApplication');
+  if (!gate || !app || !reload) return;
+  gate.dataset.state = state;
+  gate.setAttribute('role', state === 'failed' ? 'alert' : 'status');
+  gate.querySelector('small').textContent = state === 'failed' ? 'WORKSPACE UNAVAILABLE' : 'SECURE WORKSPACE';
+  gate.querySelector('h1').textContent = state === 'failed' ? 'AxoBoard could not open this workspace' : 'Loading your workspace';
+  document.querySelector('#bootstrapGateMessage').textContent = message || (state === 'failed'
+    ? 'Your workspace could not be verified. No sample or cached fixture data has been shown.'
+    : 'Verifying your session and tenant-scoped data…');
+  reload.hidden = state !== 'failed';
+  gate.hidden = state === 'ready';
+  app.hidden = state !== 'ready' || dedicatedTvRuntime;
 }
 
 function timeAgo(value) {
@@ -1254,14 +1304,22 @@ function renderKpiCard(card, kpi, { interactive = true } = {}) {
   const displayType = kpi.displayType || 'scorecard';
   const compositeScorecard = displayType === 'scorecard' && kpi.displayPayload?.layout === 'rep_metric_goal';
   const structured = Boolean(kpi.displayPayload) && !scalarDisplayTypes.has(displayType);
+  const canManageKpi = interactive && liveCapabilities.manageKpis !== false;
+  const showSourceDetails = !interactive || liveCapabilities.viewSourceDetails !== false;
   card.className = `surface kpi-card kpi-card-${displayType}${structured ? ' kpi-card-structured' : ''}${compositeScorecard ? ' kpi-card-scorecard-detail' : ''}${interactive ? '' : ' kpi-card-builder-preview'}`;
   const goalProgress = kpi.goalValue === null || kpi.goalValue === 0 ? null : clampPercent((kpi.value / kpi.goalValue) * 100);
   const comparisonPercent = kpi.comparisonValue === null || kpi.comparisonValue === 0 ? null : (kpi.comparisonDelta / Math.abs(kpi.comparisonValue)) * 100;
-  const comparisonText = kpi.comparisonValue === null ? '' : `${kpi.comparisonDelta >= 0 ? '+' : ''}${formatKpiValue(kpi.comparisonDelta, kpi.displayFormat)}${comparisonPercent === null ? '' : ` (${comparisonPercent >= 0 ? '+' : ''}${comparisonPercent.toFixed(1)}%)`} vs ${kpi.comparisonSourceRange}`;
+  const comparisonLabel = showSourceDetails && kpi.comparisonSourceRange ? kpi.comparisonSourceRange : 'comparison';
+  const comparisonText = kpi.comparisonValue === null ? '' : `${kpi.comparisonDelta >= 0 ? '+' : ''}${formatKpiValue(kpi.comparisonDelta, kpi.displayFormat)}${comparisonPercent === null ? '' : ` (${comparisonPercent >= 0 ? '+' : ''}${comparisonPercent.toFixed(1)}%)`} vs ${comparisonLabel}`;
   const contextText = comparisonText || (goalProgress === null ? (kpi.status === 'active' ? 'Live' : 'Needs attention') : `${goalProgress.toFixed(1)}% of ${formatKpiValue(kpi.goalValue, kpi.displayFormat)} goal`);
-  const actions = interactive ? `<span class="kpi-card-actions"><button type="button" data-edit-live-kpi="${escapeHtml(kpi.id)}" aria-label="Edit ${escapeHtml(kpi.name)}" title="Edit KPI">✎</button><button type="button" data-sync-live-kpi="${escapeHtml(kpi.id)}" aria-label="Refresh ${escapeHtml(kpi.name)}" title="Refresh KPI">↻</button><button class="kpi-delete-button" type="button" data-delete-live-kpi="${escapeHtml(kpi.id)}" aria-label="Delete ${escapeHtml(kpi.name)}" title="Delete KPI">×</button></span>` : '<span class="preview-live-pill">Preview</span>';
+  const automationCount = canManageKpi && liveCapabilities.readAutomations !== false ? automationRulesForMetric(automationMetricIdForKpi(kpi)).length : 0;
+  const automationShortcut = automationCount ? `<button class="kpi-automation-badge" type="button" data-open-kpi-automations="${escapeHtml(automationMetricIdForKpi(kpi))}" data-interaction-status="working" aria-label="Open ${automationCount} automation${automationCount === 1 ? '' : 's'} for ${escapeHtml(kpi.name)}" title="${automationCount} linked automation${automationCount === 1 ? '' : 's'}">ϟ ${automationCount}</button>` : '';
+  const actions = canManageKpi ? `<span class="kpi-card-actions">${automationShortcut}<button type="button" data-edit-live-kpi="${escapeHtml(kpi.id)}" aria-label="Edit ${escapeHtml(kpi.name)}" title="Edit KPI">✎</button><button type="button" data-sync-live-kpi="${escapeHtml(kpi.id)}" aria-label="Refresh ${escapeHtml(kpi.name)}" title="Refresh KPI">↻</button><button class="kpi-delete-button" type="button" data-delete-live-kpi="${escapeHtml(kpi.id)}" aria-label="Delete ${escapeHtml(kpi.name)}" title="Delete KPI">×</button></span>` : (interactive ? '' : '<span class="preview-live-pill">Preview</span>');
   const certified = kpi.certification?.status === 'certified' ? `<button class="certified-chip" type="button" data-live-trust="${escapeHtml(kpi.id)}">✓ Certified</button>` : '';
-  const header = `<header class="structured-kpi-head"><span class="source-mark google">G</span><small>Google Sheets · ${escapeHtml(kpi.sourceRange || `${kpi.sheetTitle}!${kpi.range}`)}</small>${certified}${actions}</header>`;
+  const source = showSourceDetails
+    ? `<span class="source-mark google">G</span><small>Google Sheets · ${escapeHtml(kpi.sourceRange || `${kpi.sheetTitle}!${kpi.range}`)}</small>`
+    : '<span class="source-mark certified-source">✓</span><small>Certified metric</small>';
+  const header = `<header class="structured-kpi-head">${source}${certified}${actions}</header>`;
   if (displayType === 'goal_pace') {
     const target = Number(kpi.goalValue);
     const hasGoal = Number.isFinite(target) && target !== 0;
@@ -1282,7 +1340,8 @@ function renderKpiCard(card, kpi, { interactive = true } = {}) {
     const progress = payload.goal.value === 0 ? null : clampPercent((payload.metric.value / payload.goal.value) * 100);
     card.innerHTML = `${header}<div class="scorecard-rep"><small>${escapeHtml(payload.rep.label)}</small><strong>${escapeHtml(payload.rep.value)}</strong></div><div class="scorecard-metric"><p>${escapeHtml(payload.metric.label === 'Metric' ? kpi.name : payload.metric.label)}</p><strong>${escapeHtml(formatKpiValue(payload.metric.value, kpi.displayFormat))}</strong></div><div class="scorecard-goal"><span><small>${escapeHtml(payload.goal.label)}</small><b>${escapeHtml(formatKpiValue(payload.goal.value, kpi.displayFormat))}</b></span><em>${progress === null ? 'Goal progress unavailable' : `${progress.toFixed(1)}% of goal`}</em></div><div class="goal-pace-track"><i style="width:${progress ?? 0}%"></i><em style="left:${progress ?? 0}%"></em></div><footer><span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span><b>Live rep scorecard</b></footer>`;
   } else if (!structured) {
-    card.innerHTML = `${header}<p>${escapeHtml(kpi.name)}</p><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><div class="kpi-change ${kpi.status === 'active' ? 'positive' : 'neutral'}">● ${escapeHtml(contextText)} <span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span></div><div class="mini-progress"><i style="width:${goalProgress === null ? (kpi.status === 'active' ? '100' : '20') : goalProgress}%"></i></div><footer><span>${escapeHtml(kpi.aggregation.replaceAll('_', ' '))} · read only</span><b>${escapeHtml(kpi.status)}</b></footer>`;
+    const calculationLabel = kpi.aggregation ? kpi.aggregation.replaceAll('_', ' ') : 'certified value';
+    card.innerHTML = `${header}<p>${escapeHtml(kpi.name)}</p><strong>${escapeHtml(formatKpiValue(kpi.value, kpi.displayFormat))}</strong><div class="kpi-change ${kpi.status === 'active' ? 'positive' : 'neutral'}">● ${escapeHtml(contextText)} <span>${escapeHtml(timeAgo(kpi.fetchedAt))}</span></div><div class="mini-progress"><i style="width:${goalProgress === null ? (kpi.status === 'active' ? '100' : '20') : goalProgress}%"></i></div><footer><span>${escapeHtml(calculationLabel)} · read only</span><b>${escapeHtml(kpi.status)}</b></footer>`;
   } else if (displayType === 'rep_cards') {
     const period = periodLabels[kpi.periodGranularity] || 'Monthly';
     const cards = (kpi.displayPayload.items || []).map((item) => {
@@ -1343,13 +1402,16 @@ function renderBuilderAccuratePreview() {
 function renderLiveKpis() {
   document.body.dataset.liveKpis = liveKpis.length ? 'true' : 'false';
   if (!liveKpis.length) {
+    const canManageKpis = liveCapabilities.manageKpis !== false;
     const empty = document.createElement('section');
     empty.className = 'surface live-dashboard-empty';
-    empty.innerHTML = '<span class="empty-axo">•ᴗ•</span><div><small>THIS WORKSPACE</small><h2>No KPIs yet</h2><p>Connect Google Sheets, then add the first trusted KPI to this dashboard.</p></div><button class="button button-primary" type="button">＋ Add KPI</button>';
-    empty.querySelector('button').addEventListener('click', (event) => openKpiBuilder('google', event.currentTarget));
+    empty.innerHTML = `<span class="empty-axo">•ᴗ•</span><div><small>THIS WORKSPACE</small><h2>No KPIs yet</h2><p>${canManageKpis ? 'Connect Google Sheets, then add the first trusted KPI to this dashboard.' : 'No dashboard metrics have been published to this workspace yet.'}</p></div>${canManageKpis ? '<button class="button button-primary" type="button">＋ Add KPI</button>' : ''}`;
+    empty.querySelector('button')?.addEventListener('click', (event) => openKpiBuilder('google', event.currentTarget));
     dashboardKpiGrid.replaceChildren(empty);
     document.querySelector('.dashboard-toolbar strong').textContent = liveWorkspaceName || 'Workspace dashboard';
     document.querySelector('.dashboard-toolbar small').textContent = '0 KPIs · nothing inherited from another workspace';
+    liveDashboardLayout = normalizeDashboardLayout(liveDashboardLayout || {}, []);
+    applyDashboardLayout(liveDashboardLayout);
     return;
   }
   const order = normalizeDashboardLayout(liveDashboardLayout || {}, liveKpis.map((kpi) => kpi.id)).kpiOrder;
@@ -1428,29 +1490,44 @@ function renderLiveKpis() {
       });
     }
     const refresh = card.querySelector('[data-sync-live-kpi]');
-    refresh.dataset.interactionStatus = 'working';
-    refresh.addEventListener('click', async (event) => {
-      event.stopPropagation();
-      refresh.disabled = true;
-      try {
-        await apiJson(`/api/axoboard/kpis/${encodeURIComponent(kpi.id)}/sync`, { method: 'POST' });
-        await loadLiveData();
-        showToast('KPI refreshed', `${kpi.name} now shows the latest Google Sheets value.`);
-      } catch (error) { showToast('Refresh failed', error.message); }
-      finally { refresh.disabled = false; }
-    });
+    if (refresh) {
+      refresh.dataset.interactionStatus = 'working';
+      refresh.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        refresh.disabled = true;
+        try {
+          await apiJson(`/api/axoboard/kpis/${encodeURIComponent(kpi.id)}/sync`, { method: 'POST' });
+          await loadLiveData();
+          showToast('KPI refreshed', `${kpi.name} now shows the latest Google Sheets value.`);
+        } catch (error) { showToast('Refresh failed', error.message); }
+        finally { refresh.disabled = false; }
+      });
+    }
     const editButton = card.querySelector('[data-edit-live-kpi]');
-    editButton.dataset.interactionStatus = 'working';
-    editButton.addEventListener('click', (event) => {
+    if (editButton) {
+      editButton.dataset.interactionStatus = 'working';
+      editButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        openKpiBuilder('google', editButton, kpi);
+      });
+    }
+    const automationBadge = card.querySelector('[data-open-kpi-automations]');
+    if (automationBadge) automationBadge.addEventListener('click', (event) => {
       event.stopPropagation();
-      openKpiBuilder('google', editButton, kpi);
+      showScreen('automations');
+      switchAutomationTab('rules');
+      document.querySelector('#automationMetricFilter').value = automationBadge.dataset.openKpiAutomations;
+      renderAutomationRules();
+      document.querySelector('#automationMetricFilter').focus();
     });
     const deleteButton = card.querySelector('[data-delete-live-kpi]');
-    deleteButton.dataset.interactionStatus = 'working';
-    deleteButton.addEventListener('click', (event) => {
-      event.stopPropagation();
-      deleteLiveKpi(kpi.id, deleteButton);
-    });
+    if (deleteButton) {
+      deleteButton.dataset.interactionStatus = 'working';
+      deleteButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        deleteLiveKpi(kpi.id, deleteButton);
+      });
+    }
     return card;
   }));
   liveDashboardLayout = normalizeDashboardLayout(liveDashboardLayout || {}, liveKpis.map((kpi) => kpi.id));
@@ -1478,7 +1555,9 @@ async function deleteLiveKpi(kpiId, trigger) {
     showToast('KPI deleted', `${kpi.name} was removed only from ${liveWorkspaceName || 'this workspace'}.`);
   } catch (error) {
     trigger.disabled = false;
-    showToast('Could not delete KPI', error.message);
+    if (error.code === 'kpi_has_linked_automations') {
+      showToast('KPI has linked automations', `${error.message} Open Automations, archive every rule linked to this KPI, then retry deletion.`);
+    } else showToast('Could not delete KPI', error.message);
   }
 }
 
@@ -1486,7 +1565,25 @@ function renderLiveConnections() {
   activeGoogleConnection = liveConnections.find((connection) => connection.provider === 'google_sheets') || null;
   document.body.dataset.liveIntegrations = activeGoogleConnection ? 'true' : 'false';
   document.querySelector('#googleConnectionLabel').textContent = activeGoogleConnection ? `✓ ${activeGoogleConnection.accountEmail}` : 'Connection required';
-  if (!activeGoogleConnection) return;
+  const connectionCard = document.querySelector('#googleConnectionCard');
+  connectionCard.classList.toggle('is-connected', Boolean(activeGoogleConnection));
+  if (!activeGoogleConnection) {
+    document.querySelector('#liveConnectionCount').textContent = '0';
+    document.querySelector('#liveKpiCount').textContent = '0';
+    document.querySelector('#liveLastRefresh').textContent = '—';
+    document.querySelector('#liveSyncStatus').textContent = 'Setup';
+    document.querySelector('#googleConnectionAccount').textContent = 'No account connected';
+    document.querySelector('#googleConnectionMappings').textContent = '0 KPIs';
+    document.querySelector('#googleConnectionStatus').textContent = '○ Not connected';
+    document.querySelector('#googleHealthDetail').textContent = 'Connect Google Sheets to report health';
+    document.querySelector('#googleHealthMark').textContent = '—';
+    document.querySelector('#googleHealthBadge').textContent = 'Setup';
+    connectionCard.querySelector('.connect-source').textContent = 'Connect';
+    connectionCard.querySelector('.build-source-kpi').disabled = true;
+    return;
+  }
+  connectionCard.querySelector('.connect-source').textContent = 'Reconnect';
+  connectionCard.querySelector('.build-source-kpi').disabled = false;
   const canBrowseSpreadsheets = activeGoogleConnection.scopes?.includes(googleDriveMetadataScope);
   const activeKpis = liveKpis.filter((kpi) => kpi.connectionId === activeGoogleConnection.id);
   document.querySelector('#liveConnectionCount').textContent = String(liveConnections.length);
@@ -1536,8 +1633,8 @@ function renderLiveEngagement() {
   if (ledgerStats.length >= 4) {
     ledgerStats[0].textContent = String(events.length);
     ledgerStats[1].textContent = String(events.filter((event) => event.delivery.status === 'pending').length);
-    ledgerStats[2].textContent = '0';
-    ledgerStats[3].textContent = '100%';
+    ledgerStats[2].textContent = '—';
+    ledgerStats[3].textContent = '—';
   }
 }
 
@@ -1604,13 +1701,691 @@ function openDisplayEditor(display) {
   openFeatureModal('displayEditorModal', document.querySelector(`[data-live-display="${display.id}"] button`));
 }
 
-async function loadLiveData() {
+function automationMetricIdForKpi(kpi) {
+  return kpi?.metricId || kpi?.certification?.metricId || '';
+}
+
+function automationEditableVersion(rule) {
+  return rule?.draftVersion || rule?.publishedVersion || rule || {};
+}
+
+function automationEffectiveVersion(rule) {
+  const state = automationRuleState(rule);
+  if (['active', 'paused', 'degraded'].includes(state) && rule?.publishedVersion) return rule.publishedVersion;
+  return rule?.draftVersion || rule?.publishedVersion || rule || {};
+}
+
+function automationRuleActions(rule) {
+  if (Array.isArray(rule?.actions)) return rule.actions;
+  const version = automationEditableVersion(rule);
+  return Array.isArray(version?.actions) ? version.actions : [];
+}
+
+function automationRuleState(rule) {
+  return String(rule?.state || (rule?.publishedVersion ? 'active' : 'draft')).toLowerCase();
+}
+
+function automationRuleMetricId(rule) {
+  return rule?.metric?.id || rule?.metricId || automationEffectiveVersion(rule)?.metricId || '';
+}
+
+function automationRulesForMetric(metricId) {
+  if (!metricId || !automationsLoaded) return [];
+  return liveAutomationRules.filter((rule) => automationRuleMetricId(rule) === metricId);
+}
+
+function isStructuredAutomationKpi(kpi) {
+  return Boolean(kpi && (structuredAutomationTypes.has(kpi.displayType) || kpi.displayPayload?.layout === 'rep_metric_goal'));
+}
+
+function certifiedScalarKpis() {
+  return liveKpis.filter((kpi) => automationMetricIdForKpi(kpi) && kpi.certification?.status === 'certified' && !isStructuredAutomationKpi(kpi));
+}
+
+function setAutomationApiState(element, state, title, detail) {
+  if (!element) return;
+  element.hidden = false;
+  element.dataset.state = state;
+  element.setAttribute('aria-busy', String(state === 'loading'));
+  element.querySelector('strong').textContent = title;
+  element.querySelector('p').textContent = detail;
+}
+
+function clearAutomationApiState(element) {
+  if (!element) return;
+  element.hidden = true;
+  element.setAttribute('aria-busy', 'false');
+}
+
+function automationOperatorSymbol(operator) {
+  return ({ gte: '≥', gt: '>', lte: '≤', lt: '<', eq: '=' })[operator] || operator || '—';
+}
+
+function automationThresholdText(trigger = {}) {
+  const threshold = Number(trigger.thresholdValue);
+  const value = Number.isFinite(threshold) ? new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(threshold) : '—';
+  return trigger.thresholdMode === 'goal_percent' ? `${value}% of goal` : value;
+}
+
+function automationDecisionLabel(run) {
+  if (!run) return 'Never evaluated';
+  const status = String(run.status || 'recorded').replaceAll('_', ' ');
+  return `${status} · ${timeAgo(run.occurredAt || run.completedAt)}`;
+}
+
+function populateAutomationMetricSelect(select, { includeAll = false, selected = '' } = {}) {
+  if (!select) return;
+  const previous = selected || select.value;
+  const options = [];
+  if (includeAll) options.push(new Option('All certified metrics', ''));
+  else options.push(new Option('Choose a certified scalar metric', ''));
+  certifiedScalarKpis().forEach((kpi) => options.push(new Option(kpi.name, automationMetricIdForKpi(kpi))));
+  select.replaceChildren(...options);
+  if ([...select.options].some((option) => option.value === previous)) select.value = previous;
+}
+
+function applyAutomationPermissions() {
+  const createButton = document.querySelector('#newAutomationButton');
+  if (createButton) {
+    createButton.disabled = !automationPermissions.canEdit;
+    createButton.title = automationPermissions.canEdit ? '' : 'Your workspace role cannot create automation drafts.';
+  }
+  const kpiCreate = document.querySelector('#createKpiAutomation');
+  if (kpiCreate) kpiCreate.disabled = !automationPermissions.canEdit || isStructuredAutomationKpi(automationEditorKpi);
+}
+
+function renderAutomationRuleFilters() {
+  const metricFilter = document.querySelector('#automationMetricFilter');
+  const runRuleFilter = document.querySelector('#automationRunRuleFilter');
+  populateAutomationMetricSelect(metricFilter, { includeAll: true });
+  const selectedRule = runRuleFilter.value;
+  runRuleFilter.replaceChildren(new Option('All rules', ''), ...liveAutomationRules.map((rule) => new Option(rule.name, rule.id)));
+  if ([...runRuleFilter.options].some((option) => option.value === selectedRule)) runRuleFilter.value = selectedRule;
+}
+
+function renderAutomationRules() {
+  const list = document.querySelector('#automationRuleList');
+  const state = document.querySelector('#automationRulesState');
+  if (!list || !state) return;
+  const counts = {
+    active: liveAutomationRules.filter((rule) => automationRuleState(rule) === 'active').length,
+    draft: liveAutomationRules.filter((rule) => automationRuleState(rule) === 'draft').length,
+    paused: liveAutomationRules.filter((rule) => automationRuleState(rule) === 'paused').length,
+    attention: liveAutomationRules.filter((rule) => automationRuleState(rule) === 'degraded' || ['failed', 'dead_letter'].includes(rule.lastRun?.status)).length
+  };
+  document.querySelector('#automationActiveCount').textContent = automationsLoaded ? String(counts.active) : '—';
+  document.querySelector('#automationDraftCount').textContent = automationsLoaded ? String(counts.draft) : '—';
+  document.querySelector('#automationPausedCount').textContent = automationsLoaded ? String(counts.paused) : '—';
+  document.querySelector('#automationAttentionCount').textContent = automationsLoaded ? String(counts.attention) : '—';
+  renderAutomationRuleFilters();
+  applyAutomationPermissions();
+  if (automationRulesError) {
+    list.replaceChildren();
+    setAutomationApiState(state, 'error', 'Automation rules could not be loaded', automationRulesError);
+    return;
+  }
+  if (!automationsLoaded) {
+    list.replaceChildren();
+    setAutomationApiState(state, 'loading', 'Loading automation rules…', 'Reading this workspace’s published and draft versions.');
+    return;
+  }
+  const query = document.querySelector('#automationRuleSearch').value.trim().toLowerCase();
+  const status = document.querySelector('#automationRuleStatusFilter').value;
+  const metricId = document.querySelector('#automationMetricFilter').value;
+  const rules = liveAutomationRules.filter((rule) => {
+    const searchable = `${rule.name || ''} ${rule.metric?.name || ''}`.toLowerCase();
+    return (!query || searchable.includes(query)) && (!status || automationRuleState(rule) === status) && (!metricId || automationRuleMetricId(rule) === metricId);
+  });
+  if (!liveAutomationRules.length) {
+    list.replaceChildren();
+    setAutomationApiState(state, 'empty', 'No automation rules yet', automationPermissions.canEdit ? 'Create a draft from a certified scalar KPI. Nothing runs until an authorized publisher activates it.' : 'No rules are visible in this workspace.');
+    return;
+  }
+  if (!rules.length) {
+    list.replaceChildren();
+    setAutomationApiState(state, 'empty', 'No rules match these filters', 'Clear a filter to see the rest of this workspace’s rules.');
+    return;
+  }
+  clearAutomationApiState(state);
+  list.replaceChildren(...rules.map((rule) => {
+    const article = document.createElement('article');
+    const version = automationEffectiveVersion(rule);
+    const trigger = version.trigger || {};
+    const stateName = automationRuleState(rule);
+    const lastRun = rule.lastRun || null;
+    const warning = stateName === 'degraded' || ['failed', 'dead_letter'].includes(lastRun?.status);
+    const stateCopy = stateName.replaceAll('_', ' ');
+    const duration = Number(trigger.durationSeconds) > 0 ? ` for ${Math.round(Number(trigger.durationSeconds) / 60)}m` : '';
+    const canToggle = automationPermissions.canPublish && ['active', 'paused', 'degraded'].includes(stateName);
+    const toggleAction = stateName === 'active' ? 'pause' : 'resume';
+    const canEditRule = automationPermissions.canEdit && stateName !== 'archived';
+    const canArchive = automationPermissions.canPublish && stateName !== 'archived';
+    const stateControl = canToggle ? `<button type="button" data-rule-state-action="${toggleAction}" data-rule-id="${escapeHtml(rule.id)}" data-interaction-status="working">${toggleAction === 'pause' ? 'Pause' : 'Resume'}</button>` : '';
+    const editControl = canEditRule ? `<button type="button" data-edit-automation="${escapeHtml(rule.id)}" data-interaction-status="working">Edit rule</button>` : (!automationPermissions.canEdit ? '<span class="read-only-label">Read only</span>' : '');
+    const archiveControl = canArchive ? `<button class="archive-rule-button" type="button" data-archive-automation="${escapeHtml(rule.id)}" data-rule-name="${escapeHtml(rule.name || 'Untitled automation')}" data-interaction-status="working">Archive</button>` : '';
+    article.className = `surface rule-card automation-rule-card${warning ? ' has-warning' : ''}`;
+    article.dataset.rule = rule.id;
+    article.innerHTML = `<header><span class="rule-icon ${warning ? 'warning' : 'goal'}">${warning ? '!' : 'ϟ'}</span><div><h3>${escapeHtml(rule.name || 'Untitled automation')}</h3><p>${escapeHtml(rule.metric?.name || 'Certified metric')} · version ${escapeHtml(version.version || version.revision || 'draft')}</p></div><span class="automation-status-badge status-${escapeHtml(stateName)}">${escapeHtml(stateCopy)}</span></header><div class="rule-flow"><div><small>WHEN</small><strong>${escapeHtml(rule.metric?.name || 'Certified metric')} ${escapeHtml(automationOperatorSymbol(trigger.operator))} ${escapeHtml(automationThresholdText(trigger))}${escapeHtml(duration)}</strong></div><i>→</i><div><small>THEN</small><span class="action-chip celebration">▣ TV celebration</span><span class="automation-action-count">${Number(rule.actionCount || version.actions?.length || 0)} action${Number(rule.actionCount || version.actions?.length || 0) === 1 ? '' : 's'}</span></div></div><footer><span><strong>${escapeHtml(automationDecisionLabel(lastRun))}</strong>${lastRun?.reason ? `<small>${escapeHtml(lastRun.reason)}</small>` : ''}</span><div>${stateControl}${editControl}${archiveControl}</div></footer>`;
+    return article;
+  }));
+  list.querySelectorAll('[data-edit-automation]').forEach((button) => button.addEventListener('click', () => {
+    const rule = liveAutomationRules.find((item) => item.id === button.dataset.editAutomation);
+    openAutomationEditor({ rule, trigger: button }).catch((error) => showToast('Rule editor unavailable', error.message));
+  }));
+  list.querySelectorAll('[data-rule-state-action]').forEach((button) => button.addEventListener('click', () => changeAutomationState(button.dataset.ruleId, button.dataset.ruleStateAction, button)));
+  list.querySelectorAll('[data-archive-automation]').forEach((button) => button.addEventListener('click', () => archiveAutomation(button)));
+}
+
+async function loadAutomationRules({ quiet = false } = {}) {
+  const request = ++automationLoadRequest;
+  if (!quiet) {
+    automationsLoaded = false;
+    automationRulesError = '';
+    renderAutomationRules();
+  }
   try {
-    const [bootstrap, displayPayload] = await Promise.all([
-      apiJson('/api/axoboard/bootstrap'),
-      apiJson('/api/axoboard/displays').catch(() => ({ displays: [] }))
-    ]);
+    const payload = await apiJson('/api/axoboard/automations');
+    if (request !== automationLoadRequest) return false;
+    liveAutomationRules = Array.isArray(payload.automations) ? payload.automations : [];
+    automationPermissions = { canRead: Boolean(payload.permissions?.canRead), canEdit: Boolean(payload.permissions?.canEdit), canPublish: Boolean(payload.permissions?.canPublish) };
+    automationsLoaded = true;
+    automationRulesError = '';
+    renderAutomationRules();
+    renderLiveKpis();
+    if (activeBuilderStep === 4 && editingKpiId) renderKpiAutomationSurface();
+    return true;
+  } catch (error) {
+    if (request !== automationLoadRequest) return false;
+    liveAutomationRules = [];
+    automationsLoaded = false;
+    automationPermissions = { canRead: false, canEdit: false, canPublish: false };
+    automationRulesError = error.message;
+    renderAutomationRules();
+    return false;
+  }
+}
+
+function renderAutomationRuns() {
+  const list = document.querySelector('#automationRunList');
+  const state = document.querySelector('#automationRunsState');
+  if (!list || !state) return;
+  if (automationRunsError) {
+    list.replaceChildren();
+    setAutomationApiState(state, 'error', 'Run history could not be loaded', automationRunsError);
+    return;
+  }
+  if (!liveAutomationRuns.length) {
+    list.replaceChildren();
+    setAutomationApiState(state, 'empty', 'No automation runs match this view', 'Runs appear after an active rule evaluates a future certified metric event. Dry runs remain separate.');
+    return;
+  }
+  clearAutomationApiState(state);
+  list.replaceChildren(...liveAutomationRuns.map((run) => {
+    const article = document.createElement('article');
+    const status = String(run.status || 'recorded').toLowerCase();
+    const actions = Array.isArray(run.actions) ? run.actions : [];
+    article.className = `surface automation-run-card status-${status.replace(/[^a-z0-9_-]/g, '')}`;
+    article.dataset.runId = run.id;
+    article.innerHTML = `<header><div><span class="automation-status-badge status-${escapeHtml(status)}">${escapeHtml(status.replaceAll('_', ' '))}</span><h3>${escapeHtml(run.automationName || 'Automation run')}</h3><p>${escapeHtml(run.reason || 'Evaluation recorded')} · ${escapeHtml(timeAgo(run.occurredAt || run.completedAt))}</p></div><strong>${run.triggerValue === null || run.triggerValue === undefined ? '—' : escapeHtml(new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(Number(run.triggerValue)))}</strong></header><div class="automation-attempt-list">${actions.length ? actions.map((action) => {
+      const actionStatus = String(action.status || 'recorded').toLowerCase();
+      const actionId = action.actionId;
+      const retryable = ['failed', 'dead_letter'].includes(actionStatus) && automationPermissions.canPublish && actionId;
+      const persistedOnly = actionStatus === 'succeeded' && action.responseMetadata?.mode === 'persisted_only';
+      const actionLabel = persistedOnly ? 'Published to TV feed' : String(action.type || 'internal_tv_celebration').replaceAll('_', ' ');
+      const actionDetail = persistedOnly
+        ? `Playback not acknowledged · ${action.attemptCount || 0} attempt${Number(action.attemptCount || 0) === 1 ? '' : 's'}`
+        : action.error || action.errorCode || `${action.attemptCount || 0} attempt${Number(action.attemptCount || 0) === 1 ? '' : 's'}`;
+      const actionStatusLabel = persistedOnly ? 'published' : actionStatus.replaceAll('_', ' ');
+      return `<div><span aria-hidden="true">▣</span><span><strong>${escapeHtml(actionLabel)}</strong><small>${escapeHtml(actionDetail)}</small></span><b class="status-${escapeHtml(actionStatus)}">${escapeHtml(actionStatusLabel)}</b>${retryable ? `<button type="button" data-retry-run="${escapeHtml(run.id)}" data-retry-action="${escapeHtml(actionId)}" data-interaction-status="working">Retry action</button>` : ''}</div>`;
+    }).join('') : '<p>No action attempts were created for this decision.</p>'}</div>`;
+    return article;
+  }));
+  list.querySelectorAll('[data-retry-run]').forEach((button) => button.addEventListener('click', () => retryAutomationAction(button)));
+}
+
+async function loadAutomationRuns() {
+  const request = ++automationRunsRequest;
+  automationRunsError = '';
+  liveAutomationRuns = [];
+  setAutomationApiState(document.querySelector('#automationRunsState'), 'loading', 'Loading run history…', 'Reading evaluations, suppressions, deliveries, and retries.');
+  const query = new URLSearchParams({ limit: '100' });
+  const status = document.querySelector('#automationRunStatusFilter').value;
+  const automationId = document.querySelector('#automationRunRuleFilter').value;
+  if (status) query.set('status', status);
+  if (automationId) query.set('automationId', automationId);
+  try {
+    const payload = await apiJson(`/api/axoboard/automation-runs?${query}`);
+    if (request !== automationRunsRequest) return;
+    liveAutomationRuns = Array.isArray(payload.runs) ? payload.runs : [];
+    renderAutomationRuns();
+  } catch (error) {
+    if (request !== automationRunsRequest) return;
+    automationRunsError = error.message;
+    renderAutomationRuns();
+  }
+}
+
+function switchAutomationTab(name, { focus = false } = {}) {
+  const target = name === 'runs' ? 'runs' : 'rules';
+  document.querySelectorAll('[data-automation-tab]').forEach((button) => {
+    const active = button.dataset.automationTab === target;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-selected', String(active));
+    button.tabIndex = active ? 0 : -1;
+    if (active && focus) button.focus();
+  });
+  document.querySelectorAll('[data-automation-panel]').forEach((panel) => { panel.hidden = panel.dataset.automationPanel !== target; });
+  if (target === 'runs') loadAutomationRuns();
+}
+
+async function retryAutomationAction(button) {
+  button.disabled = true;
+  try {
+    await apiJson(`/api/axoboard/automation-runs/${encodeURIComponent(button.dataset.retryRun)}/actions/${encodeURIComponent(button.dataset.retryAction)}/retry`, { method: 'POST', body: '{}' });
+    showToast('Retry queued', 'Only the selected failed action will be attempted again.');
+    await loadAutomationRuns();
+  } catch (error) {
+    showToast('Retry was not queued', error.message);
+  } finally { button.disabled = false; }
+}
+
+async function changeAutomationState(ruleId, action, button) {
+  if (!automationPermissions.canPublish || !['pause', 'resume'].includes(action)) return;
+  button.disabled = true;
+  try {
+    await apiJson(`/api/axoboard/automations/${encodeURIComponent(ruleId)}/${action}`, { method: 'POST', body: '{}' });
+    await loadAutomationRules({ quiet: true });
+    showToast(action === 'pause' ? 'Automation paused' : 'Automation resumed', action === 'pause' ? 'Future events will be recorded without running this rule.' : 'The published version can evaluate future certified events again.');
+  } catch (error) {
+    if (action === 'resume' && error.code === 'republish_required') {
+      showToast('Review and publish a new version', 'The linked metric contract changed. Edit this rule, review the new contract, and publish before resuming.');
+    } else showToast(`Automation was not ${action === 'pause' ? 'paused' : 'resumed'}`, error.message);
+  } finally { button.disabled = false; }
+}
+
+async function archiveAutomation(button) {
+  if (!automationPermissions.canPublish) return;
+  const ruleId = button.dataset.archiveAutomation;
+  const ruleName = button.dataset.ruleName || 'this automation';
+  const confirmed = window.confirm(`Archive “${ruleName}”?\n\nArchived rules stop evaluating future metric events. Existing versions, runs, and audit history remain available.`);
+  if (!confirmed) return;
+  button.disabled = true;
+  try {
+    await apiJson(`/api/axoboard/automations/${encodeURIComponent(ruleId)}/archive`, { method: 'POST', body: '{}' });
+    await loadAutomationRules({ quiet: true });
+    await loadAutomationRuns();
+    showToast('Automation archived', `${ruleName} will not evaluate future metric events. Its run history was retained.`);
+  } catch (error) {
+    showToast('Automation was not archived', error.message);
+    button.disabled = false;
+  }
+}
+
+function resetAutomationEditor() {
+  const form = document.querySelector('#automationRuleForm');
+  form.reset();
+  document.querySelector('#automationRuleId').value = '';
+  document.querySelector('#automationRuleRevision').value = '';
+  document.querySelector('#automationFreshnessSeconds').value = '900';
+  document.querySelector('#automationCooldownSeconds').value = '3600';
+  document.querySelector('#automationMaxRunsPerDay').value = '10';
+  document.querySelector('#automationTimezone').value = 'America/Denver';
+  document.querySelector('#automationRequireFresh').checked = true;
+  document.querySelector('#automationTvAction').checked = true;
+  document.querySelector('#automationPublishConfirm').checked = false;
+  document.querySelector('#automationQuietHoursFields').hidden = true;
+  document.querySelector('#automationFormError').hidden = true;
+  document.querySelector('#automationDryRunResult').innerHTML = '<strong>Not tested yet</strong><p>Save the draft, then run a no-side-effect evaluation.</p>';
+  const metricSelect = document.querySelector('#automationMetricId');
+  metricSelect.disabled = false;
+  document.querySelector('#automationMetricBindingHelp').textContent = 'A published rule stays bound to this stable metric identity.';
+  populateAutomationMetricSelect(metricSelect);
+  activeAutomationRule = null;
+  showAutomationEditorStep(1);
+}
+
+function selectedAutomationKpi() {
+  const metricId = document.querySelector('#automationMetricId').value;
+  const kpi = liveKpis.find((item) => automationMetricIdForKpi(item) === metricId);
+  if (kpi) return kpi;
+  if (activeAutomationRule && automationRuleMetricId(activeAutomationRule) === metricId) {
+    return { name: activeAutomationRule.metric?.name || 'Bound metric', metricId, displayType: 'scorecard', certification: { status: 'certified' } };
+  }
+  return null;
+}
+
+function syncStructuredAutomationBoundary() {
+  const kpi = selectedAutomationKpi();
+  const field = document.querySelector('#automationScalarSelectorField');
+  const blocked = isStructuredAutomationKpi(kpi);
+  field.hidden = !blocked;
+  document.querySelector('#automationScalarSelector').disabled = true;
+  if (blocked) {
+    field.querySelector('span').textContent = 'Structured-card automation unavailable';
+    field.querySelector('small').textContent = 'This card contains multiple values, but the certified snapshot currently stores only one aggregate scalar. Create a separate scalar KPI for the item, stage, or field you want to automate.';
+  }
+}
+
+function showAutomationEditorStep(step) {
+  activeAutomationEditorStep = Math.max(1, Math.min(4, Number(step) || 1));
+  document.querySelectorAll('[data-automation-editor-panel]').forEach((panel) => {
+    const active = Number(panel.dataset.automationEditorPanel) === activeAutomationEditorStep;
+    panel.classList.toggle('is-active', active);
+    panel.hidden = !active;
+  });
+  document.querySelectorAll('[data-automation-editor-step]').forEach((button) => {
+    const active = Number(button.dataset.automationEditorStep) === activeAutomationEditorStep;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-selected', String(active));
+    button.tabIndex = active ? 0 : -1;
+  });
+  document.querySelector('#automationEditorBack').disabled = activeAutomationEditorStep === 1;
+  document.querySelector('#automationEditorNext').textContent = activeAutomationEditorStep === 1 ? 'Action →' : activeAutomationEditorStep === 2 ? 'Guardrails →' : activeAutomationEditorStep === 3 ? 'Test & publish →' : 'Publish automation';
+  if (activeAutomationEditorStep === 4) renderAutomationReview();
+  document.querySelector('.automation-editor-body').scrollTop = 0;
+}
+
+function populateAutomationEditor(rule) {
+  activeAutomationRule = rule;
+  const version = automationEditableVersion(rule);
+  const trigger = version.trigger || {};
+  const guardrails = version.guardrails || {};
+  document.querySelector('#automationRuleId').value = rule.id || '';
+  document.querySelector('#automationRuleRevision').value = version.revision ?? '';
+  document.querySelector('#automationRuleName').value = rule.name || '';
+  const metricSelect = document.querySelector('#automationMetricId');
+  const metricId = automationRuleMetricId(rule);
+  populateAutomationMetricSelect(metricSelect, { selected: metricId });
+  if (metricId && ![...metricSelect.options].some((option) => option.value === metricId)) metricSelect.add(new Option(`${rule.metric?.name || 'Bound metric'} · stable binding`, metricId));
+  metricSelect.value = metricId;
+  metricSelect.disabled = true;
+  document.querySelector('#automationMetricBindingHelp').textContent = 'Stable binding · To watch a different metric, create a new automation.';
+  document.querySelector('#automationOperator').value = trigger.operator || 'gte';
+  document.querySelector('#automationThresholdMode').value = trigger.thresholdMode || 'absolute';
+  document.querySelector('#automationThresholdValue').value = trigger.thresholdValue ?? '';
+  document.querySelector(`[name="automationBehavior"][value="${trigger.behavior || 'edge'}"]`).checked = true;
+  document.querySelector('#automationDurationSeconds').value = String(trigger.durationSeconds || 0);
+  const actions = automationRuleActions(rule);
+  document.querySelector('#automationTvAction').checked = actions.some((action) => action.type === 'internal_tv_celebration') || !actions.length;
+  document.querySelector('#automationRequireFresh').checked = Number(guardrails.freshnessSeconds || 0) > 0;
+  document.querySelector('#automationFreshnessSeconds').value = String(guardrails.freshnessSeconds || 900);
+  document.querySelector('#automationCooldownSeconds').value = String(guardrails.cooldownSeconds || 0);
+  document.querySelector('#automationMaxRunsPerDay').value = String(guardrails.maxRunsPerDay || 10);
+  document.querySelector('#automationTimezone').value = guardrails.timezone || 'America/Denver';
+  document.querySelector('#automationQuietHoursEnabled').checked = Boolean(guardrails.quietHours);
+  document.querySelector('#automationQuietHoursFields').hidden = !guardrails.quietHours;
+  document.querySelector('#automationQuietStart').value = guardrails.quietHours?.start || '20:00';
+  document.querySelector('#automationQuietEnd').value = guardrails.quietHours?.end || '07:00';
+  document.querySelector('#automationEditorTitle').textContent = `Edit ${rule.name || 'automation'}`;
+  document.querySelector('#automationEditorStatus').textContent = `Editing ${automationRuleState(rule).replaceAll('_', ' ')} rule`;
+  syncStructuredAutomationBoundary();
+}
+
+async function openAutomationEditor({ rule = null, kpi = null, trigger = document.activeElement } = {}) {
+  if (!automationPermissions.canEdit) throw new Error('Your workspace role cannot create or edit automation drafts.');
+  resetAutomationEditor();
+  automationEditorKpi = kpi || null;
+  document.querySelector('#automationEditorTitle').textContent = rule ? `Edit ${rule.name}` : 'Create automation';
+  openFeatureModal('automationEditorModal', trigger);
+  if (rule?.id) {
+    document.querySelector('#automationEditorStatus').textContent = 'Loading the latest draft version…';
+    try {
+      const payload = await apiJson(`/api/axoboard/automations/${encodeURIComponent(rule.id)}`);
+      populateAutomationEditor(payload.automation);
+    } catch (error) {
+      document.querySelector('#automationEditorStatus').textContent = 'Rule could not be loaded';
+      showAutomationFormError(error.message);
+      throw error;
+    }
+  } else {
+    const metricId = automationMetricIdForKpi(kpi);
+    if (metricId) {
+      const metricSelect = document.querySelector('#automationMetricId');
+      if ([...metricSelect.options].some((option) => option.value === metricId)) metricSelect.value = metricId;
+      document.querySelector('#automationRuleName').value = kpi ? `${kpi.name} automation` : '';
+    }
+    syncStructuredAutomationBoundary();
+    if (isStructuredAutomationKpi(kpi)) {
+      showAutomationFormError('This structured card cannot be automated from its current aggregate snapshot. Create a certified scalar KPI for the exact item, stage, or field first.');
+    }
+  }
+}
+
+function showAutomationFormError(message) {
+  const error = document.querySelector('#automationFormError');
+  error.textContent = message;
+  error.hidden = false;
+  document.querySelector('#automationEditorStatus').textContent = 'Needs attention';
+}
+
+function clearAutomationFormError() {
+  document.querySelector('#automationFormError').hidden = true;
+}
+
+function validateAutomationStep(step = activeAutomationEditorStep) {
+  clearAutomationFormError();
+  if (step === 1) {
+    if (!document.querySelector('#automationRuleName').value.trim()) throw new Error('Enter a rule name.');
+    const kpi = selectedAutomationKpi();
+    if (!kpi) throw new Error('Choose a certified scalar metric.');
+    if (isStructuredAutomationKpi(kpi)) throw new Error('Structured cards need a separate certified scalar KPI before they can be automated.');
+    if (!Number.isFinite(Number(document.querySelector('#automationThresholdValue').value))) throw new Error('Enter a valid numeric threshold.');
+  }
+  if (step === 2 && !document.querySelector('#automationTvAction').checked) throw new Error('Select the supported internal TV celebration action.');
+  if (step === 3) {
+    const maxRuns = Number(document.querySelector('#automationMaxRunsPerDay').value);
+    if (!Number.isInteger(maxRuns) || maxRuns < 1 || maxRuns > 100) throw new Error('Maximum daily runs must be a whole number from 1 to 100.');
+    if (document.querySelector('#automationQuietHoursEnabled').checked && (!document.querySelector('#automationQuietStart').value || !document.querySelector('#automationQuietEnd').value)) throw new Error('Choose both quiet-hour times.');
+  }
+  return true;
+}
+
+function validateEntireAutomation() {
+  [1, 2, 3].forEach((step) => validateAutomationStep(step));
+  return true;
+}
+
+function automationDraftPayload() {
+  const quietHoursEnabled = document.querySelector('#automationQuietHoursEnabled').checked;
+  const requireFresh = document.querySelector('#automationRequireFresh').checked;
+  const ruleName = document.querySelector('#automationRuleName').value.trim();
+  const existingTvActions = automationRuleActions(activeAutomationRule).filter((action) => action.type === 'internal_tv_celebration');
+  const actions = existingTvActions.length
+    ? existingTvActions.map((action) => ({
+        ...(action.id ? { id: action.id } : {}),
+        type: action.type,
+        ...(action.destinationId ? { destinationId: action.destinationId } : {}),
+        config: { ...(action.config || {}) }
+      }))
+    : [{ type: 'internal_tv_celebration', config: { title: ruleName } }];
+  return {
+    name: ruleName,
+    metricId: document.querySelector('#automationMetricId').value,
+    trigger: {
+      type: 'metric_threshold',
+      operator: document.querySelector('#automationOperator').value,
+      thresholdMode: document.querySelector('#automationThresholdMode').value,
+      thresholdValue: Number(document.querySelector('#automationThresholdValue').value),
+      behavior: document.querySelector('[name="automationBehavior"]:checked').value,
+      durationSeconds: Number(document.querySelector('#automationDurationSeconds').value)
+    },
+    guardrails: {
+      freshnessSeconds: requireFresh ? Number(document.querySelector('#automationFreshnessSeconds').value) : null,
+      cooldownSeconds: Number(document.querySelector('#automationCooldownSeconds').value),
+      maxRunsPerDay: Number(document.querySelector('#automationMaxRunsPerDay').value),
+      quietHours: quietHoursEnabled ? { start: document.querySelector('#automationQuietStart').value, end: document.querySelector('#automationQuietEnd').value } : null,
+      timezone: document.querySelector('#automationTimezone').value
+    },
+    actions
+  };
+}
+
+function renderAutomationReview() {
+  const payload = automationDraftPayload();
+  const kpi = selectedAutomationKpi();
+  const quiet = payload.guardrails.quietHours ? `${payload.guardrails.quietHours.start}–${payload.guardrails.quietHours.end} ${payload.guardrails.timezone}` : 'No quiet hours';
+  document.querySelector('#automationReviewSummary').innerHTML = `<div><small>RULE</small><strong>${escapeHtml(payload.name || 'Untitled automation')}</strong></div><div><small>TRIGGER</small><strong>${escapeHtml(kpi?.name || 'Metric')} ${escapeHtml(automationOperatorSymbol(payload.trigger.operator))} ${escapeHtml(automationThresholdText(payload.trigger))}</strong></div><div><small>ACTION</small><strong>Internal TV celebration</strong></div><div><small>GUARDRAILS</small><strong>${escapeHtml(`${payload.guardrails.cooldownSeconds / 60}m cooldown · max ${payload.guardrails.maxRunsPerDay}/day · ${quiet}`)}</strong></div>`;
+}
+
+async function saveAutomationDraft({ announce = true } = {}) {
+  validateEntireAutomation();
+  const id = document.querySelector('#automationRuleId').value;
+  const body = automationDraftPayload();
+  const options = id
+    ? { method: 'PATCH', body: JSON.stringify({ revision: Number(document.querySelector('#automationRuleRevision').value), ...body }) }
+    : { method: 'POST', body: JSON.stringify(body) };
+  document.querySelector('#automationEditorStatus').textContent = id ? 'Saving draft changes…' : 'Creating draft…';
+  const payload = await apiJson(id ? `/api/axoboard/automations/${encodeURIComponent(id)}` : '/api/axoboard/automations', options);
+  activeAutomationRule = payload.automation;
+  const version = automationEditableVersion(payload.automation);
+  document.querySelector('#automationRuleId').value = payload.automation.id;
+  document.querySelector('#automationRuleRevision').value = version.revision ?? '';
+  document.querySelector('#automationEditorStatus').textContent = `Draft saved · revision ${version.revision ?? 'current'}`;
+  await loadAutomationRules({ quiet: true });
+  if (announce) showToast('Automation draft saved', 'Nothing will run until an authorized publisher activates this version.');
+  return payload.automation;
+}
+
+async function runAutomationDryTest() {
+  const button = document.querySelector('#automationDryRunButton');
+  button.disabled = true;
+  try {
+    const rule = await saveAutomationDraft({ announce: false });
+    const result = document.querySelector('#automationDryRunResult');
+    result.dataset.state = 'loading';
+    result.innerHTML = '<strong>Evaluating retained snapshots…</strong><p>No actions will be created or delivered.</p>';
+    const payload = await apiJson(`/api/axoboard/automations/${encodeURIComponent(rule.id)}/dry-run`, { method: 'POST', body: JSON.stringify({ lookbackDays: Number(document.querySelector('#automationDryRunDays').value), limit: 100 }) });
+    const dryRun = payload.dryRun || {};
+    result.dataset.state = 'complete';
+    result.innerHTML = `<strong>${Number(dryRun.matches || 0)} matches from ${Number(dryRun.evaluated || 0)} evaluations</strong><p>${Number(dryRun.suppressed || 0)} suppressed by guardrails. No action attempts were created.</p>${Array.isArray(dryRun.samples) && dryRun.samples.length ? `<ul>${dryRun.samples.slice(0, 5).map((sample) => `<li>${escapeHtml(sample.at || 'Snapshot')} · ${escapeHtml(sample.result || 'evaluated')}</li>`).join('')}</ul>` : ''}`;
+    document.querySelector('#automationEditorStatus').textContent = 'Dry run complete · no actions delivered';
+  } catch (error) {
+    document.querySelector('#automationDryRunResult').dataset.state = 'error';
+    document.querySelector('#automationDryRunResult').innerHTML = `<strong>Dry run failed</strong><p>${escapeHtml(error.message)}</p>`;
+    showAutomationFormError(error.message);
+  } finally { button.disabled = false; }
+}
+
+async function publishAutomation() {
+  if (!automationPermissions.canPublish) throw new Error('Your workspace role can save drafts but cannot publish automation versions.');
+  if (!document.querySelector('#automationPublishConfirm').checked) throw new Error('Confirm that you reviewed the trigger, action, and guardrails before publishing.');
+  const rule = await saveAutomationDraft({ announce: false });
+  document.querySelector('#automationEditorStatus').textContent = 'Publishing immutable version…';
+  const reviewedRevision = Number(automationEditableVersion(rule).revision);
+  if (!Number.isInteger(reviewedRevision) || reviewedRevision < 1) throw new Error('The saved draft revision could not be verified. Reload the rule before publishing.');
+  await apiJson(`/api/axoboard/automations/${encodeURIComponent(rule.id)}/publish`, { method: 'POST', body: JSON.stringify({ revision: reviewedRevision }) });
+  closeFeatureModal(document.querySelector('#automationEditorModal'));
+  await loadAutomationRules({ quiet: true });
+  showToast('Automation published', 'The new immutable version can evaluate future certified metric events.');
+}
+
+async function renderKpiAutomationSurface() {
+  const kpi = automationEditorKpi || liveKpis.find((item) => item.id === editingKpiId);
+  const state = document.querySelector('#kpiAutomationState');
+  const list = document.querySelector('#kpiAutomationList');
+  const create = document.querySelector('#createKpiAutomation');
+  if (!kpi || !state || !list) return;
+  automationEditorKpi = kpi;
+  const metricId = automationMetricIdForKpi(kpi);
+  const structured = isStructuredAutomationKpi(kpi);
+  document.querySelector('#kpiAutomationMetricName').textContent = kpi.name;
+  document.querySelector('#kpiAutomationMetricMeta').textContent = metricId ? `Certified metric · ${metricId.slice(0, 8)}…` : 'No certified metric is attached';
+  document.querySelector('#structuredAutomationNote').hidden = !structured;
+  create.disabled = !automationPermissions.canEdit || structured || !metricId;
+  create.title = structured ? 'Create a separate certified scalar KPI for this structured value first.' : !automationPermissions.canEdit ? 'Your role cannot create automation drafts.' : '';
+  list.replaceChildren();
+  if (structured) {
+    setAutomationApiState(state, 'unavailable', 'Structured-card rules need scalar metrics', 'This snapshot certifies one aggregate value. Create a separate scalar KPI for the exact item, stage, or field before adding an automation.');
+    return;
+  }
+  if (!metricId) {
+    setAutomationApiState(state, 'unavailable', 'This KPI is not certified', 'A rule can bind only after the KPI has a stable certified metric definition.');
+    return;
+  }
+  setAutomationApiState(state, 'loading', 'Loading linked automations…', 'Reading only rules bound to this certified metric.');
+  try {
+    const payload = await apiJson(`/api/axoboard/metrics/${encodeURIComponent(metricId)}/automations`);
+    const rules = Array.isArray(payload.automations) ? payload.automations : [];
+    document.querySelector('#kpiAutomationMetricMeta').textContent = `${rules.length} linked rule${rules.length === 1 ? '' : 's'} · certified metric`;
+    if (!rules.length) {
+      setAutomationApiState(state, 'empty', 'No rules use this KPI yet', automationPermissions.canEdit ? 'Create a draft with this certified metric preselected.' : 'No linked rules are visible for this metric.');
+      return;
+    }
+    clearAutomationApiState(state);
+    list.replaceChildren(...rules.map((rule) => {
+      const item = document.createElement('article');
+      const version = automationEffectiveVersion(rule);
+      item.className = 'surface kpi-linked-rule';
+      item.innerHTML = `<span class="automation-status-badge status-${escapeHtml(automationRuleState(rule))}">${escapeHtml(automationRuleState(rule).replaceAll('_', ' '))}</span><div><strong>${escapeHtml(rule.name)}</strong><small>${escapeHtml(automationDecisionLabel(rule.lastRun))} · ${Number(rule.actionCount || version.actions?.length || 0)} action${Number(rule.actionCount || version.actions?.length || 0) === 1 ? '' : 's'}</small></div>${rule.lastRun?.status === 'failed' ? '<b class="automation-warning-copy">Needs attention</b>' : ''}${automationPermissions.canEdit ? `<button type="button" data-edit-linked-automation="${escapeHtml(rule.id)}" data-interaction-status="working">Edit</button>` : '<span class="read-only-label">Read only</span>'}`;
+      return item;
+    }));
+    list.querySelectorAll('[data-edit-linked-automation]').forEach((button) => button.addEventListener('click', () => {
+      const rule = rules.find((item) => item.id === button.dataset.editLinkedAutomation);
+      openAutomationEditor({ rule, kpi, trigger: button }).catch((error) => showToast('Rule editor unavailable', error.message));
+    }));
+  } catch (error) {
+    setAutomationApiState(state, 'error', 'Linked rules could not be loaded', error.message);
+  }
+}
+
+function showKpiAutomationPrompt(kpi) {
+  const prompt = document.querySelector('#kpiAutomationPrompt');
+  if (!prompt) return;
+  pendingPromptKpi = liveKpis.find((item) => item.id === kpi.id) || kpi;
+  const structured = isStructuredAutomationKpi(pendingPromptKpi);
+  document.querySelector('#kpiAutomationPromptTitle').textContent = structured ? `${pendingPromptKpi.name} needs a scalar KPI` : `${pendingPromptKpi.name} is ready for automation`;
+  prompt.querySelector('p').textContent = structured ? 'This structured card contains multiple values. Create a separate scalar KPI for the exact item, stage, or field you want to automate.' : 'Its certified metric now has a stable ID. Add a versioned rule now or return later from Edit KPI.';
+  document.querySelector('#createPromptAutomation').hidden = structured;
+  prompt.hidden = false;
+  prompt.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function applySessionCapabilities(capabilities = {}) {
+  liveCapabilities = capabilities || {};
+  const canManageProduct = liveCapabilities.manageKpis !== false || liveCapabilities.manageDashboard !== false;
+  const visibility = {
+    integrations: liveCapabilities.viewSourceDetails !== false,
+    displays: liveCapabilities.readDisplays !== false,
+    automations: liveCapabilities.readAutomations !== false,
+    workspace: liveCapabilities.manageBilling !== false,
+    plans: liveCapabilities.manageBilling !== false,
+    celebrations: liveCapabilities.readEvents !== false,
+    sounds: canManageProduct,
+    competitions: canManageProduct,
+    brand: canManageProduct
+  };
+  Object.entries(visibility).forEach(([screen, allowed]) => {
+    document.querySelectorAll(`.nav-item[data-screen="${screen}"]`).forEach((button) => { button.hidden = !allowed; });
+  });
+  document.querySelector('#pairScreenButton').hidden = !visibility.displays;
+  document.querySelector('#newAutomationButton').hidden = !visibility.automations;
+  document.querySelector('#addKpiButton').hidden = liveCapabilities.manageKpis === false;
+  document.querySelector('#editLayoutButton').hidden = liveCapabilities.manageDashboard === false;
+  document.querySelector('#templateGalleryButton').hidden = liveCapabilities.manageDashboard === false;
+  document.querySelector('#shareDashboardButton').hidden = liveCapabilities.manageDashboard === false;
+  document.querySelector('.workspace-switcher button').hidden = !visibility.workspace;
+  document.querySelector('.mobile-workspace-switch').hidden = !visibility.workspace;
+  document.querySelector('.sidebar-tip').hidden = !canManageProduct;
+  if (!visibility.displays) liveDisplays = [];
+  if (!visibility.automations) {
+    liveAutomationRules = [];
+    liveAutomationRuns = [];
+    automationsLoaded = false;
+    automationPermissions = { canRead: false, canEdit: false, canPublish: false };
+  }
+  const requestedScreen = location.hash.slice(1);
+  if (requestedScreen && visibility[requestedScreen] === false) showScreen('dashboard');
+}
+
+async function loadLiveData() {
+  if (!bootstrapReady) setBootstrapState('loading');
+  try {
+    const bootstrap = await apiJson('/api/axoboard/bootstrap');
     const { session, connections: connectionPayload, kpis: kpiPayload, dashboard: dashboardPayload, engagement, brand } = bootstrap;
+    applySessionCapabilities(session.capabilities || {});
+    const displayPayload = liveCapabilities.readDisplays === false
+      ? { displays: [] }
+      : await apiJson('/api/axoboard/displays').catch(() => ({ displays: [] }));
     liveConnections = connectionPayload.connections || [];
     liveKpis = kpiPayload.kpis || [];
     liveEngagement = engagement || { summary: {}, events: [] };
@@ -1627,22 +2402,31 @@ async function loadLiveData() {
       document.querySelector('.mobile-workspace-switch')?.setAttribute('aria-label', `Open ${session.user.workspace_name} workspace settings`);
       workspaceName.value = session.user.workspace_name;
       document.querySelector('#serviceWorkspaceName').textContent = session.user.workspace_name;
+      const serviceAvatar = document.querySelector('.customer-hero .workspace-avatar');
+      if (serviceAvatar) serviceAvatar.textContent = session.user.workspace_name[0].toUpperCase();
       document.querySelector('#dashboardTitle').textContent = `${session.user.workspace_name} dashboard`;
       document.querySelector('.sidebar-user strong').textContent = session.user.full_name;
       document.querySelector('.sidebar-user small').textContent = `Workspace ${session.user.role}`;
+      const userInitials = String(session.user.full_name || session.user.email || 'Account').split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+      document.querySelector('.sidebar-user .user-avatar').textContent = userInitials || 'A';
     }
     renderLiveConnections();
     renderLiveKpis();
     renderLiveEngagement();
     renderLiveDisplays();
+    if (!dedicatedTvRuntime && liveCapabilities.readAutomations !== false) await loadAutomationRules();
     if (activeFeatureModal?.id === 'tvPreviewModal' || dedicatedTvRuntime) {
       renderTvMode();
       setTvConnectionState('live');
     }
+    bootstrapReady = true;
+    setBootstrapState('ready');
     return true;
   } catch (error) {
     console.warn('[axoboard] live integration state unavailable', error.message);
     if (activeFeatureModal?.id === 'tvPreviewModal' || dedicatedTvRuntime) setTvConnectionState('offline');
+    if (!bootstrapReady) setBootstrapState('failed', `We could not verify this workspace. ${error.message || 'Reload AxoBoard to try again.'} No synthetic dashboard data has been shown.`);
+    else showToast('Workspace refresh unavailable', 'The last verified tenant data remains visible. Reload when the connection is restored.');
     return false;
   }
 }
@@ -1665,16 +2449,33 @@ function syncBuilderSource(source) {
 }
 
 function showBuilderStep(step) {
-  activeBuilderStep = Math.max(1, Math.min(3, Number(step) || 1));
-  builderSteps.forEach((panel) => panel.classList.toggle('is-active', Number(panel.dataset.builderStep) === activeBuilderStep));
+  activeBuilderStep = Math.max(1, Math.min(4, Number(step) || 1));
+  builderSteps.forEach((panel) => {
+    const active = Number(panel.dataset.builderStep) === activeBuilderStep;
+    panel.classList.toggle('is-active', active);
+    panel.hidden = !active;
+  });
   builderStepLabels.forEach((label) => {
     const labelStep = Number(label.dataset.builderStepLabel);
     label.classList.toggle('is-active', labelStep === activeBuilderStep);
     label.classList.toggle('is-complete', labelStep < activeBuilderStep);
+    label.setAttribute('aria-selected', String(labelStep === activeBuilderStep));
+    label.tabIndex = labelStep === activeBuilderStep ? 0 : -1;
   });
   builderBack.disabled = activeBuilderStep === 1;
-  builderNext.textContent = activeBuilderStep === 1 ? 'Choose data →' : activeBuilderStep === 2 ? 'Design KPI →' : editingKpiId ? 'Save KPI changes' : '＋ Add to dashboard';
-  document.querySelector('#builderStatus').textContent = activeBuilderStep === 3 ? (editingKpiId ? 'Ready to update this live KPI' : 'Ready to create live KPI') : 'Nothing saved until the final step';
+  builderNext.textContent = activeBuilderStep === 1
+    ? 'Choose data →'
+    : activeBuilderStep === 2
+      ? 'Design KPI →'
+      : activeBuilderStep === 3
+        ? (editingKpiId ? 'Save & manage automations →' : '＋ Add to dashboard')
+        : 'Done';
+  document.querySelector('#builderStatus').textContent = activeBuilderStep === 4
+    ? 'Automation changes save independently as versioned rules'
+    : activeBuilderStep === 3
+      ? (editingKpiId ? 'Save the KPI before managing its rules' : 'Ready to create live KPI')
+      : 'Nothing saved until the KPI is created or updated';
+  if (activeBuilderStep === 4 && editingKpiId) renderKpiAutomationSurface();
   document.querySelector('.builder-body').scrollTop = 0;
 }
 
@@ -1709,6 +2510,10 @@ function openKpiBuilder(source = 'google', trigger = document.activeElement, kpi
   }
   builderReturnFocus = trigger;
   editingKpiId = kpi?.id || null;
+  automationEditorKpi = kpi || null;
+  const automationTab = document.querySelector('#kpiBuilderTab4');
+  automationTab.disabled = !editingKpiId;
+  automationTab.setAttribute('aria-disabled', String(!editingKpiId));
   document.querySelector('#kpiBuilderEyebrow').textContent = editingKpiId ? 'EDIT LIVE DASHBOARD METRIC' : 'NEW DASHBOARD METRIC';
   document.querySelector('#kpiBuilderTitle').textContent = editingKpiId ? `Edit ${kpi.name}` : 'Build a KPI';
   availableSpreadsheets = [];
@@ -1839,6 +2644,7 @@ function closeKpiBuilder() {
   kpiBuilderModal.setAttribute('aria-hidden', 'true');
   document.body.style.overflow = '';
   editingKpiId = null;
+  automationEditorKpi = null;
   builderReturnFocus?.focus?.();
 }
 
@@ -2043,7 +2849,7 @@ async function previewGoogleSelection() {
   return builderPreview;
 }
 
-async function saveLiveKpi() {
+async function saveLiveKpi({ stayOpen = false } = {}) {
   if (!builderPreview && !await previewGoogleSelection()) throw new Error('The display changed while Google was checking the selected cells. Try again.');
   const editedId = editingKpiId;
   const payload = await apiJson(editedId ? `/api/axoboard/kpis/${encodeURIComponent(editedId)}` : '/api/axoboard/kpis', {
@@ -2060,11 +2866,22 @@ async function saveLiveKpi() {
       ...comparisonBuilderPayload()
     })
   });
-  closeKpiBuilder();
   await loadLiveData();
+  if (stayOpen && editedId) {
+    editingKpiId = payload.kpi.id;
+    automationEditorKpi = liveKpis.find((item) => item.id === payload.kpi.id) || payload.kpi;
+    document.querySelector('#kpiBuilderTab4').disabled = false;
+    document.querySelector('#kpiBuilderTab4').setAttribute('aria-disabled', 'false');
+    showBuilderStep(4);
+    showToast('KPI updated', `${payload.kpi.name} is saved. Its automation rules remain independently versioned.`);
+    return payload.kpi;
+  }
+  closeKpiBuilder();
   showScreen('dashboard');
   showToast(editedId ? 'KPI updated' : 'Live KPI created', `${payload.kpi.name} is synced from ${payload.kpi.sourceRange}.`);
   document.querySelector(`[data-live-kpi="${payload.kpi.id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  if (!editedId) showKpiAutomationPrompt(payload.kpi);
+  return payload.kpi;
 }
 
 document.querySelector('#addKpiButton').addEventListener('click', (event) => openKpiBuilder('google', event.currentTarget));
@@ -2092,10 +2909,20 @@ builderNext.addEventListener('click', async () => {
       try { await previewGoogleSelection(); }
       catch (error) { showToast('Choose a matching display', error.message); }
     }
-    else await saveLiveKpi();
+    else if (activeBuilderStep === 3) await saveLiveKpi({ stayOpen: Boolean(editingKpiId) });
+    else closeKpiBuilder();
   } catch (error) { showToast('KPI setup needs attention', error.message); }
   finally { builderNext.disabled = false; }
 });
+builderStepLabels.forEach((label) => label.addEventListener('click', () => {
+  const targetStep = Number(label.dataset.builderStepLabel);
+  if (label.disabled || targetStep === activeBuilderStep) return;
+  if (!editingKpiId && targetStep > activeBuilderStep) {
+    showToast('Continue in order', targetStep === 4 ? 'Save the KPI first so its automation can bind to a stable certified metric.' : 'Complete the current KPI step before moving forward.');
+    return;
+  }
+  showBuilderStep(targetStep);
+}));
 document.querySelector('#closeKpiBuilder').addEventListener('click', closeKpiBuilder);
 kpiBuilderModal.addEventListener('click', (event) => { if (event.target === kpiBuilderModal) closeKpiBuilder(); });
 kpiName.addEventListener('input', () => { previewKpiName.textContent = kpiName.value || 'Untitled KPI'; renderBuilderAccuratePreview(); });
@@ -2329,7 +3156,8 @@ function tvKpiContext(kpi) {
 }
 
 function tvKpiMeta(kpi) {
-  return `<footer class="tv-kpi-meta"><span>${escapeHtml(kpi.sheetTitle || 'Google Sheets')}</span><em>${escapeHtml(kpi.sourceRange || kpi.range || '')}</em><b>${escapeHtml(timeAgo(kpi.fetchedAt))}</b></footer>`;
+  const trust = kpi.certification?.status === 'certified' ? 'Certified' : 'Verified metric';
+  return `<footer class="tv-kpi-meta"><span>${escapeHtml(trust)}</span><em>Customer dashboard</em><b>${escapeHtml(timeAgo(kpi.fetchedAt))}</b></footer>`;
 }
 
 function renderTvTrend(items, displayFormat) {
@@ -2526,7 +3354,7 @@ function renderTvMode() {
   }));
   const freshest = visibleKpis.reduce((latest, kpi) => !latest || new Date(kpi.fetchedAt) > new Date(latest.fetchedAt) ? kpi : latest, null);
   document.querySelector('#tvDashboardContext strong').textContent = `${visibleKpis.length} workspace KPI${visibleKpis.length === 1 ? '' : 's'} shown in the saved dashboard order`;
-  document.querySelector('#tvDashboardContext .tv-source-summary').innerHTML = `<span>Google Sheets</span><span>${escapeHtml(liveWorkspaceName)}</span><span>${escapeHtml(freshest?.status || 'unknown')}</span>`;
+  document.querySelector('#tvDashboardContext .tv-source-summary').innerHTML = `<span>Verified metrics</span><span>${escapeHtml(liveWorkspaceName)}</span><span>${escapeHtml(freshest?.status || 'unknown')}</span>`;
   document.querySelector('#tvFreshness').textContent = `Live · freshest update ${timeAgo(freshest?.fetchedAt)}`;
   updateTvClock();
 }
@@ -2587,6 +3415,7 @@ function openFeatureModal(id, trigger = document.activeElement) {
   modal.classList.add('is-visible');
   modal.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
+  if (id === 'automationEditorModal') document.querySelector('.app-shell').inert = true;
   modal.querySelector('[data-close-feature]')?.focus();
   if (id === 'tvPreviewModal') {
     renderTvMode();
@@ -2607,6 +3436,7 @@ function closeFeatureModal(modal = activeFeatureModal) {
   }
   modal.classList.remove('is-visible');
   modal.setAttribute('aria-hidden', 'true');
+  if (modal.id === 'automationEditorModal') document.querySelector('.app-shell').inert = false;
   if (modal.id === 'tvPreviewModal') {
     window.clearInterval(loopTimer);
   }
@@ -2648,7 +3478,7 @@ document.querySelector('#previewRuntimeCompatibility').addEventListener('click',
 document.querySelector('#manageRuntimeButton').addEventListener('click', (event) => openWorkflow('screen', event.currentTarget, 'Display runtime policy'));
 document.querySelector('#previewAllBrandSurfaces').addEventListener('click', (event) => {
   openFeatureModal('tvPreviewModal', event.currentTarget);
-  showToast('Customer-facing brand preview', 'Dashboard, TV, celebration, competition, and offline surfaces share one versioned brand package.');
+  showToast('TV brand preview opened', 'This local preview does not verify or publish a brand package to any customer-facing runtime.');
 });
 
 document.querySelectorAll('[data-close-feature]').forEach((button) => button.addEventListener('click', () => closeFeatureModal(button.closest('.feature-overlay'))));
@@ -2710,29 +3540,65 @@ function openDrilldown(key, trigger) {
   mark.textContent = data.mark;
   mark.classList.toggle('google', data.provider === 'google');
   mark.classList.toggle('hubspot', data.provider === 'hubspot');
+  document.querySelector('#openSourceButton').hidden = false;
   openFeatureModal('drilldownModal', trigger);
 }
 
 async function openLiveMetricTrust(mappingId, trigger) {
   const payload = await apiJson(`/api/axoboard/metrics/${encodeURIComponent(mappingId)}/trust`);
-  const metric = payload.metric;
-  document.querySelector('#drilldownTitle').textContent = `${metric.name} · Certified metric`;
-  document.querySelector('#drilldownSubtitle').textContent = `${metric.certification.status} · verified ${timeAgo(metric.freshness.fetchedAt)}`;
-  document.querySelector('#drilldownSource').textContent = 'Google Sheets';
-  document.querySelector('#drilldownPath').textContent = `${metric.source.spreadsheetTitle} → ${metric.source.sheetTitle} → ${metric.source.range}`;
+  const metric = payload.metric || {};
+  const certification = metric.certification || {};
+  const freshness = metric.freshness || {};
+  const source = metric.source || null;
+  const provider = String(source?.provider || '').toLowerCase();
+  const providerName = provider === 'google_sheets' || provider === 'google'
+    ? 'Google Sheets'
+    : provider ? provider.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) : 'Certified metric';
+  const sourcePath = source
+    ? [source.spreadsheetTitle, source.sheetTitle, source.range].filter(Boolean).join(' → ') || 'Certified source details unavailable'
+    : 'Source details are hidden for this role';
+  const verifiedAt = freshness.fetchedAt || freshness.lastSyncAt;
+  const certificationStatus = String(certification.status || 'certified').replaceAll('_', ' ');
+  document.querySelector('#drilldownTitle').textContent = `${metric.name || 'Metric'} · Certified metric`;
+  document.querySelector('#drilldownSubtitle').textContent = `${certificationStatus} · ${verifiedAt ? `verified ${timeAgo(verifiedAt)}` : 'verification time not reported'}`;
+  document.querySelector('#drilldownSource').textContent = providerName;
+  document.querySelector('#drilldownPath').textContent = sourcePath;
   const liveKpi = liveKpis.find((kpi) => kpi.id === mappingId);
   document.querySelector('#drilldownValue').textContent = liveKpi ? formatKpiValue(liveKpi.value, liveKpi.displayFormat) : '—';
-  document.querySelector('#drilldownFormula').textContent = `Read-only source · refresh ${Math.round(metric.freshness.refreshSeconds / 60)}m`;
-  document.querySelector('#drilldownTableTitle').textContent = 'Certified source and immutable lineage';
-  document.querySelector('.drilldown-content aside p').textContent = metric.definition;
+  const refreshSeconds = Number(freshness.refreshSeconds);
+  document.querySelector('#drilldownFormula').textContent = Number.isFinite(refreshSeconds) && refreshSeconds > 0
+    ? `Certified read-only metric · refresh ${Math.round(refreshSeconds / 60)}m`
+    : 'Certified read-only metric';
+  const summaryValues = document.querySelectorAll('.drilldown-summary strong');
+  if (summaryValues[2]) summaryValues[2].textContent = 'Not reported';
+  if (summaryValues[3]) summaryValues[3].textContent = 'Not reported';
+  document.querySelector('#drilldownTableTitle').textContent = source ? 'Certified source and immutable lineage' : 'Certified metric access';
+  document.querySelector('.drilldown-content aside p').textContent = metric.definition || 'This role can verify certification and freshness without receiving provider, cell, lineage, or metric-definition details.';
+  const sourceTable = document.querySelector('.source-table');
+  const sourceValue = liveKpi ? formatKpiValue(liveKpi.value, liveKpi.displayFormat) : '—';
+  sourceTable.innerHTML = source
+    ? `<div class="table-row table-head"><span>Source</span><span>Metric</span><span>Value</span><span>Updated</span></div><div class="table-row"><span>${escapeHtml(source.range || providerName)}</span><strong>${escapeHtml(metric.name || 'Certified metric')}</strong><b>${escapeHtml(sourceValue)}</b><small>${escapeHtml(verifiedAt ? timeAgo(verifiedAt) : 'Not reported')}</small></div>`
+    : `<div class="table-row table-head"><span>Access</span><span>Metric</span><span>Value</span><span>Verified</span></div><div class="table-row"><span>Restricted</span><strong>${escapeHtml(metric.name || 'Certified metric')}</strong><b>${escapeHtml(sourceValue)}</b><small>${escapeHtml(verifiedAt ? timeAgo(verifiedAt) : 'Not reported')}</small></div>`;
   const facts = document.querySelectorAll('.drilldown-content aside dd');
   if (facts.length >= 4) {
     facts[0].textContent = liveKpi?.goal?.timezone || 'Workspace timezone';
-    facts[1].textContent = `${Math.round(metric.freshness.staleAfterSeconds / 60)} minutes`;
-    facts[2].textContent = metric.certification.method.replaceAll('_', ' ');
-    facts[3].textContent = timeAgo(metric.certification.certifiedAt);
+    const staleAfterSeconds = Number(freshness.staleAfterSeconds);
+    facts[1].textContent = Number.isFinite(staleAfterSeconds) && staleAfterSeconds > 0 ? `${Math.round(staleAfterSeconds / 60)} minutes` : 'Policy managed';
+    facts[2].textContent = certification.method ? String(certification.method).replaceAll('_', ' ') : 'Certified';
+    facts[3].textContent = certification.certifiedAt ? timeAgo(certification.certifiedAt) : 'Not reported';
   }
-  document.querySelector('#drilldownSourceMark').textContent = 'G';
+  const mark = document.querySelector('#drilldownSourceMark');
+  mark.textContent = providerName === 'Google Sheets' ? 'G' : source ? providerName.charAt(0) : '✓';
+  mark.classList.toggle('google', providerName === 'Google Sheets');
+  mark.classList.toggle('hubspot', providerName === 'HubSpot');
+  document.querySelector('.lineage-bar .connection-pill').textContent = `● ${freshness.status ? String(freshness.status).replaceAll('_', ' ') : certificationStatus}`;
+  document.querySelector('#openSourceButton').hidden = !source;
+  const exportButton = document.querySelector('.drilldown-content .table-heading > button');
+  exportButton.disabled = true;
+  exportButton.textContent = 'Export unavailable';
+  const historyButton = document.querySelector('.drilldown-content aside button');
+  historyButton.disabled = true;
+  historyButton.textContent = 'History unavailable';
   openFeatureModal('drilldownModal', trigger);
 }
 
@@ -2837,29 +3703,70 @@ document.querySelectorAll('.screen-device footer button').forEach((button) => bu
   showToast(button.textContent.includes('Wake') ? 'Wake signal sent' : 'Display control ready', 'The screen will update on its next heartbeat.');
 }));
 
-document.querySelectorAll('.rule-card .toggle input').forEach((toggle) => toggle.addEventListener('change', () => {
-  const name = toggle.closest('.rule-card').querySelector('h3').textContent;
-  showToast(`${name} ${toggle.checked ? 'enabled' : 'paused'}`, toggle.checked ? 'Future matching events will run this rule.' : 'No new events will run until it is enabled.');
+document.querySelectorAll('[data-automation-tab]').forEach((button) => button.addEventListener('click', () => switchAutomationTab(button.dataset.automationTab)));
+document.querySelector('#viewRunLogButton').addEventListener('click', () => switchAutomationTab('runs', { focus: true }));
+document.querySelector('#newAutomationButton').addEventListener('click', (event) => openAutomationEditor({ trigger: event.currentTarget }).catch((error) => showToast('Automation cannot be created', error.message)));
+document.querySelector('#createKpiAutomation').addEventListener('click', (event) => openAutomationEditor({ kpi: automationEditorKpi, trigger: event.currentTarget }).catch((error) => showToast('Automation cannot be created', error.message)));
+document.querySelector('#automationRuleSearch').addEventListener('input', renderAutomationRules);
+document.querySelector('#automationRuleStatusFilter').addEventListener('change', renderAutomationRules);
+document.querySelector('#automationMetricFilter').addEventListener('change', renderAutomationRules);
+document.querySelector('#automationRunStatusFilter').addEventListener('change', loadAutomationRuns);
+document.querySelector('#automationRunRuleFilter').addEventListener('change', loadAutomationRuns);
+document.querySelector('#refreshAutomationRuns').addEventListener('click', loadAutomationRuns);
+document.querySelector('#automationMetricId').addEventListener('change', syncStructuredAutomationBoundary);
+document.querySelector('#automationQuietHoursEnabled').addEventListener('change', (event) => { document.querySelector('#automationQuietHoursFields').hidden = !event.target.checked; });
+document.querySelectorAll('[data-automation-editor-step]').forEach((button) => button.addEventListener('click', () => {
+  const nextStep = Number(button.dataset.automationEditorStep);
+  try {
+    if (nextStep > activeAutomationEditorStep) {
+      for (let step = activeAutomationEditorStep; step < nextStep; step += 1) validateAutomationStep(step);
+    }
+    showAutomationEditorStep(nextStep);
+  } catch (error) { showAutomationFormError(error.message); }
 }));
-document.querySelectorAll('.rule-card footer button').forEach((button) => button.addEventListener('click', () => showToast('Rule editor ready', `Edit ${button.closest('.rule-card').querySelector('h3').textContent}, destinations, cooldowns, and quiet hours.`)));
-document.querySelector('#viewRunLogButton').addEventListener('click', () => showToast('Automation log', '128 runs · 128 successful · 0 duplicates · full source lineage retained.'));
-document.querySelector('#newAutomationButton').addEventListener('click', () => {
-  const article = document.createElement('article');
-  article.className = 'surface rule-card prototype-rule';
-  article.innerHTML = '<header><span class="rule-icon goal">＋</span><div><h3>New KPI rule</h3><p>Choose a KPI threshold and one or more outcomes</p></div><label class="toggle"><input type="checkbox" /><span></span></label></header><div class="rule-flow"><div><small>WHEN</small><strong>Select KPI + condition</strong></div><i>→</i><div><small>THEN</small><span class="action-chip celebration">＋ Add action</span></div></div><footer><span>Draft · never run</span><button type="button">Continue setup</button></footer>';
-  document.querySelector('.rule-list').prepend(article);
-  article.querySelector('footer button').addEventListener('click', () => showToast('Automation builder ready', 'Choose a trusted metric, threshold, cooldown, and destinations.'));
-  showToast('Automation draft created', 'It will not run until its trigger, actions, and safeguards are configured.');
-  article.scrollIntoView({ behavior: 'smooth', block: 'center' });
+document.querySelector('#automationEditorBack').addEventListener('click', () => showAutomationEditorStep(activeAutomationEditorStep - 1));
+document.querySelector('#automationEditorNext').addEventListener('click', async () => {
+  const button = document.querySelector('#automationEditorNext');
+  button.disabled = true;
+  try {
+    if (activeAutomationEditorStep < 4) {
+      validateAutomationStep(activeAutomationEditorStep);
+      showAutomationEditorStep(activeAutomationEditorStep + 1);
+    } else await publishAutomation();
+  } catch (error) { showAutomationFormError(error.message); }
+  finally { button.disabled = false; }
 });
+document.querySelector('#automationSaveDraftButton').addEventListener('click', async () => {
+  const button = document.querySelector('#automationSaveDraftButton');
+  button.disabled = true;
+  try { await saveAutomationDraft(); }
+  catch (error) { showAutomationFormError(error.message); }
+  finally { button.disabled = false; }
+});
+document.querySelector('#automationDryRunButton').addEventListener('click', runAutomationDryTest);
+document.querySelector('#createPromptAutomation').addEventListener('click', (event) => {
+  const prompt = document.querySelector('#kpiAutomationPrompt');
+  prompt.hidden = true;
+  openAutomationEditor({ kpi: pendingPromptKpi, trigger: event.currentTarget }).catch((error) => showToast('Automation cannot be created', error.message));
+});
+document.querySelector('#dismissPromptAutomation').addEventListener('click', () => { document.querySelector('#kpiAutomationPrompt').hidden = true; pendingPromptKpi = null; });
 
 document.addEventListener('keydown', (event) => {
+  if (event.key === 'Tab' && activeFeatureModal?.id === 'automationEditorModal') {
+    const focusable = [...activeFeatureModal.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')].filter((element) => !element.closest('[hidden]') && element.getClientRects().length);
+    if (focusable.length) {
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+  }
   if (event.key === 'Escape' && activeFeatureModal) closeFeatureModal(activeFeatureModal);
 });
 
 const workflowDefinitions = {
   workspace: { eyebrow: 'WORKSPACE ACCESS', title: 'Switch workspace', description: 'Move between tenants without mixing data, brands, permissions, or credentials.', steps: ['Choose workspace','Confirm context'], primary: 'Switch workspace', canvas: '<h3>Your workspaces</h3><p>New workspace is an empty onboarding sample; Acme Sales contains populated synthetic fixtures.</p><div class="workflow-grid"><button class="workflow-card" data-workspace-id="sample-empty" type="button"><span>N</span><strong>New workspace</strong><small>Owner · blank OAuth test workspace</small><i>Choose</i></button><button class="workflow-card" data-workspace-id="acme" type="button"><span>A</span><strong>Acme Sales</strong><small>Owner · populated sample tenant</small><i>Choose</i></button></div>', context: '<h3>Tenant boundary</h3><p>Dashboards, integrations, assets, rules, tokens, and games remain isolated by workspace.</p><div class="workflow-summary"><div><small>NEW WORKSPACE</small><strong>No inherited credentials</strong></div><div><small>SESSION</small><strong>Revalidated on switch</strong></div></div>' },
-  profile: { eyebrow: 'ACCOUNT & PREFERENCES', title: 'Your AxoBoard profile', description: 'Manage personal display, notification, sound, and accessibility defaults.', steps: ['Profile','Preferences','Security'], primary: 'Save preferences', canvas: '<h3>Personal preferences</h3><p>These follow you across workspaces unless an admin policy overrides them.</p><div class="workflow-form"><div class="field-row"><label>Display name<input value="Jordan Lee" /></label><label>Timezone<select><option>America/Denver</option><option>America/New_York</option></select></label></div><div class="workflow-checks"><label><input type="checkbox" checked /> Email me when an automation needs attention</label><label><input type="checkbox" checked /> Respect reduced-motion system preference</label><label><input type="checkbox" /> Mute celebration sounds on this device</label></div></div>', context: '<h3>Account security</h3><p>Last sign-in today at 8:14 AM. MFA is enabled.</p><div class="workflow-summary"><div><small>ROLE</small><strong>Workspace owner</strong></div><div><small>ACTIVE SESSIONS</small><strong>2 devices</strong></div></div>' },
+  profile: { eyebrow: 'ACCOUNT & PREFERENCES', title: 'Profile controls unavailable', description: 'Personal preferences and security sessions need a dedicated account API before they can be managed here.', steps: ['Availability'], primary: 'Close preview', canvas: '<h3>No profile record is being inferred</h3><p>AxoBoard will show identity, notification preferences, MFA state, and sessions only after they are returned by an authorized account service.</p>', context: '<h3>Account boundary</h3><p>This preview does not claim a role, MFA state, sign-in time, or active-device count.</p>' },
   dashboard: { eyebrow: 'DASHBOARD CONFIGURATION', title: 'Edit dashboard', description: 'Change the time window, layout, refresh behavior, and card settings.', steps: ['Configure','Preview','Publish'], primary: 'Preview changes', canvas: '<h3>Dashboard settings</h3><p>Changes stay in a draft until you publish them.</p><div class="workflow-form"><div class="field-row"><label>Time window<select><option>Today</option><option>This week</option><option>This month</option><option>Rolling 30 days</option></select></label><label>Refresh interval<select><option>Every 5 minutes</option><option>Every minute</option><option>Every 15 minutes</option></select></label></div><label>Layout density<select><option>Comfortable</option><option>Compact</option><option>TV optimized</option></select></label><div class="workflow-checks"><label><input type="checkbox" checked /> Show source and freshness on every card</label><label><input type="checkbox" checked /> Preserve mobile card order</label></div></div>', context: '<h3>Draft impact</h3><p>4 KPI cards, 1 trend chart, and 3 attention rules use this dashboard.</p><div class="workflow-preview"><span>▦</span><strong>Sales performance</strong><small>Responsive preview · no live changes</small></div>' },
   layout: { eyebrow: 'DASHBOARD LAYOUT', title: 'Change layout', description: 'Choose a responsive preset, show the sections you need, and put KPIs in the right order.', steps: ['Arrange','Review'], primary: 'Review layout', canvas: '<h3>Shape the dashboard around the decision</h3><p>Every change previews immediately. Cancel restores the layout you started with.</p><fieldset class="layout-preset-fieldset"><legend>Layout preset</legend><div class="layout-preset-options"><label><input type="radio" name="layoutPreset" value="balanced" /><span class="layout-preset-icon balanced" aria-hidden="true"><i></i><i></i><i></i><i></i></span><strong>Balanced</strong><small>Equal KPI cards with trend and actions below.</small></label><label><input type="radio" name="layoutPreset" value="kpi-focus" /><span class="layout-preset-icon kpi-focus" aria-hidden="true"><i></i><i></i><i></i></span><strong>KPI focus</strong><small>Lead with the first KPI and give the score more room.</small></label><label><input type="radio" name="layoutPreset" value="compact" /><span class="layout-preset-icon compact" aria-hidden="true"><i></i><i></i><i></i><i></i></span><strong>Compact</strong><small>Reduce card height to scan more at once.</small></label></div></fieldset><fieldset class="layout-section-fieldset"><legend>Dashboard sections</legend><div class="workflow-checks layout-visibility-options"><label><input id="layoutShowTrend" type="checkbox" /><span><strong>Trend chart</strong><small>Revenue momentum and period comparison</small></span></label><label><input id="layoutShowActionCenter" type="checkbox" /><span><strong>Action Center</strong><small>Alerts and next-best actions</small></span></label></div></fieldset><div class="layout-order-heading"><div><strong>KPI order</strong><small>Use Move up and Move down for a keyboard-safe order.</small></div></div><ol class="layout-order-list" id="layoutKpiOrder"></ol>', context: '<h3>Live layout preview</h3><p>This preview and the dashboard behind it update together. Nothing is sent to a server.</p><div class="layout-mini-preview" data-layout-preview><div class="layout-mini-kpis" data-layout-preview-kpis></div><span class="layout-mini-section trend" data-layout-preview-trend>Trend chart</span><span class="layout-mini-section actions" data-layout-preview-actions>Action Center</span><span class="layout-mini-empty" data-layout-preview-empty hidden>KPI cards only</span></div><div class="workflow-summary"><div><small>PERSISTENCE</small><strong>This browser only</strong></div><div><small>MOBILE</small><strong>Order becomes a single column</strong></div><div><small>SERVER STATUS</small><strong>Not published</strong></div></div>' },
   kpi: { eyebrow: 'KPI SETTINGS', title: 'Edit KPI card', description: 'Update source data, appearance, goal, and comparison behavior.', steps: ['Source','Data','Display','Publish'], primary: 'Review KPI', canvas: '<h3>Metric and display</h3><p>The source contract stays visible while you customize the card.</p><div class="workflow-form"><label>KPI name<input value="Net sales today" /></label><div class="field-row"><label>Format<select><option>Currency · no decimals</option><option>Number</option><option>Percentage</option></select></label><label>Goal<input value="$65,000" /></label></div><label>Comparison<select><option>Versus another Sheets cell</option><option>Versus a matching Sheets range</option><option>Versus goal only</option></select></label><div class="workflow-checks"><label><input type="checkbox" checked /> Enable source drilldown</label><label><input type="checkbox" checked /> Show stale warning after 15 minutes</label></div></div>', context: '<h3>Trusted source</h3><p>Google Sheets → 2026 Sales Performance → Summary!D8</p><div class="workflow-summary"><div><small>CURRENT VALUE</small><strong>$55,396</strong></div><div><small>FRESHNESS</small><strong>2 minutes ago · healthy</strong></div><div><small>OWNER</small><strong>Sales Ops</strong></div></div>' },
@@ -2867,8 +3774,6 @@ const workflowDefinitions = {
   connector: { eyebrow: 'INTEGRATION SETUP', title: 'Connect a data source', description: 'Authorize the smallest useful scope, validate it, and create the first mapping.', steps: ['Choose source','Authorize','Validate','Map data'], primary: 'Review setup', canvas: '<h3>Connector roadmap</h3><p>Deep, observable connections beat a huge brittle catalog.</p><div class="workflow-grid"><button class="workflow-card is-selected" type="button"><span class="integration-logo google" aria-label="Google Sheets">Google Sheets</span><strong>Google Sheets</strong><small>Spreadsheets, sheets, cells, and named ranges</small><i>App setup required</i></button><button class="workflow-card" type="button"><span class="integration-logo hubspot" aria-label="HubSpot">HubSpot</span><strong>HubSpot</strong><small>Objects, standard/custom properties, filters</small><i>Roadmap</i></button><button class="workflow-card" type="button"><span>▤</span><strong>Shopify</strong><small>Orders, refunds, net sales, products</small><i>Roadmap</i></button><button class="workflow-card" type="button"><span>↯</span><strong>Webhook / API</strong><small>Push signed custom events</small><i>Roadmap</i></button></div>', context: '<h3>Connection requirements</h3><p>Tokens stay encrypted server-side. Revocation, freshness, rate limits, and errors remain visible.</p><div class="workflow-summary"><div><small>AUTH</small><strong>OAuth 2.0</strong></div><div><small>SYNC</small><strong>Incremental + retry</strong></div></div>' },
   connection: { eyebrow: 'CONNECTION MANAGEMENT', title: 'Manage connection', description: 'Inspect health, scopes, mappings, sync history, and revocation.', steps: ['Health','Mappings','Permissions'], primary: 'Save connection', canvas: '<h3>Google Sheets connection</h3><p>Healthy and currently used by two published KPI mappings.</p><div class="workflow-form"><div class="field-row"><label>Account<input value="jordan@acme.co" readonly /></label><label>Refresh<select><option>Every 5 minutes</option><option>Every 15 minutes</option></select></label></div><ul class="workflow-list"><li><span>▦</span><div><strong>Net sales today</strong><small>Summary!D8 · refreshed 2m ago</small></div><button type="button">Edit</button></li><li><span>◎</span><div><strong>Team on track</strong><small>Reps!G4:G18 · refreshed 2m ago</small></div><button type="button">Edit</button></li></ul></div>', context: '<h3>Connection health</h3><p>OAuth token valid. No rate limits or mapping errors.</p><div class="workflow-summary"><div><small>LAST SYNC</small><strong>2 minutes ago</strong></div><div><small>SCOPES</small><strong>Google Sheets read-only</strong></div><div><small>NEXT CHECK</small><strong>In 3 minutes</strong></div></div>' },
   screen: { eyebrow: 'DISPLAY CONTROL', title: 'Manage TV screen', description: 'Pair, assign content, set a schedule, and diagnose the player remotely.', steps: ['Screen','Content','Schedule','Confirm'], primary: 'Apply to screen', canvas: '<h3>Screen and content</h3><p>Updates apply on the next player heartbeat.</p><div class="workflow-form"><div class="field-row"><label>Screen name<input value="Sales Floor TV" /></label><label>Location<input value="Front office" /></label></div><label>Content<select><option>Revenue pulse · 3 views</option><option>Sales performance</option><option>Team Challenge</option><option>Concierge Pulse</option></select></label><div class="field-row"><label>Wake<select><option>7:00 AM</option><option>Always on</option></select></label><label>Sleep<select><option>8:00 PM</option><option>Never</option></select></label></div><div class="workflow-checks"><label><input type="checkbox" checked /> Auto-recover last-known-good content</label><label><input type="checkbox" /> Notify admin when offline for 5 minutes</label></div></div>', context: '<h3>Player heartbeat</h3><p>Chrome · 4K · player v0.4.1</p><div class="workflow-summary"><div><small>STATUS</small><strong>Online · 18s ago</strong></div><div><small>LAST RENDER</small><strong>Successful</strong></div><div><small>PAIRING</small><strong>Device-bound token</strong></div></div>' },
-  automation: { eyebrow: 'AUTOMATION WORKFLOW', title: 'Edit automation rule', description: 'Build the trigger, actions, cooldowns, and replay policy as one auditable rule.', steps: ['Trigger','Actions','Guardrails','Dry run'], primary: 'Run dry test', canvas: '<h3>Rule definition</h3><p>Every destination gets its own idempotency key and retry state.</p><div class="workflow-form"><label>Rule name<input value="Sales goal crossed" /></label><div class="field-row"><label>Metric<select><option>Net sales today</option><option>Open pipeline</option></select></label><label>Condition<select><option>Reaches $65,000</option><option>Crosses 100% of goal</option></select></label></div><div class="workflow-checks"><label><input type="checkbox" checked /> ✦ Play celebration</label><label><input type="checkbox" checked /> # Post to Slack</label><label><input type="checkbox" checked /> ⚔ Award 100 competition points</label></div><div class="field-row"><label>Cooldown<select><option>Once per day</option><option>4 hours</option></select></label><label>Quiet hours<select><option>8 PM–7 AM</option><option>None</option></select></label></div></div>', context: '<h3>Recent dry-run result</h3><p>1 match across the last 30 days; no duplicate event IDs.</p><div class="workflow-summary"><div><small>RULE STATE</small><strong>Draft version 4</strong></div><div><small>STALE METRIC</small><strong>Do not run</strong></div></div>' },
-  runs: { eyebrow: 'AUTOMATION OBSERVABILITY', title: 'Automation run log', description: 'Inspect every evaluation, suppression, destination attempt, and replay.', steps: ['Runs','Details','Replay'], primary: 'Export log', canvas: '<h3>Recent runs</h3><p>Filter by rule, metric, outcome, destination, or event ID.</p><div class="run-ledger"><div class="run-row"><span>Today · 1:06</span><strong>Big deal landed · 3 actions</strong><b class="success">Succeeded</b></div><div class="run-row"><span>Today · 10:18</span><strong>Pipeline coverage · Slack + email</strong><b class="success">Succeeded</b></div><div class="run-row"><span>Yesterday</span><strong>Sales goal crossed · cooldown active</strong><b class="suppressed">Suppressed</b></div><div class="run-row"><span>Aug 10</span><strong>Big deal landed · duplicate event ID</strong><b class="suppressed">Deduped</b></div></div>', context: '<h3>Thirty-day health</h3><p>128 evaluations with no duplicate outcomes.</p><div class="workflow-summary"><div><small>SUCCESS</small><strong>100%</strong></div><div><small>SUPPRESSED</small><strong>14 expected</strong></div><div><small>RETRIES</small><strong>2 recovered</strong></div></div>' },
   celebration: { eyebrow: 'CELEBRATION WORKFLOW', title: 'Celebrate and recognize', description: 'Review wins, create a shoutout, and choose exactly where the moment appears.', steps: ['Choose win','Message','Audience','Preview'], primary: 'Preview shoutout', canvas: '<h3>Create a team shoutout</h3><p>Recognition can be sent without changing KPI or scoring records.</p><div class="workflow-form"><label>Person or team<select><option>Maya Patel · $18,420 deal</option><option>Sales team · crossed 80%</option><option>Custom recognition</option></select></label><label>Message<textarea>You crushed it—great discovery, follow-through, and a huge finish.</textarea></label><div class="workflow-checks"><label><input type="checkbox" checked /> Celebration HQ</label><label><input type="checkbox" checked /> Sales Floor TV</label><label><input type="checkbox" /> Slack #sales-wins</label></div></div>', context: '<h3>Moment preview</h3><p>Respects quiet hours, device volume, and reduced motion.</p><div class="workflow-preview"><span>✦</span><strong>Huge win, Maya!</strong><small>Victory Splash · high hype</small></div>' },
   sound: { eyebrow: 'SOUND WORKFLOW', title: 'Upload and assign sound', description: 'Validate ownership, preview volume, tag the asset, and assign safe triggers.', steps: ['Upload','Review','Assign','Publish'], primary: 'Validate sound', canvas: '<h3>Add a sound asset</h3><p>Supported: MP3, WAV, or M4A up to 25MB.</p><div class="workflow-drop"><span>↑</span><strong>Drop a sound here or browse</strong><small>Virus scan, duration, loudness, and waveform validation run before publishing.</small></div><div class="workflow-form"><div class="field-row"><label>Name<input value="Victory Splash" /></label><label>Tags<input value="Win, Water" /></label></div><div class="workflow-checks"><label><input type="checkbox" checked /> I own or have permission to use this audio</label><label><input type="checkbox" checked /> Normalize loudness for shared displays</label></div></div>', context: '<h3>Assignment preview</h3><p>Choose event, team scope, volume, cooldown, and quiet-hour behavior.</p><div class="workflow-summary"><div><small>TRIGGERS</small><strong>Deal won · Team goal</strong></div><div><small>VOLUME</small><strong>80% · normalized</strong></div></div>' },
   game: { eyebrow: 'TEAM COMPETITION ASSETS', title: 'Customize competition asset', description: 'Edit names, avatars, arenas, sounds, scoring, and responsive competition previews.', steps: ['Choose asset','Customize','Test','Publish'], primary: 'Test in competition', canvas: '<h3>Competition asset library</h3><p>Use a preset, upload tenant-owned artwork, or create a reusable competition asset.</p><div class="workflow-grid"><button class="workflow-card is-selected" type="button"><span>•ᴗ•</span><strong>Leucistic avatar</strong><small>Team avatar · transparent PNG</small><i>Selected</i></button><button class="workflow-card" type="button"><span>🌊</span><strong>Aquatic arena</strong><small>Responsive background + safe zones</small><i>Choose</i></button><button class="workflow-card" type="button"><span>♫</span><strong>Victory Splash</strong><small>3 seconds · normalized</small><i>Choose</i></button><button class="workflow-card" type="button"><span>↑</span><strong>Upload asset</strong><small>PNG, SVG, WebP, MP3, WAV</small><i>Add new</i></button></div>', context: '<h3>Asset checks</h3><p>Transparent edges, TV/mobile safe zones, licensing, and file scanning are required.</p><div class="workflow-summary"><div><small>MOBILE</small><strong>390px preview passes</strong></div><div><small>TV</small><strong>4K safe zone passes</strong></div></div>' },
@@ -2893,6 +3798,9 @@ function renderWorkflow() {
   document.querySelector('#workflowCanvas').innerHTML = definition.canvas;
   document.querySelector('#workflowCanvas').onchange = null;
   document.querySelector('#workflowContext').innerHTML = definition.context;
+  if (activeWorkflow !== 'layout') {
+    document.querySelector('#workflowCanvas').insertAdjacentHTML('afterbegin', '<aside class="surface preview-boundary compact"><b>Prototype preview · not saved or sent</b><span>Names, values, health, access, and delivery details in this workflow are illustrative fixtures, not current workspace records. The final button closes the preview without a mutation.</span></aside>');
+  }
   if (activeWorkflow === 'customer') document.querySelector('[data-customer-workspace]').value = betaState.workspaceName;
   if (activeWorkflow === 'workspace') {
     const selected = document.querySelector(`[data-workspace-id="${betaState.activeWorkspace}"]`);
@@ -2940,8 +3848,8 @@ function updateWorkflowProgress() {
   const definition = workflowDefinitions[activeWorkflow];
   document.querySelector('#workflowProgress').innerHTML = definition.steps.map((step, index) => `${index ? '<i></i>' : ''}<span data-step="${index + 1}" class="${index === workflowStep ? 'is-active' : ''}">${step}</span>`).join('');
   const isFinalStep = workflowStep === definition.steps.length - 1;
-  document.querySelector('#workflowPrimary').textContent = activeWorkflow === 'layout' && isFinalStep ? 'Save layout' : isFinalStep ? 'Save draft' : definition.primary;
-  document.querySelector('#workflowStatus').textContent = `Step ${workflowStep + 1} of ${definition.steps.length} · ${activeWorkflow === 'layout' ? (liveWorkspaceId ? 'workspace draft' : 'browser draft') : 'prototype draft'}`;
+  document.querySelector('#workflowPrimary').textContent = activeWorkflow === 'layout' && isFinalStep ? 'Save layout' : isFinalStep ? 'Close preview' : definition.primary;
+  document.querySelector('#workflowStatus').textContent = `Step ${workflowStep + 1} of ${definition.steps.length} · ${activeWorkflow === 'layout' ? (liveWorkspaceId ? 'workspace draft' : 'browser draft') : 'preview only · not saved'}`;
 }
 
 function openWorkflow(type, trigger = document.activeElement, titleOverride = '') {
@@ -3031,24 +3939,8 @@ document.querySelector('#workflowPrimary').addEventListener('click', async () =>
     } finally { saveButton.disabled = false; }
     return;
   }
-  const workspaceValue = document.querySelector('[data-customer-workspace]')?.value.trim();
-  const selectedWorkspace = activeWorkflow === 'workspace' ? document.querySelector('#workflowCanvas [data-workspace-id].is-selected')?.dataset.workspaceId : null;
-  persistBetaState({ completedWorkflows, draftCount: betaState.draftCount + 1, ...(workspaceValue ? { workspaceName: workspaceValue } : {}) });
-  if (workspaceValue) {
-    document.querySelector('#serviceWorkspaceName').textContent = workspaceValue;
-    workspaceName.value = workspaceValue;
-    syncBrandPreview();
-  }
-  if (selectedWorkspace) {
-    const profile = workspaceProfiles[selectedWorkspace];
-    persistBetaState({ activeWorkspace: selectedWorkspace, workspaceName: profile.name, ...(selectedWorkspace === 'sample-empty' ? { teamOne: 'Team One', teamTwo: 'Team Two' } : {}) });
-    applyWorkspaceMode();
-  }
   closeFeatureModal(document.querySelector('#workflowModal'));
-  const detail = activeWorkflow === 'oauth'
-    ? 'OAuth handoff test recorded. No provider redirect occurred and no credential or token was stored.'
-    : 'Saved in this beta browser. Nothing was published or sent externally.';
-  showToast(`${definition.title} saved as a draft`, detail);
+  showToast(`${definition.title} preview closed`, 'Nothing was saved, published, delivered, invited, uploaded, or billed.');
 });
 
 insertWorkspaceSandboxStates();
@@ -3068,7 +3960,6 @@ const workflowBindings = [
   ['.dashboard-toolbar button:not(#openTvMode):not(#editLayoutButton)', 'dashboard'], ['#editLayoutButton', 'layout'], ['.kpi-card header button', 'kpi'], ['.attention-card li button', 'alert'], ['.attention-card > button', 'alert'],
   ['#browseIntegrations', 'connector'], ['.integration-catalog button', 'connector'], ['.connect-source', 'connection'],
   ['.display-summary button, .screen-device:not([data-live-display]) footer button:not(#manageRuntimeButton), .add-loop-view', 'screen'],
-  ['.rule-card footer button, #newAutomationButton', 'automation'], ['#viewRunLogButton', 'runs'],
   ['.celebration-header .button-ghost, .performers-card .card-title button, .wins-card .card-title button, .momentum-banner button', 'celebration'],
   ['#uploadSoundButton, #uploadZone, .sounds-layout .add-chip, .sounds-layout .chips button, .favorite-button', 'sound'],
   ['.studio-steps nav button, .preview-heading button, .editable-labels button, .sprite-pickers button, .arena-options button', 'game'],
@@ -3107,7 +3998,7 @@ document.querySelectorAll('[data-plan-cycle]').forEach((button) => button.addEve
   document.querySelectorAll('[data-plan-cycle]').forEach((choice) => choice.classList.toggle('is-active', choice === button));
   document.querySelectorAll('[data-monthly][data-annual]').forEach((price) => { price.textContent = price.dataset[cycle]; });
   document.querySelectorAll('[data-price-note]').forEach((note) => { note.textContent = cycle === 'annual' ? 'Billed annually' : 'Billing terms at checkout'; });
-  showToast(cycle === 'annual' ? 'Annual pricing applied' : 'Monthly pricing applied', cycle === 'annual' ? 'The displayed monthly rate is billed as one annual commitment.' : 'Flexible monthly billing is shown.');
+  showToast(cycle === 'annual' ? 'Annual preview shown' : 'Monthly preview shown', 'This changes illustrative pricing in this browser only; no subscription or invoice was changed.');
 }));
 
 document.querySelectorAll('[data-plan-action]').forEach((button) => button.addEventListener('click', (event) => {
@@ -3149,6 +4040,7 @@ new MutationObserver((mutations) => {
 }).observe(document.body, { childList: true, subtree: true });
 
 const initialScreen = location.hash.slice(1) === 'kombat' ? 'competitions' : location.hash.slice(1);
+document.querySelector('#reloadApplication').addEventListener('click', () => location.reload());
 brandColor.value = betaState.brandColor;
 celebrationLanguage.value = betaState.celebrationLanguage;
 applyWorkspaceMode();
@@ -3164,6 +4056,6 @@ if (location.search && !dedicatedTvRuntime) history.replaceState(null, '', `/app
     document.body.dataset.tvRuntime = 'true';
     setTvConnectionState('loading');
   }
-  await loadLiveData();
-  if (dedicatedTvRuntime) openFeatureModal('tvPreviewModal', document.querySelector('#tvFullscreen'));
+  const ready = await loadLiveData();
+  if (dedicatedTvRuntime && ready) openFeatureModal('tvPreviewModal', document.querySelector('#tvFullscreen'));
 })();

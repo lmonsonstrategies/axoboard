@@ -325,7 +325,13 @@ async function signup(label) {
   const session = await (await fetch(`${baseUrl}/api/auth/session`, { headers: { Cookie: cookie } })).json();
   workspaceIds.push(session.user.workspace_id);
   await pool.query("UPDATE subscriptions SET status='active', updated_at=NOW() WHERE workspace_id=$1", [session.user.workspace_id]);
-  return { cookie, workspaceId: session.user.workspace_id };
+  return { cookie, workspaceId: session.user.workspace_id, userId: session.user.id };
+}
+
+async function attachRole(account, workspaceId, role) {
+  await pool.query('INSERT INTO memberships (id,workspace_id,user_id,role) VALUES ($1,$2,$3,$4)', [randomUUID(), workspaceId, account.userId, role]);
+  await pool.query('UPDATE sessions SET workspace_id=$1 WHERE user_id=$2', [workspaceId, account.userId]);
+  return { ...account, workspaceId, role };
 }
 
 async function api(path, { method = 'GET', cookie, body } = {}) {
@@ -340,6 +346,9 @@ try {
   assert.equal(health.googleSheets, 'configured');
   const first = await signup('Primary');
   const second = await signup('Isolated');
+  const admin = await attachRole(await signup('Admin'), first.workspaceId, 'admin');
+  const editor = await attachRole(await signup('Editor'), first.workspaceId, 'editor');
+  const viewer = await attachRole(await signup('Viewer'), first.workspaceId, 'viewer');
 
   const start = await api('/api/axoboard/integrations/oauth/start', { method: 'POST', cookie: first.cookie, body: { provider: 'google' } });
   const startText = await start.text();
@@ -374,6 +383,24 @@ try {
   assert.doesNotMatch(encrypted.rows[0].ciphertext, /google_access|google_refresh_secret/i, 'database token ciphertext is encrypted');
   assert.equal(encrypted.rows[0].token_iv.length, 12);
   assert.equal(encrypted.rows[0].token_auth_tag.length, 16);
+
+  const adminOAuth = await api('/api/axoboard/integrations/oauth/start', { method: 'POST', cookie: admin.cookie, body: { provider: 'google' } });
+  assert.equal(adminOAuth.status, 200, 'admins can connect data sources');
+  for (const denied of [editor, viewer]) {
+    const deniedOAuth = await api('/api/axoboard/integrations/oauth/start', { method: 'POST', cookie: denied.cookie, body: { provider: 'google' } });
+    const deniedOAuthBody = await deniedOAuth.json();
+    assert.equal(deniedOAuth.status, 403);
+    assert.equal(deniedOAuthBody.code, 'admin_required', `${denied.role} cannot connect data sources`);
+  }
+  const editorDisconnect = await api(`/api/axoboard/integrations/connections/${connection.id}`, { method: 'DELETE', cookie: editor.cookie });
+  assert.equal(editorDisconnect.status, 403, 'editors cannot disconnect workspace data sources');
+  assert.equal((await editorDisconnect.json()).code, 'admin_required');
+  const editorConnections = await api('/api/axoboard/integrations/connections', { cookie: editor.cookie });
+  assert.equal(editorConnections.status, 200, 'editors can use existing workspace connections');
+  assert.equal((await editorConnections.json()).connections.length, 1);
+  const viewerConnections = await api('/api/axoboard/integrations/connections', { cookie: viewer.cookie });
+  assert.equal(viewerConnections.status, 403, 'viewers cannot enumerate admin connection records');
+  assert.equal((await viewerConnections.json()).code, 'editor_required');
 
   const beforeIsolationCalls = driveCalls + metadataCalls + valuesCalls;
   const isolatedList = await api(`/api/axoboard/integrations/google/spreadsheets?connectionId=${connection.id}`, { cookie: second.cookie });
@@ -559,20 +586,64 @@ try {
   const firstEvents = await api('/api/axoboard/events', { cookie: first.cookie });
   const firstEventBody = await firstEvents.json();
   assert.equal(firstEvents.status, 200, JSON.stringify(firstEventBody));
-  assert.deepEqual(firstEventBody.events.map((event) => event.payload.milestone).sort((a, b) => a - b), [25, 50, 75]);
+  const firstMilestones = firstEventBody.events.filter((event) => event.type.startsWith('goal.milestone.'));
+  const firstSnapshots = firstEventBody.events.filter((event) => event.type === 'metric.snapshot.recorded.v1');
+  assert.deepEqual(firstMilestones.map((event) => event.payload.milestone).sort((a, b) => a - b), [25, 50, 75]);
+  assert.equal(firstSnapshots.length, 1, 'each accepted certified snapshot emits one normalized event');
+  assert.equal(firstSnapshots[0].payload.schemaVersion, 1);
+  assert.equal(firstSnapshots[0].payload.metricId, persistedGoalKpi.metricId);
+  assert.equal(firstSnapshots[0].payload.value, 20);
+  assert.equal(firstSnapshots[0].payload.certification.status, 'certified');
+  assert.equal(firstSnapshots[0].payload.freshness.status, 'fresh');
+  assert.doesNotMatch(JSON.stringify(firstSnapshots[0].payload), /google|spreadsheet|sheets-owner@example\.com/i, 'snapshot events are provider-neutral and credential-free');
   assert.ok(firstEventBody.events.every((event) => event.delivery.status === 'pending'));
+  const sourceSnapshotId = firstSnapshots[0].payload.snapshotId;
+  const snapshotContext = (await pool.query(`SELECT s.*,m.* FROM metric_snapshots s
+    JOIN kpi_mappings m ON m.workspace_id=s.workspace_id AND m.id=s.mapping_id
+    WHERE s.workspace_id=$1 AND s.id=$2`, [first.workspaceId, sourceSnapshotId])).rows[0];
+  const metricContext = (await pool.query('SELECT * FROM metric_definitions WHERE workspace_id=$1 AND mapping_id=$2', [first.workspaceId, goalKpi.id])).rows[0];
+  const goalContext = (await pool.query("SELECT * FROM goal_configs WHERE workspace_id=$1 AND metric_id=$2 AND status='active'", [first.workspaceId, metricContext.id])).rows[0];
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await googleIntegrationInternals.recordMetricSnapshotEvent(pool, {
+      mapping: snapshotContext, snapshotId: sourceSnapshotId, value: snapshotContext.value, goalValue: snapshotContext.snapshot_goal_value,
+      fetchedAt: snapshotContext.fetched_at, engagement: { metric: metricContext, goal: goalContext, intelligence: null }
+    });
+  }
+  const idempotentSnapshotEvent = await pool.query(`SELECT e.id,o.status,o.attempt_count,o.processed_at FROM domain_events e
+    JOIN event_outbox o ON o.workspace_id=e.workspace_id AND o.event_id=e.id
+    WHERE e.workspace_id=$1 AND e.idempotency_key=$2`, [first.workspaceId, `metric_snapshot:${sourceSnapshotId}:v1`]);
+  assert.equal(idempotentSnapshotEvent.rowCount, 1, 'retries cannot duplicate a snapshot event or outbox row');
+  assert.equal(idempotentSnapshotEvent.rows[0].status, 'pending');
+  assert.equal(idempotentSnapshotEvent.rows[0].attempt_count, 0);
+  assert.equal(idempotentSnapshotEvent.rows[0].processed_at, null, 'recording an event does not imply external delivery');
   const isolatedEvents = await api('/api/axoboard/events', { cookie: second.cookie });
   assert.deepEqual((await isolatedEvents.json()).events, [], 'milestone ledger is workspace scoped');
+  const viewerEvents = await api('/api/axoboard/events', { cookie: viewer.cookie });
+  const viewerEventBody = await viewerEvents.json();
+  assert.equal(viewerEvents.status, 403, 'viewers cannot read event control-plane records');
+  assert.equal(viewerEventBody.code, 'editor_required');
+  const editorEvents = await api('/api/axoboard/events', { cookie: editor.cookie });
+  assert.equal(editorEvents.status, 200, 'editors can read workspace event records');
+  assert.equal((await editorEvents.json()).events.length, firstEventBody.events.length);
+  const viewerTrust = await api(`/api/axoboard/metrics/${goalKpi.id}/trust`, { cookie: viewer.cookie });
+  const viewerTrustBody = await viewerTrust.json();
+  assert.equal(viewerTrust.status, 200);
+  assert.equal('source' in viewerTrustBody.metric, false, 'viewer trust payload excludes source identity');
+  assert.equal('lineageHash' in viewerTrustBody.metric, false, 'viewer trust payload excludes internal lineage');
+  assert.equal('definition' in viewerTrustBody.metric, false, 'viewer trust payload excludes provider-specific definitions');
+  assert.equal('errorCode' in viewerTrustBody.metric.freshness, false, 'viewer trust payload excludes internal sync errors');
   const repeatGoalSync = await api(`/api/axoboard/kpis/${goalKpi.id}/sync`, { method: 'POST', cookie: first.cookie });
   assert.equal(repeatGoalSync.status, 200, await repeatGoalSync.text());
   const repeatedEvents = await api('/api/axoboard/events', { cookie: first.cookie });
-  assert.equal((await repeatedEvents.json()).events.length, 3, 'repeated snapshots cannot duplicate milestone events in one goal period');
+  const repeatedEventBody = await repeatedEvents.json();
+  assert.equal(repeatedEventBody.events.filter((event) => event.type.startsWith('goal.milestone.')).length, 3, 'repeated snapshots cannot duplicate milestone events in one goal period');
+  assert.equal(repeatedEventBody.events.filter((event) => event.type === 'metric.snapshot.recorded.v1').length, 2, 'a new accepted snapshot emits its own event');
   const goalBootstrap = await api('/api/axoboard/bootstrap', { cookie: first.cookie });
   const goalBootstrapBody = await goalBootstrap.json();
   assert.equal(goalBootstrapBody.brand.name, 'Google Primary');
   assert.equal(goalBootstrapBody.brand.version, 1);
   assert.ok(goalBootstrapBody.engagement.summary.certified >= 1);
-  assert.equal(goalBootstrapBody.engagement.events.length, 3);
+  assert.equal(goalBootstrapBody.engagement.events.length, 5);
   const deleteGoalMetric = await api(`/api/axoboard/kpis/${goalKpi.id}`, { method: 'DELETE', cookie: first.cookie });
   assert.equal(deleteGoalMetric.status, 200);
 
@@ -662,6 +733,26 @@ try {
   assert.equal(create.status, 201, createText);
   const createdKpi = JSON.parse(createText).kpi;
   assert.equal(createdKpi.value, 20);
+  assert.ok(createdKpi.metricId, 'new KPIs expose their certified metric identity for automation setup');
+  const destinationResponse = await api('/api/axoboard/automation-destinations', {
+    method: 'POST', cookie: first.cookie,
+    body: { name: 'Restore-safe TVs', type: 'internal_tv_celebration', config: {} }
+  });
+  const destinationText = await destinationResponse.text();
+  assert.equal(destinationResponse.status, 201, destinationText);
+  const destinationId = JSON.parse(destinationText).destination.id;
+  const automationResponse = await api('/api/axoboard/automations', {
+    method: 'POST', cookie: first.cookie,
+    body: {
+      name: 'Qualified pipeline threshold', metricId: createdKpi.metricId,
+      trigger: { type: 'metric_threshold', operator: 'gte', thresholdMode: 'absolute', thresholdValue: 20, behavior: 'edge', durationSeconds: 0 },
+      guardrails: { freshnessSeconds: 900, cooldownSeconds: 0, maxRunsPerDay: 20, timezone: 'America/Denver' },
+      actions: [{ type: 'internal_tv_celebration', destinationId, config: { title: 'Pipeline target reached', message: 'Qualified pipeline reached its target.', durationSeconds: 6, theme: 'brand' } }]
+    }
+  });
+  const automationText = await automationResponse.text();
+  assert.equal(automationResponse.status, 201, automationText);
+  const automationId = JSON.parse(automationText).automation.id;
   const list = await api('/api/axoboard/kpis', { cookie: first.cookie });
   const kpis = (await list.json()).kpis;
   assert.equal(kpis.length, 1);
@@ -683,6 +774,79 @@ try {
   assert.equal(bootstrapBody.connections.connections.length, 1);
   assert.equal(bootstrapBody.kpis.kpis.length, 1);
   assert.deepEqual(bootstrapBody.dashboard.dashboard.layout.kpiOrder, [createdKpi.id]);
+
+  const adminBootstrap = await api('/api/axoboard/bootstrap', { cookie: admin.cookie });
+  const adminBootstrapBody = await adminBootstrap.json();
+  assert.equal(adminBootstrap.status, 200);
+  assert.equal(adminBootstrapBody.session.capabilities.manageAutomationDrafts, true);
+  assert.equal(adminBootstrapBody.session.capabilities.publishAutomations, true);
+  assert.equal(adminBootstrapBody.session.capabilities.manageAutomationDestinations, true);
+  assert.equal(adminBootstrapBody.session.capabilities.retryAutomationActions, true);
+
+  const editorBootstrap = await api('/api/axoboard/bootstrap', { cookie: editor.cookie });
+  const editorBootstrapBody = await editorBootstrap.json();
+  assert.equal(editorBootstrap.status, 200);
+  assert.equal(editorBootstrapBody.session.capabilities.manageKpis, true);
+  assert.equal(editorBootstrapBody.session.capabilities.readDisplays, false);
+  assert.equal(editorBootstrapBody.session.capabilities.readEvents, true);
+  assert.equal(editorBootstrapBody.session.capabilities.manageDisplays, false);
+  assert.equal(editorBootstrapBody.session.capabilities.readAutomations, true);
+  assert.equal(editorBootstrapBody.session.capabilities.manageAutomationDrafts, true);
+  assert.equal(editorBootstrapBody.session.capabilities.publishAutomations, false);
+  assert.equal(editorBootstrapBody.session.capabilities.manageAutomationDestinations, false);
+  assert.equal(editorBootstrapBody.session.capabilities.retryAutomationActions, false);
+  assert.equal(editorBootstrapBody.connections.connections.length, 1);
+  assert.equal(editorBootstrapBody.kpis.kpis[0].connectionId, connection.id, 'editors retain source details needed to manage KPI drafts');
+  const editorDashboardSave = await api('/api/axoboard/dashboard', {
+    method: 'PUT', cookie: editor.cookie, body: { layout: { preset: 'balanced', kpiOrder: [createdKpi.id] } }
+  });
+  assert.equal(editorDashboardSave.status, 200, 'editors retain dashboard draft management');
+
+  const viewerBootstrap = await api('/api/axoboard/bootstrap', { cookie: viewer.cookie });
+  const viewerBootstrapText = await viewerBootstrap.text();
+  const viewerBootstrapBody = JSON.parse(viewerBootstrapText);
+  assert.equal(viewerBootstrap.status, 200);
+  assert.equal(viewerBootstrapBody.session.capabilities.readKpis, true);
+  assert.equal(viewerBootstrapBody.session.capabilities.manageKpis, false);
+  assert.equal(viewerBootstrapBody.session.capabilities.readDisplays, false);
+  assert.equal(viewerBootstrapBody.session.capabilities.manageDisplays, false);
+  assert.equal(viewerBootstrapBody.session.capabilities.readEvents, false);
+  assert.equal(viewerBootstrapBody.session.capabilities.readAutomations, false);
+  assert.equal(viewerBootstrapBody.session.capabilities.manageAutomationDrafts, false);
+  assert.equal(viewerBootstrapBody.session.capabilities.publishAutomations, false);
+  assert.equal(viewerBootstrapBody.session.capabilities.manageAutomationDestinations, false);
+  assert.equal(viewerBootstrapBody.session.capabilities.retryAutomationActions, false);
+  assert.equal(viewerBootstrapBody.connections.restricted, true);
+  assert.deepEqual(viewerBootstrapBody.connections.connections, []);
+  assert.deepEqual(viewerBootstrapBody.engagement.events, [], 'viewer bootstrap excludes event IDs, payloads, idempotency keys, and outbox state');
+  assert.ok(viewerBootstrapBody.engagement.summary.certified >= 1, 'viewer retains safe aggregate certification health');
+  assert.ok(viewerBootstrapBody.engagement.summary.latestVerifiedAt, 'viewer retains safe aggregate freshness');
+  assert.equal(viewerBootstrapBody.kpis.kpis.length, 1);
+  for (const sensitiveField of ['provider', 'connectionId', 'spreadsheetId', 'spreadsheetTitle', 'sheetId', 'sheetTitle', 'sourceRange', 'lastErrorCode', 'lineageHash']) {
+    assert.equal(sensitiveField in viewerBootstrapBody.kpis.kpis[0], false, `viewer KPI excludes ${sensitiveField}`);
+  }
+  assert.doesNotMatch(viewerBootstrapText, /google sheets|sheet_test_123456789|summary!d8:d9|sheets-owner@example\.com/i, 'viewer bootstrap excludes provider account and source identity');
+
+  const viewerKpis = await api('/api/axoboard/kpis', { cookie: viewer.cookie });
+  const viewerKpiText = await viewerKpis.text();
+  assert.equal(viewerKpis.status, 200);
+  assert.doesNotMatch(viewerKpiText, /google sheets|sheet_test_123456789|summary!d8:d9|sheets-owner@example\.com/i, 'viewer KPI list is source-redacted');
+
+  const viewerMutationCases = [
+    ['/api/axoboard/kpis/google/preview', { method: 'POST', body: selection }, 'editor_required'],
+    ['/api/axoboard/kpis', { method: 'POST', body: { ...selection, name: 'Forbidden KPI' } }, 'editor_required'],
+    ['/api/axoboard/dashboard', { method: 'PUT', body: { layout: { kpiOrder: [createdKpi.id] } } }, 'editor_required'],
+    [`/api/axoboard/kpis/${createdKpi.id}/sync`, { method: 'POST' }, 'editor_required'],
+    [`/api/axoboard/kpis/${createdKpi.id}`, { method: 'PUT', body: {} }, 'editor_required'],
+    [`/api/axoboard/kpis/${createdKpi.id}`, { method: 'DELETE' }, 'editor_required'],
+    [`/api/axoboard/integrations/connections/${connection.id}`, { method: 'DELETE' }, 'admin_required']
+  ];
+  for (const [path, options, code] of viewerMutationCases) {
+    const denied = await api(path, { ...options, cookie: viewer.cookie });
+    const deniedBody = await denied.json();
+    assert.equal(denied.status, 403, `viewer mutation is denied: ${options.method} ${path}`);
+    assert.equal(deniedBody.code, code);
+  }
 
   const initialDashboard = await api('/api/axoboard/dashboard', { cookie: first.cookie });
   assert.equal(initialDashboard.status, 200);
@@ -743,6 +907,14 @@ try {
 
   const crossTenantDelete = await api(`/api/axoboard/kpis/${createdKpi.id}`, { method: 'DELETE', cookie: second.cookie });
   assert.equal(crossTenantDelete.status, 404, 'another workspace cannot discover or delete the KPI');
+  const blockedDelete = await api(`/api/axoboard/kpis/${createdKpi.id}`, { method: 'DELETE', cookie: first.cookie });
+  const blockedDeleteBody = await blockedDelete.json();
+  assert.equal(blockedDelete.status, 409, 'KPIs with linked automations cannot be deleted');
+  assert.equal(blockedDeleteBody.code, 'kpi_has_linked_automations');
+  assert.equal(blockedDeleteBody.details.count, 1);
+  assert.equal(blockedDeleteBody.details.automations[0].id, automationId);
+  const archivedAutomation = await api(`/api/axoboard/automations/${automationId}/archive`, { method: 'POST', cookie: first.cookie, body: {} });
+  assert.equal(archivedAutomation.status, 200, await archivedAutomation.text());
   const deleteFirst = await api(`/api/axoboard/kpis/${createdKpi.id}`, { method: 'DELETE', cookie: first.cookie });
   assert.equal(deleteFirst.status, 200);
   const layoutAfterDelete = await api('/api/axoboard/dashboard', { cookie: first.cookie });

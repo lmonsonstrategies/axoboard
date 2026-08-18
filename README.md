@@ -48,6 +48,8 @@ Set `AXOBOARD_GOOGLE_CLIENT_ID`, `AXOBOARD_GOOGLE_CLIENT_SECRET`, `AXOBOARD_GOOG
 ## Key documents
 
 - [Release runbook](docs/RELEASE_RUNBOOK.md)
+- [Database restore runbook](docs/DATABASE_RESTORE_RUNBOOK.md)
+- [Automation operations runbook](docs/AUTOMATION_OPERATIONS.md)
 - [Stripe billing implementation plan](docs/STRIPE_BILLING_IMPLEMENTATION_PLAN.md)
 - [Integration setup wireframe](docs/INTEGRATION_SETUP_WIREFRAME.html)
 - [Integration launch checklist](docs/INTEGRATION_LAUNCH_CHECKLIST.md)

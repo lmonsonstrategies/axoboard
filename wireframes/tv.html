@@ -28,6 +28,16 @@
       <div class="tv-grid" id="runtimeGrid" aria-live="polite"></div>
       <footer><div class="page-controls"><button id="previousPage" type="button" aria-label="Previous page">←</button><button id="pauseRotation" type="button" aria-pressed="false">Pause</button><button id="nextPage" type="button" aria-label="Next page">→</button><span id="pageDots"></span></div><div class="freshness"><span id="runtimeFreshness">Loading assigned content</span><i></i><span>Refresh in <b id="refreshCountdown">45</b>s</span></div><button id="fullscreenButton" type="button" aria-label="Enter fullscreen">⛶</button></footer>
       <aside class="offline-banner" id="offlineBanner" hidden><b>Connection interrupted</b><span>Showing the last verified dashboard while this display reconnects.</span></aside>
+      <aside class="tv-celebration" id="automationCelebration" role="status" aria-live="assertive" aria-atomic="true" hidden>
+        <div class="tv-celebration-card">
+          <button id="dismissAutomationCelebration" type="button" aria-label="Dismiss celebration">×</button>
+          <span class="tv-celebration-mark" id="automationCelebrationMark" aria-hidden="true">W</span>
+          <small>TEAM MOMENT</small>
+          <h2 id="automationCelebrationTitle">Goal reached</h2>
+          <p id="automationCelebrationMessage">A trusted metric triggered this celebration.</p>
+          <span class="tv-celebration-source" id="automationCelebrationSource">Verified metric event</span>
+        </div>
+      </aside>
     </section>
   </main>
   <script src="/tv.js"></script>

@@ -10,6 +10,7 @@ import { createVault } from './lib/crypto-vault.mjs';
 import { createGoogleProvider } from './lib/google-provider.mjs';
 import { createGoogleIntegration } from './lib/google-integration.mjs';
 import { createDisplayRuntime } from './lib/display-runtime.mjs';
+import { classifyAutomationWorkerHealth, createAutomationRuntime } from './lib/automation-runtime.mjs';
 
 const { Pool } = pg;
 const appRoot = resolve(fileURLToPath(new URL('.', import.meta.url)));
@@ -38,10 +39,68 @@ const googleIntegration = createGoogleIntegration({
   pool, vault: oauthVault, provider: googleProvider, env: process.env,
   sendJson, readJson, currentSession, sameOrigin
 });
+const automationRuntime = createAutomationRuntime({
+  pool, env: process.env, sendJson, readJson, sameOrigin
+});
+const automationEventProducerReady = process.env.AXOBOARD_ENGAGEMENT_CORE_ENABLED !== 'false';
 const displayRuntime = createDisplayRuntime({
   pool, env: process.env, sendJson, readJson, sameOrigin, isRateLimited,
-  loadWorkspaceDisplay: googleIntegration.displaySnapshot
+  loadWorkspaceDisplay: googleIntegration.displaySnapshot,
+  loadAutomationEvents: automationRuntime.listTvEvents
 });
+const automationWorkerState = {
+  enabled: automationRuntime.ready && process.env.AXOBOARD_AUTOMATION_WORKER_ENABLED !== 'false',
+  running: false,
+  lastStartedAt: null,
+  lastCompletedAt: null,
+  lastErrorAt: null
+};
+const configuredAutomationWorkerInterval = Number(process.env.AXOBOARD_AUTOMATION_WORKER_INTERVAL_MS || 5_000);
+const automationWorkerIntervalMs = Math.max(1_000, Math.min(60_000,
+  Number.isFinite(configuredAutomationWorkerInterval) ? configuredAutomationWorkerInterval : 5_000));
+
+function automationWorkerStatus() {
+  return classifyAutomationWorkerHealth({
+    ready: automationRuntime.ready,
+    enabled: automationWorkerState.enabled,
+    dependenciesReady: automationEventProducerReady,
+    lastStartedAt: automationWorkerState.lastStartedAt,
+    lastCompletedAt: automationWorkerState.lastCompletedAt,
+    lastErrorAt: automationWorkerState.lastErrorAt,
+    intervalMs: automationWorkerIntervalMs
+  });
+}
+
+function startAutomationWorker() {
+  if (!automationWorkerState.enabled || !automationEventProducerReady) return async () => {};
+  let stopped = false;
+  const tick = async () => {
+    if (stopped || automationWorkerState.running) return;
+    automationWorkerState.running = true;
+    automationWorkerState.lastStartedAt = new Date();
+    try {
+      await automationRuntime.processDueEvents({ limit: 50 });
+      await automationRuntime.processDueActions({ limit: 50 });
+      automationWorkerState.lastCompletedAt = new Date();
+    } catch (error) {
+      automationWorkerState.lastErrorAt = new Date();
+      console.error('[automation-worker] tick failed', error.code || error.message || 'unknown');
+    } finally {
+      automationWorkerState.running = false;
+    }
+  };
+  const timer = setInterval(tick, automationWorkerIntervalMs);
+  timer.unref();
+  setTimeout(tick, Math.min(1_000, automationWorkerIntervalMs)).unref();
+  return async () => {
+    stopped = true;
+    clearInterval(timer);
+    const deadline = Date.now() + 9_000;
+    while (automationWorkerState.running && Date.now() < deadline) {
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
+    }
+  };
+}
 
 const contentTypes = new Map([
   ['.css', 'text/css; charset=utf-8'], ['.html', 'text/html; charset=utf-8'],
@@ -530,10 +589,20 @@ const server = createServer(async (req, res) => {
         try { await pool.query('SELECT 1'); database = 'healthy'; }
         catch { database = 'unhealthy'; }
       }
-      return sendJson(res, database === 'unhealthy' ? 503 : 200, {
-        ok: database !== 'unhealthy', service: 'axoboard-web',
+      const workerStatus = automationWorkerStatus();
+      const requiredWorkerUnhealthy = automationWorkerState.enabled && ['dependency_unavailable', 'degraded', 'stale'].includes(workerStatus);
+      const unhealthy = database === 'unhealthy' || requiredWorkerUnhealthy;
+      return sendJson(res, unhealthy ? 503 : 200, {
+        ok: !unhealthy, service: 'axoboard-web',
         version: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.APP_VERSION || 'development',
-        database, googleSheets: googleIntegration.ready ? 'configured' : 'not_configured'
+        database,
+        googleSheets: googleIntegration.ready ? 'configured' : 'not_configured',
+        automationCore: automationRuntime.ready ? 'configured' : 'not_configured',
+        automationEventProducer: automationEventProducerReady ? 'configured' : 'not_configured',
+        automationWorker: workerStatus,
+        automationWorkerLastStartedAt: automationWorkerState.lastStartedAt?.toISOString() || null,
+        automationWorkerLastCompletedAt: automationWorkerState.lastCompletedAt?.toISOString() || null,
+        automationWorkerLastErrorAt: automationWorkerState.lastErrorAt?.toISOString() || null
       });
     }
     if (url.pathname === '/api/integrations/oauth/google/callback' && req.method === 'GET') return await googleIntegration.handleCallback(req, res, url);
@@ -561,6 +630,8 @@ const server = createServer(async (req, res) => {
         return sendJson(res, 404, { error: 'Not found' });
       }
       if (url.pathname.startsWith('/api/axoboard/')) {
+        const automationHandled = await automationRuntime.handleAdmin(req, res, url, productSession);
+        if (automationHandled !== false) return automationHandled;
         const displayHandled = await displayRuntime.handleAdmin(req, res, url, productSession);
         if (displayHandled !== false) return displayHandled;
         const handled = await googleIntegration.handleProductRequest(req, res, url, productSession);
@@ -624,12 +695,14 @@ const server = createServer(async (req, res) => {
 
 await initializeDatabase();
 const stopGoogleScheduler = googleIntegration.startScheduler();
+const stopAutomationWorker = startAutomationWorker();
 server.listen(port, '0.0.0.0', () => console.log(`[axoboard-web] listening on 0.0.0.0:${port}`));
 
 function shutdown(signal) {
   console.log(`[axoboard-web] received ${signal}; shutting down`);
   stopGoogleScheduler();
-  server.close(async () => { if (pool) await pool.end(); process.exit(0); });
+  const automationStopped = stopAutomationWorker();
+  server.close(async () => { await automationStopped; if (pool) await pool.end(); process.exit(0); });
   setTimeout(() => process.exit(1), 10_000).unref();
 }
 

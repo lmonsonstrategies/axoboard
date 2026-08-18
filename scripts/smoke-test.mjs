@@ -93,6 +93,8 @@ function rawResponse(path, headers = {}) {
 try {
   const health = await waitForHealth();
   assert.equal(health.database, process.env.DATABASE_URL ? 'healthy' : 'not_configured', 'database health state');
+  assert.equal(health.automationCore, process.env.DATABASE_URL ? 'configured' : 'not_configured', 'automation core health state');
+  assert.ok(process.env.DATABASE_URL ? ['starting', 'healthy'].includes(health.automationWorker) : health.automationWorker === 'not_configured', 'automation worker exposes an honest startup state');
   const landing = await assertRoute('/', 200, /Your team should[\s\S]*<em>feel<\/em>[\s\S]*the numbers[\s\S]*moving/i);
   assert.match(landing.headers.get('content-security-policy') || '', /default-src 'self'/);
   const landingHtml = await (await fetch(`${baseUrl}/`)).text();
