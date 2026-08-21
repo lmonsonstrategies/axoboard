@@ -19,4 +19,3 @@ for (const file of files.sort()) {
   execFileSync(process.execPath, ['--check', file], { stdio: 'inherit' });
 }
 console.log(`Syntax checked ${files.length} module(s).`);
-

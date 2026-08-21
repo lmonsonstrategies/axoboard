@@ -39,7 +39,7 @@ Current product does **not** pass Apple acceptance: the focused local audit foun
 - `package.json` 50 — valid
 - `playwright.config.mjs` 46 — checked
 - `scripts/approve-qa-baselines.mjs` 25 — tested
-- `scripts/check-source.mjs` 22 — checked
+- `scripts/check-source.mjs` 21 — checked
 - `src/audit.mjs` 393 — tested
 - `src/config.mjs` 100 — tested
 - `src/detectors.mjs` 392 — tested
