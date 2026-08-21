@@ -6,3 +6,6 @@ dist/
 !.env.example
 *.log
 screenshots/
+reports/latest/
+test-results/
+playwright-report/

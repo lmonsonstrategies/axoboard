@@ -18,11 +18,23 @@
     "verify:production": "node scripts/verify-production.mjs",
     "audit:performance": "node scripts/browser-performance-audit.mjs",
     "release:check": "node scripts/release.mjs",
-    "release": "node scripts/release.mjs --promote"
+    "release": "node scripts/release.mjs --promote",
+    "qa:apple": "node src/audit.mjs",
+    "qa:apple:quick": "node src/audit.mjs --quick",
+    "qa:apple:test": "node --test tests/apple-qa/*.test.mjs",
+    "qa:apple:candidate": "playwright test tests/apple-qa/*.spec.mjs",
+    "qa:apple:smoke": "playwright test tests/apple-qa/public-surface.spec.mjs --project=desktop-1440",
+    "qa:apple:lint": "node scripts/check-source.mjs",
+    "qa:apple:verify": "npm run qa:apple:lint && npm run qa:apple:test"
   },
   "dependencies": {
     "pg": "^8.16.3",
     "stripe": "22.5.0"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "^1.55.0",
+    "ajv": "^8.17.1"
   },
   "engines": {
     "node": ">=22"

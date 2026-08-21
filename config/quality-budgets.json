@@ -1,0 +1,76 @@
+{
+  "$schema": "./quality-budgets.schema.json",
+  "schemaVersion": 1,
+  "product": "AxoBoard",
+  "mode": "public-non-mutating",
+  "failOn": ["P0", "P1"],
+  "allowedBaseUrls": [
+    "https://axoboard.io",
+    "http://127.0.0.1:*",
+    "http://localhost:*"
+  ],
+  "routes": [
+    { "id": "home", "path": "/", "checkpoint": true },
+    { "id": "features", "path": "/features", "checkpoint": true },
+    { "id": "integrations", "path": "/integrations", "checkpoint": true },
+    { "id": "pricing", "path": "/pricing", "checkpoint": true },
+    { "id": "faq", "path": "/faq", "checkpoint": false },
+    { "id": "login", "path": "/login", "checkpoint": true },
+    { "id": "signup", "path": "/signup", "checkpoint": true },
+    { "id": "privacy", "path": "/privacy", "checkpoint": false },
+    { "id": "terms", "path": "/terms", "checkpoint": false }
+  ],
+  "optionalRoutes": [
+    {
+      "id": "public-tv-player",
+      "env": "AXOBOARD_TV_PUBLIC_PATH",
+      "pattern": "^/display/[A-Za-z0-9_-]{8,128}$",
+      "checkpoint": true,
+      "surface": "white-label"
+    }
+  ],
+  "viewports": [
+    { "id": "phone-320", "width": 320, "height": 568, "dpr": 2 },
+    { "id": "phone-375", "width": 375, "height": 812, "dpr": 3 },
+    { "id": "phone-390", "width": 390, "height": 844, "dpr": 3 },
+    { "id": "phone-430", "width": 430, "height": 932, "dpr": 3 },
+    { "id": "tablet-portrait", "width": 768, "height": 1024, "dpr": 2 },
+    { "id": "tablet-landscape", "width": 1024, "height": 768, "dpr": 2 },
+    { "id": "desktop-1280", "width": 1280, "height": 800, "dpr": 1 },
+    { "id": "desktop-1440", "width": 1440, "height": 900, "dpr": 2 },
+    { "id": "tv-1920", "width": 1920, "height": 1080, "dpr": 1 }
+  ],
+  "canonicalScreenshotViewports": ["phone-375", "desktop-1440", "tv-1920"],
+  "budgets": {
+    "horizontalOverflowPx": 1,
+    "minimumTouchTargetPx": 44,
+    "minimumBodyFontPx": 16,
+    "minimumTvBodyFontPx": 24,
+    "maximumTextLineLengthCh": 75,
+    "maximumMotionMsReduced": 100,
+    "lcpMs": 2500,
+    "cls": 0.1,
+    "inpMs": 200,
+    "navigationMs": 4000,
+    "consoleErrors": 0,
+    "failedSameOriginResources": 0,
+    "brokenSameOriginLinks": 0,
+    "imageDensityRatio": 0.95,
+    "tvSafeAreaPercent": 5
+  },
+  "sensitivePatterns": [
+    "murphy\\s*door",
+    "murphydoor",
+    "workspace-murphy",
+    "n8n-murphy-sales",
+    "BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY",
+    "AIza[0-9A-Za-z_-]{30,}"
+  ],
+  "qualityPolicy": {
+    "p0P1BlockRelease": true,
+    "maximumP2ForPremiumAcceptance": 0,
+    "expertReviewRequired": true,
+    "visualBaselineUpdatesRequireIndependentApproval": true
+  }
+}
+
