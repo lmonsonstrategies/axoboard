@@ -7,5 +7,6 @@ dist/
 *.log
 screenshots/
 reports/latest/
+reports/runs/
 test-results/
 playwright-report/

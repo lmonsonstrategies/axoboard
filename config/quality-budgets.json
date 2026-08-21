@@ -10,15 +10,46 @@
     "http://localhost:*"
   ],
   "routes": [
-    { "id": "home", "path": "/", "checkpoint": true },
-    { "id": "features", "path": "/features", "checkpoint": true },
-    { "id": "integrations", "path": "/integrations", "checkpoint": true },
-    { "id": "pricing", "path": "/pricing", "checkpoint": true },
-    { "id": "faq", "path": "/faq", "checkpoint": false },
-    { "id": "login", "path": "/login", "checkpoint": true },
-    { "id": "signup", "path": "/signup", "checkpoint": true },
-    { "id": "privacy", "path": "/privacy", "checkpoint": false },
-    { "id": "terms", "path": "/terms", "checkpoint": false }
+    { "id": "home", "path": "/", "surface": "landing", "state": "default", "themes": ["light"], "viewports": ["phone-320", "phone-375", "phone-390", "phone-430", "tablet-portrait", "tablet-landscape", "desktop-1280", "desktop-1440", "wide-1728"], "checkpoint": true, "baselineRequired": true },
+    { "id": "features", "path": "/features", "surface": "landing", "state": "features", "themes": ["light"], "viewports": ["phone-375", "tablet-portrait", "desktop-1440"], "checkpoint": true, "baselineRequired": true },
+    { "id": "integrations", "path": "/integrations", "surface": "landing", "state": "integrations", "themes": ["light"], "viewports": ["phone-375", "tablet-portrait", "desktop-1440"], "checkpoint": true, "baselineRequired": true },
+    { "id": "pricing", "path": "/pricing", "surface": "landing", "state": "pricing", "themes": ["light"], "viewports": ["phone-375", "tablet-portrait", "desktop-1440"], "checkpoint": true, "baselineRequired": true },
+    { "id": "faq", "path": "/faq", "surface": "landing", "state": "faq", "themes": ["light"], "viewports": ["phone-375", "desktop-1440"], "checkpoint": false, "baselineRequired": false },
+    { "id": "login", "path": "/login", "surface": "auth", "state": "login", "themes": ["light"], "viewports": ["phone-320", "phone-390", "tablet-portrait", "desktop-1440"], "checkpoint": true, "baselineRequired": true },
+    { "id": "signup", "path": "/signup", "surface": "auth", "state": "signup-step-1", "themes": ["light"], "viewports": ["phone-320", "phone-390", "tablet-portrait", "desktop-1440"], "checkpoint": true, "baselineRequired": true },
+    { "id": "app-auth-guard", "path": "/app", "expectedPath": "/login", "surface": "app", "state": "unauthenticated-redirect", "themes": ["light"], "viewports": ["phone-390", "desktop-1440"], "checkpoint": true, "baselineRequired": false },
+    { "id": "tv-pairing", "path": "/tv", "surface": "tv", "state": "pairing-empty", "themes": ["dark"], "viewports": ["tablet-landscape", "desktop-1440", "wide-1728", "tv-1920"], "checkpoint": true, "baselineRequired": true },
+    { "id": "privacy", "path": "/privacy", "surface": "legal", "state": "default", "themes": ["light"], "viewports": ["phone-375", "desktop-1440"], "checkpoint": false, "baselineRequired": false },
+    { "id": "terms", "path": "/terms", "surface": "legal", "state": "default", "themes": ["light"], "viewports": ["phone-375", "desktop-1440"], "checkpoint": false, "baselineRequired": false }
+  ],
+  "fixtureRoutes": [
+    { "id": "fixture-landing", "path": "/fixtures/good?state=landing", "surface": "landing", "state": "default", "themes": ["light", "dark"], "viewports": ["phone-375", "tablet-portrait", "desktop-1440"], "checkpoint": true, "baselineRequired": false },
+    { "id": "fixture-auth", "path": "/fixtures/good?state=auth", "surface": "auth", "state": "login-error", "themes": ["light", "dark"], "viewports": ["phone-375", "desktop-1440"], "checkpoint": true, "baselineRequired": false },
+    { "id": "fixture-app-empty", "path": "/fixtures/good?state=app-empty", "surface": "app", "state": "empty", "themes": ["light", "dark"], "viewports": ["phone-375", "tablet-portrait", "desktop-1440"], "checkpoint": true, "baselineRequired": false },
+    { "id": "fixture-app-loading", "path": "/fixtures/good?state=app-loading", "surface": "app", "state": "loading", "themes": ["light", "dark"], "viewports": ["phone-375", "desktop-1440"], "checkpoint": true, "baselineRequired": false },
+    { "id": "fixture-app-error", "path": "/fixtures/good?state=app-error", "surface": "app", "state": "error", "themes": ["light", "dark"], "viewports": ["phone-375", "desktop-1440"], "checkpoint": true, "baselineRequired": false },
+    { "id": "fixture-tv", "path": "/fixtures/good?state=tv", "surface": "tv", "state": "live", "themes": ["dark"], "viewports": ["tablet-landscape", "tv-1920"], "checkpoint": true, "baselineRequired": false }
+  ],
+  "badFixtureRoutes": [
+    { "id": "fixture-deliberate-bad", "path": "/fixtures/bad", "surface": "fixture", "state": "deliberate-hard-failures", "themes": ["light"], "viewports": ["phone-375"], "checkpoint": true, "baselineRequired": false }
+  ],
+  "humanOnlyScenarios": [
+    {
+      "id": "authenticated-app-critical-states",
+      "surface": "app",
+      "states": ["default", "empty", "loading", "error"],
+      "viewports": ["phone-375", "tablet-portrait", "desktop-1440"],
+      "themes": ["light"],
+      "blocker": "Requires a disposable non-production tenant and authenticated browser state; customer and production credentials are prohibited."
+    },
+    {
+      "id": "paired-tv-live-state",
+      "surface": "tv",
+      "states": ["live", "offline", "stale", "celebration"],
+      "viewports": ["tablet-landscape", "tv-1920"],
+      "themes": ["dark"],
+      "blocker": "Requires a disposable paired display token backed by synthetic data; production display tokens are prohibited."
+    }
   ],
   "optionalRoutes": [
     {
@@ -26,7 +57,11 @@
       "env": "AXOBOARD_TV_PUBLIC_PATH",
       "pattern": "^/display/[A-Za-z0-9_-]{8,128}$",
       "checkpoint": true,
-      "surface": "white-label"
+      "surface": "white-label",
+      "state": "live",
+      "themes": ["dark"],
+      "viewports": ["tablet-landscape", "desktop-1440", "tv-1920"],
+      "baselineRequired": true
     }
   ],
   "viewports": [
@@ -38,9 +73,10 @@
     { "id": "tablet-landscape", "width": 1024, "height": 768, "dpr": 2 },
     { "id": "desktop-1280", "width": 1280, "height": 800, "dpr": 1 },
     { "id": "desktop-1440", "width": 1440, "height": 900, "dpr": 2 },
+    { "id": "wide-1728", "width": 1728, "height": 1117, "dpr": 2 },
     { "id": "tv-1920", "width": 1920, "height": 1080, "dpr": 1 }
   ],
-  "canonicalScreenshotViewports": ["phone-375", "desktop-1440", "tv-1920"],
+  "canonicalScreenshotViewports": ["phone-375", "tablet-portrait", "desktop-1440", "tv-1920"],
   "budgets": {
     "horizontalOverflowPx": 1,
     "minimumTouchTargetPx": 44,
@@ -56,7 +92,10 @@
     "failedSameOriginResources": 0,
     "brokenSameOriginLinks": 0,
     "imageDensityRatio": 0.95,
-    "tvSafeAreaPercent": 5
+    "tvSafeAreaPercent": 5,
+    "maximumScreenshotDiffRatio": 0.001,
+    "maximumPositiveTabIndex": 0,
+    "maximumLayoutShiftBeforeFonts": 1
   },
   "sensitivePatterns": [
     "murphy\\s*door",
@@ -70,7 +109,9 @@
     "p0P1BlockRelease": true,
     "maximumP2ForPremiumAcceptance": 0,
     "expertReviewRequired": true,
-    "visualBaselineUpdatesRequireIndependentApproval": true
+    "visualBaselineUpdatesRequireIndependentApproval": true,
+    "qualitativeDimensions": ["hierarchy", "typography", "spacing-rhythm", "alignment-grid", "density", "surface-material", "icon-consistency", "microcopy", "interaction-states", "motion-intent", "perceived-polish", "brand-distinctiveness"],
+    "minimumQualitativeScore": 4,
+    "releaseBlockerRules": ["runtime.*", "navigation.route-status", "layout.horizontal-overflow", "interaction.touch-target", "accessibility.*", "axe.*", "motion.reduced-motion-parity", "visual.baseline-*", "visual.screenshot-instability", "privacy.*"]
   }
 }
-

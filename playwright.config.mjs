@@ -2,11 +2,12 @@ import { defineConfig } from '@playwright/test';
 import { loadConfig, resolveChromiumExecutable } from './src/config.mjs';
 
 const quality = await loadConfig();
-const baseURL = process.env.AXOBOARD_BASE_URL || 'https://axoboard.io';
+const baseURL = process.env.AXOBOARD_BASE_URL;
+if (!baseURL) throw new Error('AXOBOARD_BASE_URL is required for Playwright candidate tests. Use npm run qa:apple for an isolated local run.');
 const executablePath = resolveChromiumExecutable();
 
 export default defineConfig({
-  testDir: './tests',
+  testDir: './tests/apple-qa',
   testMatch: /.*\.spec\.mjs/,
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
@@ -43,4 +44,3 @@ export default defineConfig({
     }
   }))
 });
-

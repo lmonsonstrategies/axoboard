@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "kind": "axoboard-human-authenticated-qa-evidence",
+  "reviewer": "",
+  "reviewedAt": "",
+  "environment": "disposable-non-production",
+  "scenarios": [
+    {
+      "id": "authenticated-app-critical-states",
+      "passed": false,
+      "artifactManifest": "",
+      "notes": ""
+    },
+    {
+      "id": "paired-tv-live-state",
+      "passed": false,
+      "artifactManifest": "",
+      "notes": ""
+    }
+  ]
+}

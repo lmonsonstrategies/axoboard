@@ -3,7 +3,7 @@
   "$id": "https://axoboard.io/schemas/apple-qa-quality-budgets-v1.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "product", "mode", "failOn", "allowedBaseUrls", "routes", "viewports", "budgets", "qualityPolicy"],
+  "required": ["schemaVersion", "product", "mode", "failOn", "allowedBaseUrls", "routes", "fixtureRoutes", "badFixtureRoutes", "humanOnlyScenarios", "viewports", "budgets", "qualityPolicy"],
   "properties": {
     "$schema": { "type": "string" },
     "schemaVersion": { "const": 1 },
@@ -20,6 +20,32 @@
       "type": "array",
       "minItems": 1,
       "items": { "$ref": "#/$defs/route" }
+    },
+    "fixtureRoutes": {
+      "type": "array",
+      "minItems": 6,
+      "items": { "$ref": "#/$defs/route" }
+    },
+    "badFixtureRoutes": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/route" }
+    },
+    "humanOnlyScenarios": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "surface", "states", "viewports", "themes", "blocker"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "surface": { "enum": ["app", "tv"] },
+          "states": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+          "viewports": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+          "themes": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["light", "dark"] } },
+          "blocker": { "type": "string", "minLength": 20 }
+        }
+      }
     },
     "optionalRoutes": {
       "type": "array",
@@ -39,7 +65,7 @@
     },
     "viewports": {
       "type": "array",
-      "minItems": 9,
+      "minItems": 10,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -62,12 +88,20 @@
     "qualityPolicy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["p0P1BlockRelease", "maximumP2ForPremiumAcceptance", "expertReviewRequired", "visualBaselineUpdatesRequireIndependentApproval"],
+      "required": ["p0P1BlockRelease", "maximumP2ForPremiumAcceptance", "expertReviewRequired", "visualBaselineUpdatesRequireIndependentApproval", "qualitativeDimensions", "minimumQualitativeScore", "releaseBlockerRules"],
       "properties": {
         "p0P1BlockRelease": { "const": true },
         "maximumP2ForPremiumAcceptance": { "type": "integer", "minimum": 0 },
         "expertReviewRequired": { "const": true },
-        "visualBaselineUpdatesRequireIndependentApproval": { "const": true }
+        "visualBaselineUpdatesRequireIndependentApproval": { "const": true },
+        "qualitativeDimensions": {
+          "type": "array",
+          "minItems": 12,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "minimumQualitativeScore": { "type": "number", "minimum": 0, "maximum": 5 },
+        "releaseBlockerRules": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
       }
     }
   },
@@ -75,16 +109,20 @@
     "route": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "checkpoint"],
+      "required": ["id", "checkpoint", "surface", "state", "themes", "viewports", "baselineRequired"],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "path": { "type": "string", "pattern": "^/" },
         "checkpoint": { "type": "boolean" },
-        "surface": { "enum": ["public", "white-label"] },
+        "surface": { "enum": ["landing", "auth", "app", "tv", "legal", "white-label", "fixture"] },
+        "state": { "type": "string", "minLength": 1 },
+        "themes": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["light", "dark"] } },
+        "viewports": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "baselineRequired": { "type": "boolean" },
+        "expectedPath": { "type": "string", "pattern": "^/" },
         "env": { "type": "string" },
         "pattern": { "type": "string" }
       }
     }
   }
 }
-

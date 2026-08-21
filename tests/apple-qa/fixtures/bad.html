@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Deliberately bad QA fixture</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #aaa; background: #fff; font: 12px Arial, sans-serif; }
+    .overflow { width: 900px; padding: 4px; }
+    button { width: 20px; height: 20px; padding: 0; border: 0; color: #bbb; background: #fff; }
+    button:focus { outline: 0; box-shadow: none; }
+    .motion { width: 30px; height: 30px; background: #ddd; animation: drift 2s infinite alternate; }
+    @keyframes drift { to { transform: translateX(300px); } }
+  </style>
+</head>
+<body>
+  <div class="overflow">
+    <h2>Broken on purpose</h2>
+    <p>This page intentionally violates the hard UI gates.</p>
+    <button tabindex="3"></button>
+    <div class="motion"></div>
+    <img src="/fixtures/missing.png" alt="Missing fixture resource" />
+  </div>
+  <script>
+    console.error('deliberate fixture console error');
+    fetch('/fixtures/mutation', { method: 'POST' }).catch(() => {});
+  </script>
+</body>
+</html>

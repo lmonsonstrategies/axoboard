@@ -2,7 +2,7 @@ import { access, readFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import Ajv from 'ajv';
+import Ajv2020 from 'ajv/dist/2020.js';
 
 const moduleDirectory = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(moduleDirectory, '..');
@@ -16,7 +16,7 @@ export async function loadConfig() {
   ]);
   const config = JSON.parse(rawConfig);
   const schema = JSON.parse(rawSchema);
-  const ajv = new Ajv({ allErrors: true, strict: false });
+  const ajv = new Ajv2020({ allErrors: true, strict: false });
   const validate = ajv.compile(schema);
   if (!validate(config)) {
     const detail = validate.errors.map((error) => `${error.instancePath || '/'} ${error.message}`).join('; ');
@@ -98,4 +98,3 @@ for (const candidate of [
 }
 
 export { configPath, projectRoot, schemaPath };
-

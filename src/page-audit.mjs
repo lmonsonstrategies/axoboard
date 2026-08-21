@@ -4,15 +4,19 @@ import {
   detectAxeViolations,
   detectBrokenLinks,
   detectFixedCollisions,
+  detectFocusOrder,
   detectFocusTrap,
+  detectFontReadiness,
   detectHorizontalOverflow,
   detectImageDensity,
   detectInvisibleFocus,
   detectMissingAccessibleNames,
+  detectMutationAttempts,
   detectPerformance,
   detectReducedMotion,
   detectRuntimeErrors,
   detectSensitiveIdentity,
+  detectStateSemantics,
   detectStructure,
   detectTypography,
   detectUndersizedTargets
@@ -21,6 +25,7 @@ import {
 export async function installPerformanceObservers(page) {
   await page.addInitScript(() => {
     window.__AXO_QA_VITALS__ = { lcpMs: null, cls: 0, inpMs: null };
+    window.__AXO_QA_FONT_LAYOUT__ = { before: [], after: [], shiftCount: 0 };
     try {
       new PerformanceObserver((list) => {
         const entries = list.getEntries();
@@ -44,6 +49,21 @@ export async function installPerformanceObservers(page) {
         }
       }).observe({ type: 'event', buffered: true, durationThreshold: 16 });
     } catch {}
+    document.addEventListener('DOMContentLoaded', () => {
+      const sample = () => [...document.querySelectorAll('h1,h2,h3,p,button,label')].slice(0, 40).map((element) => {
+        const rect = element.getBoundingClientRect();
+        return { tag: element.tagName, x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      });
+      window.__AXO_QA_FONT_LAYOUT__.before = sample();
+      document.fonts?.ready.then(() => {
+        window.__AXO_QA_FONT_LAYOUT__.after = sample();
+        window.__AXO_QA_FONT_LAYOUT__.shiftCount = window.__AXO_QA_FONT_LAYOUT__.after.reduce((count, item, index) => {
+          const before = window.__AXO_QA_FONT_LAYOUT__.before[index];
+          if (!before || before.tag !== item.tag) return count + 1;
+          return count + (Math.abs(before.x - item.x) > 1 || Math.abs(before.y - item.y) > 1 || Math.abs(before.width - item.width) > 1 || Math.abs(before.height - item.height) > 1 ? 1 : 0);
+        }, 0);
+      }).catch(() => {});
+    }, { once: true });
   });
 }
 
@@ -121,15 +141,26 @@ export async function collectDomSnapshot(page, viewport, budgets) {
       }
       const direct = element.getAttribute('aria-label') || element.getAttribute('alt') || element.getAttribute('title');
       if (direct?.trim()) return direct.trim();
-      if (element.labels?.length) return [...element.labels].map((label) => label.textContent || '').join(' ').trim();
+      if (element.labels?.length) {
+        const associatedLabel = [...element.labels].map((label) => label.textContent || '').join(' ').replace(/\s+/g, ' ').trim();
+        if (associatedLabel) return associatedLabel;
+      }
+      const enclosingLabel = element.closest('label');
+      if (enclosingLabel) {
+        const clone = enclosingLabel.cloneNode(true);
+        clone.querySelectorAll('input,select,textarea,button').forEach((control) => control.remove());
+        const labelText = (clone.textContent || '').replace(/\s+/g, ' ').trim();
+        if (labelText) return labelText;
+      }
       return (element.innerText || element.textContent || '').replace(/\s+/g, ' ').trim();
     };
 
-    const overflowPx = Math.max(0, document.documentElement.scrollWidth - window.innerWidth);
+    const layoutViewportWidth = document.documentElement.clientWidth || window.innerWidth;
+    const overflowPx = Math.max(0, document.documentElement.scrollWidth - layoutViewportWidth);
     const overflowOffenders = [...document.querySelectorAll('body *')]
       .filter(visible)
       .map((element) => ({ element, rect: element.getBoundingClientRect() }))
-      .filter(({ rect }) => rect.right > window.innerWidth + budgets.horizontalOverflowPx || rect.left < -budgets.horizontalOverflowPx)
+      .filter(({ rect }) => rect.right > layoutViewportWidth + budgets.horizontalOverflowPx || rect.left < -budgets.horizontalOverflowPx)
       .slice(0, 30)
       .map(({ element, rect }) => ({
         selector: selectorFor(element),
@@ -148,6 +179,9 @@ export async function collectDomSnapshot(page, viewport, budgets) {
           tag: element.tagName.toLowerCase(),
           width: Math.round(rect.width * 10) / 10,
           height: Math.round(rect.height * 10) / 10,
+          tabIndex: element.tabIndex,
+          role: element.getAttribute('role') || null,
+          disabled: Boolean(element.disabled || element.getAttribute('aria-disabled') === 'true'),
           accessibleName: accessibleName(element).slice(0, 100)
         };
       });
@@ -225,8 +259,32 @@ export async function collectDomSnapshot(page, viewport, budgets) {
 
     const bodyFontPx = Number.parseFloat(getComputedStyle(document.body).fontSize);
     const tvTextTooSmall = viewport.id.startsWith('tv-')
-      ? textBlocks.filter((block) => block.fontPx < budgets.minimumTvBodyFontPx).slice(0, 30)
+      ? [...document.querySelectorAll('p,li,dd,dt,button,label,input,select,textarea,small,span')]
+        .filter((element) => visible(element) && (element.textContent || element.value || '').trim())
+        .map((element) => ({ selector: selectorFor(element), fontPx: Number.parseFloat(getComputedStyle(element).fontSize), sample: (element.textContent || element.value || '').replace(/\s+/g, ' ').trim().slice(0, 100) }))
+        .filter((block) => block.fontPx < budgets.minimumTvBodyFontPx)
+        .slice(0, 30)
       : [];
+
+    const visibleElements = [...document.querySelectorAll('body *')].filter(visible);
+    const styleSample = visibleElements.slice(0, 250).map((element) => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return {
+        selector: selectorFor(element),
+        tag: element.tagName.toLowerCase(),
+        x: Math.round(rect.x),
+        width: Math.round(rect.width),
+        fontPx: Number.parseFloat(style.fontSize),
+        fontWeight: Number.parseInt(style.fontWeight, 10) || 400,
+        lineHeightPx: Number.parseFloat(style.lineHeight) || null,
+        fontFamily: style.fontFamily,
+        color: style.color,
+        backgroundColor: style.backgroundColor,
+        borderRadiusPx: Number.parseFloat(style.borderRadius) || 0,
+        gapPx: Number.parseFloat(style.gap) || 0
+      };
+    });
 
     const links = [...document.querySelectorAll('a[href]')]
       .filter(visible)
@@ -244,16 +302,30 @@ export async function collectDomSnapshot(page, viewport, budgets) {
       bodyFontPx,
       overlongTextBlocks: textBlocks.filter((block) => block.estimatedCharsPerLine > budgets.maximumTextLineLengthCh).slice(0, 30),
       tvTextTooSmall,
-      mainCount: document.querySelectorAll('main').length,
-      h1Count: document.querySelectorAll('h1').length,
+      mainCount: [...document.querySelectorAll('main')].filter(visible).length,
+      h1Count: headings.filter((heading) => heading.tagName === 'H1').length,
       headingSkips,
       fixedCollisions,
-      links
+      links,
+      statusRegionCount: document.querySelectorAll('[role="status"],[aria-live="polite"]').length,
+      alertRegionCount: document.querySelectorAll('[role="alert"],[aria-live="assertive"]').length,
+      busyRegionCount: document.querySelectorAll('[aria-busy="true"]').length,
+      qualitative: {
+        visibleElementCount: visibleElements.length,
+        sectionCount: document.querySelectorAll('main section,main article').length,
+        wordCount: (document.body.innerText.match(/\S+/g) || []).length,
+        headingSizes: headings.map((heading) => Number.parseFloat(getComputedStyle(heading).fontSize)),
+        styleSample,
+        inlineSvgCount: document.querySelectorAll('svg').length,
+        emojiIconCount: [...document.querySelectorAll('[aria-hidden="true"],button,a')].filter((element) => /[\u2190-\u2BFF\u{1F300}-\u{1FAFF}]/u.test(element.textContent || '')).length,
+        brandMentions: (document.body.innerText.match(/AxoBoard/gi) || []).length
+      }
     };
   }, { viewport, budgets });
 }
 
 export async function auditKeyboard(page, maxStops = 35) {
+  await page.addStyleTag({ content: 'html,*{scroll-behavior:auto!important}' });
   const focusableCount = await page.locator('a[href],button,input:not([type="hidden"]),select,textarea,[tabindex]:not([tabindex="-1"])').count();
   const stops = [];
   const sequence = [];
@@ -262,14 +334,31 @@ export async function auditKeyboard(page, maxStops = 35) {
   const iterations = Math.min(maxStops, focusableCount + 2);
   for (let index = 0; index < iterations; index += 1) {
     await page.keyboard.press('Tab');
+    await page.evaluate(() => new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame))));
+    await page.waitForFunction(() => {
+      const element = document.activeElement;
+      if (!element || element === document.body) return true;
+      const rect = element.getBoundingClientRect();
+      return rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < (document.documentElement.clientWidth || innerWidth);
+    }, null, { timeout: 400 }).catch(() => {});
     const stop = await page.evaluate(() => {
       const element = document.activeElement;
       if (!element || element === document.body) return null;
       const style = getComputedStyle(element);
       const rect = element.getBoundingClientRect();
-      const selector = element.id
-        ? `#${CSS.escape(element.id)}`
-        : `${element.tagName.toLowerCase()}${element.getAttribute('name') ? `[name="${CSS.escape(element.getAttribute('name'))}"]` : ''}`;
+      const selector = (() => {
+        if (element.id) return `#${CSS.escape(element.id)}`;
+        const parts = [];
+        let current = element;
+        while (current && current !== document.body && parts.length < 6) {
+          let part = current.tagName.toLowerCase();
+          const siblings = current.parentElement ? [...current.parentElement.children].filter((candidate) => candidate.tagName === current.tagName) : [];
+          if (siblings.length > 1) part += `:nth-of-type(${siblings.indexOf(current) + 1})`;
+          parts.unshift(part);
+          current = current.parentElement;
+        }
+        return `body > ${parts.join(' > ')}`;
+      })();
       const outlineWidth = Number.parseFloat(style.outlineWidth) || 0;
       const hasOutline = style.outlineStyle !== 'none' && outlineWidth >= 1;
       const hasShadow = style.boxShadow !== 'none' && style.boxShadow !== '';
@@ -339,6 +428,22 @@ export async function collectPerformance(page) {
   });
 }
 
+export async function collectFontReadiness(page) {
+  return page.evaluate(() => {
+    const layout = window.__AXO_QA_FONT_LAYOUT__ || {};
+    const bodyFamily = getComputedStyle(document.body).fontFamily;
+    const heading = document.querySelector('h1,h2,h3');
+    return {
+      status: document.fonts?.status || 'unsupported',
+      bodyFamily,
+      headingFamily: heading ? getComputedStyle(heading).fontFamily : null,
+      loadedFaceCount: document.fonts ? [...document.fonts].filter((font) => font.status === 'loaded').length : null,
+      failedFaceCount: document.fonts ? [...document.fonts].filter((font) => font.status === 'error').length : null,
+      layoutShiftCount: layout.shiftCount || 0
+    };
+  });
+}
+
 export async function checkSameOriginLinks(requestContext, links, baseOrigin) {
   const safeLinks = links.filter(({ href }) => {
     try {
@@ -362,11 +467,12 @@ export async function checkSameOriginLinks(requestContext, links, baseOrigin) {
   return output;
 }
 
-export async function runPageAudit({ page, requestContext, route, viewport, config, baseOrigin, checkLinks = false }) {
-  const context = { route: route.path, viewport: viewport.id, budgets: config.budgets };
+export async function runPageAudit({ page, requestContext, route, viewport, theme = 'light', config, baseOrigin, checkLinks = false }) {
+  const context = { route: route.id, state: route.state, theme, viewport: viewport.id, budgets: config.budgets };
   const runtime = attachRuntimeObservers(page, baseOrigin);
   await enforceReadOnlyNetwork(page, runtime);
   await installPerformanceObservers(page);
+  await page.emulateMedia({ colorScheme: theme, reducedMotion: 'no-preference' });
   const response = await page.goto(new URL(route.path, baseOrigin).toString(), { waitUntil: 'domcontentloaded', timeout: 20_000 });
   await page.waitForLoadState('networkidle', { timeout: 4_000 }).catch(() => {});
   await page.evaluate(() => document.fonts?.ready).catch(() => {});
@@ -376,6 +482,7 @@ export async function runPageAudit({ page, requestContext, route, viewport, conf
   const keyboard = await auditKeyboard(page);
   const reducedMotion = await collectReducedMotion(page, config.budgets.maximumMotionMsReduced);
   const metrics = await collectPerformance(page);
+  const fonts = await collectFontReadiness(page);
   const axe = await new AxeBuilder({ page }).analyze();
   const linkResults = checkLinks ? await checkSameOriginLinks(requestContext, snapshot.links, baseOrigin) : [];
 
@@ -384,26 +491,32 @@ export async function runPageAudit({ page, requestContext, route, viewport, conf
     ...detectUndersizedTargets(snapshot.targets, context),
     ...detectMissingAccessibleNames(snapshot.missingNameCandidates, context),
     ...detectInvisibleFocus(keyboard.stops, context),
+    ...detectFocusOrder(keyboard, snapshot.targets, context),
     ...detectFocusTrap(keyboard, context),
     ...detectReducedMotion(reducedMotion, context),
     ...detectImageDensity(snapshot.images, context),
     ...detectTypography(snapshot, context),
     ...detectStructure(snapshot, context),
+    ...detectStateSemantics(snapshot, context),
     ...detectFixedCollisions(snapshot.fixedCollisions, context),
     ...detectSensitiveIdentity(snapshot.bodyText, config.sensitivePatterns, context),
     ...detectPerformance(metrics, context),
+    ...detectFontReadiness(fonts, context),
     ...detectRuntimeErrors(runtime, context),
+    ...detectMutationAttempts(runtime, context),
     ...detectAxeViolations(axe.violations, context),
     ...detectBrokenLinks(linkResults, context)
   ];
 
   if (!response || response.status() >= 400) {
     findings.push({
-      id: `navigation-route-${route.id}-${viewport.id}`,
+      id: `navigation-route-${route.id}-${viewport.id}-${theme}`,
       rule: 'navigation.route-status',
       severity: 'P1',
       source: 'automated',
-      route: route.path,
+      route: route.id,
+      state: route.state,
+      theme,
       viewport: viewport.id,
       selector: null,
       message: `Route returned ${response?.status() || 'no response'}.`,
@@ -412,14 +525,36 @@ export async function runPageAudit({ page, requestContext, route, viewport, conf
     });
   }
 
+  const finalUrl = new URL(page.url());
+  if (route.expectedPath && finalUrl.pathname !== route.expectedPath) {
+    findings.push({
+      id: `navigation-redirect-${route.id}-${viewport.id}-${theme}`,
+      rule: 'navigation.redirect-contract',
+      severity: 'P1',
+      source: 'automated',
+      route: route.id,
+      state: route.state,
+      theme,
+      viewport: viewport.id,
+      selector: null,
+      message: `Expected navigation to ${route.expectedPath}; finished at ${finalUrl.pathname}.`,
+      evidence: { expectedPath: route.expectedPath, actualPath: finalUrl.pathname },
+      screenshot: null
+    });
+  }
+
   return {
     route: route.path,
     routeId: route.id,
+    state: route.state,
+    theme,
     surface: route.surface,
     viewport,
     title: snapshot.title,
     status: response?.status() || null,
     metrics,
+    fonts,
+    finalPath: finalUrl.pathname,
     blockedMutations: runtime.blockedMutations,
     counts: {
       interactiveTargets: snapshot.targets.length,
@@ -427,7 +562,8 @@ export async function runPageAudit({ page, requestContext, route, viewport, conf
       axeViolations: axe.violations.length,
       linksChecked: linkResults.length
     },
-    findings: deduplicateFindings(findings)
+    findings: deduplicateFindings(findings),
+    qualitativeSnapshot: snapshot.qualitative
   };
 }
 
@@ -449,4 +585,3 @@ function safeUrl(candidate) {
     return String(candidate).slice(0, 200);
   }
 }
-

@@ -2,16 +2,18 @@ import { createHash } from 'node:crypto';
 
 const severities = ['P0', 'P1', 'P2', 'P3'];
 
-export function createFinding({ rule, severity, route, viewport, selector = null, message, evidence = {}, screenshot = null, source = 'automated' }) {
+export function createFinding({ rule, severity, route, state = 'default', theme = 'light', viewport, selector = null, message, evidence = {}, screenshot = null, source = 'automated' }) {
   if (!severities.includes(severity)) throw new Error(`Unknown severity ${severity}`);
   if (!rule || !route || !viewport || !message) throw new Error('Finding is missing required identity fields.');
-  const fingerprint = [rule, route, viewport, selector || '', JSON.stringify(evidence)].join('|');
+  const fingerprint = [rule, route, state, theme, viewport, selector || '', JSON.stringify(evidence)].join('|');
   return {
     id: `${rule}-${createHash('sha256').update(fingerprint).digest('hex').slice(0, 12)}`,
     rule,
     severity,
     source,
     route,
+    state,
+    theme,
     viewport,
     selector,
     message,
@@ -81,6 +83,41 @@ export function detectFocusTrap(focusAudit, context) {
     message: 'Keyboard navigation is trapped on a focusable element.',
     evidence: focusAudit
   })];
+}
+
+export function detectFocusOrder(focusAudit, targets, context) {
+  const findings = [];
+  const positiveTabIndex = targets.filter((target) => target.tabIndex > context.budgets.maximumPositiveTabIndex);
+  for (const target of positiveTabIndex) {
+    findings.push(createFinding({
+      rule: 'accessibility.positive-tabindex',
+      severity: 'P1',
+      ...context,
+      selector: target.selector,
+      message: `Positive tabindex ${target.tabIndex} overrides logical DOM focus order.`,
+      evidence: target
+    }));
+  }
+  for (const stop of focusAudit.stops.filter((item) => !item.inViewport)) {
+    findings.push(createFinding({
+      rule: 'accessibility.offscreen-focus',
+      severity: 'P1',
+      ...context,
+      selector: stop.selector,
+      message: 'Keyboard focus moved to content that is outside the viewport.',
+      evidence: stop
+    }));
+  }
+  if (focusAudit.focusableCount > 0 && focusAudit.stops.length === 0) {
+    findings.push(createFinding({
+      rule: 'accessibility.focus-order-empty',
+      severity: 'P1',
+      ...context,
+      message: 'Interactive controls exist but Tab navigation reached no focus stop.',
+      evidence: { focusableCount: focusAudit.focusableCount }
+    }));
+  }
+  return findings;
 }
 
 export function detectReducedMotion(records, context) {
@@ -240,6 +277,74 @@ export function detectPerformance(metrics, context) {
     }));
   }
   return findings;
+}
+
+export function detectFontReadiness(fonts, context) {
+  const findings = [];
+  if (fonts.status !== 'loaded') {
+    findings.push(createFinding({
+      rule: 'typography.font-readiness',
+      severity: 'P1',
+      ...context,
+      selector: 'html',
+      message: `Document fonts did not reach the loaded state (status: ${fonts.status}).`,
+      evidence: fonts
+    }));
+  }
+  if (fonts.layoutShiftCount > context.budgets.maximumLayoutShiftBeforeFonts) {
+    findings.push(createFinding({
+      rule: 'typography.font-layout-shift',
+      severity: 'P1',
+      ...context,
+      selector: 'body',
+      message: 'Text geometry shifted while fonts settled.',
+      evidence: fonts
+    }));
+  }
+  return findings;
+}
+
+export function detectStateSemantics(snapshot, context) {
+  const findings = [];
+  const state = context.state || '';
+  if (state.includes('loading') && snapshot.statusRegionCount === 0 && snapshot.busyRegionCount === 0) {
+    findings.push(createFinding({
+      rule: 'state.loading-semantics',
+      severity: 'P1',
+      ...context,
+      message: 'Loading state has neither a status live region nor aria-busy context.',
+      evidence: { statusRegionCount: snapshot.statusRegionCount, busyRegionCount: snapshot.busyRegionCount }
+    }));
+  }
+  if (state.includes('error') && snapshot.alertRegionCount === 0) {
+    findings.push(createFinding({
+      rule: 'state.error-semantics',
+      severity: 'P1',
+      ...context,
+      message: 'Error state is not exposed through an alert region.',
+      evidence: { alertRegionCount: snapshot.alertRegionCount }
+    }));
+  }
+  if (state === 'empty' && snapshot.targets.length === 0) {
+    findings.push(createFinding({
+      rule: 'state.empty-recovery-action',
+      severity: 'P2',
+      ...context,
+      message: 'Empty state offers no discoverable recovery or creation action.',
+      evidence: { interactiveTargets: snapshot.targets.length }
+    }));
+  }
+  return findings;
+}
+
+export function detectMutationAttempts(runtime, context) {
+  return runtime.blockedMutations.map((attempt) => createFinding({
+    rule: 'safety.mutation-attempt',
+    severity: 'P0',
+    ...context,
+    message: `QA navigation attempted a blocked ${attempt.method} request.`,
+    evidence: attempt
+  }));
 }
 
 export function detectRuntimeErrors(runtime, context) {

@@ -19,13 +19,19 @@
     "audit:performance": "node scripts/browser-performance-audit.mjs",
     "release:check": "node scripts/release.mjs",
     "release": "node scripts/release.mjs --promote",
-    "qa:apple": "node src/audit.mjs",
-    "qa:apple:quick": "node src/audit.mjs --quick",
+    "qa:apple": "node src/audit.mjs --target local --mode gate",
+    "qa:apple:quick": "node src/audit.mjs --target local --mode diagnostic --quick --no-baselines",
+    "qa:apple:list": "node src/audit.mjs --list",
+    "qa:apple:dry-run": "node src/audit.mjs --target local --dry-run",
+    "qa:apple:fixture": "node src/audit.mjs --target fixture --mode harness --no-baselines",
+    "qa:apple:fixture:bad": "node src/audit.mjs --target fixture-bad --mode harness --no-baselines --expect-failure",
+    "qa:apple:baseline:approve": "node scripts/approve-qa-baselines.mjs",
     "qa:apple:test": "node --test tests/apple-qa/*.test.mjs",
-    "qa:apple:candidate": "playwright test tests/apple-qa/*.spec.mjs",
+    "qa:apple:candidate": "node src/audit.mjs --target url --mode gate",
+    "qa:apple:playwright": "playwright test tests/apple-qa/*.spec.mjs",
     "qa:apple:smoke": "playwright test tests/apple-qa/public-surface.spec.mjs --project=desktop-1440",
     "qa:apple:lint": "node scripts/check-source.mjs",
-    "qa:apple:verify": "npm run qa:apple:lint && npm run qa:apple:test"
+    "qa:apple:verify": "npm run qa:apple:lint && npm run qa:apple:test && npm run qa:apple:fixture && npm run qa:apple:fixture:bad"
   },
   "dependencies": {
     "pg": "^8.16.3",
@@ -34,7 +40,9 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",
     "@playwright/test": "^1.55.0",
-    "ajv": "^8.17.1"
+    "ajv": "^8.17.1",
+    "pixelmatch": "^7.1.0",
+    "pngjs": "^7.0.0"
   },
   "engines": {
     "node": ">=22"
