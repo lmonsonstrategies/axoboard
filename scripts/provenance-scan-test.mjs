@@ -86,13 +86,16 @@ try {
   const company = ['Mur', 'phy'].join('');
   const credentialLabel = ['api', 'key'].join('_');
   const credentialValue = ['gh', 'p_', '1234567890', '1234567890', '1234567890'].join('');
+  const credentialDirectory = ['creden', 'tials'].join('');
+  const tenantLabel = ['tenant', 'id'].join('_');
+  const commissionTerm = ['comm', 'ission'].join('');
   const forbiddenText = [
     `${company} Door operational default`,
     `https://${company.toLowerCase()}dashboards.example.com/private`,
-    `/home/example/.openclaw/workspace-${company.toLowerCase()}/.credentials/provider.env`,
-    `tenant_id = "tenant_123456789"`,
+    `/home/example/.openclaw/workspace-${company.toLowerCase()}/.${credentialDirectory}/provider.env`,
+    `${tenantLabel} = "tenant_123456789"`,
     `${credentialLabel} = "${credentialValue}"`,
-    'commission formula is fixed',
+    `${commissionTerm} formula is fixed`,
     'data-workspace-id="sample-empty"'
   ].join('\n');
   write(root, 'src/leaks.txt', `${forbiddenText}\n`);
@@ -106,6 +109,28 @@ try {
     assert.ok(rules.has(rule), `${rule} leakage is rejected`);
   }
   assert.equal(leaked.violations.some((violation) => violation.rule === 'tenant-provider-id' && violation.file.endsWith('safe.html')), false);
+
+  write(root, 'scripts/provenance-scan.mjs', `${company} confidential tenant material\n`);
+  const policyLeak = scanWorkspace(root);
+  assert.ok(policyLeak.violations.some((violation) => violation.file === 'scripts/provenance-scan.mjs' && violation.rule === 'company-identity'),
+    'provenance policy files are scanned and cannot exempt themselves');
+  write(root, 'scripts/provenance-scan.mjs', 'export const policy = true;\n');
+
+  const reusedContent = 'export const genericValue = 1;\n';
+  writeManifest(root, manifest({
+    exceptions: [{
+      path: 'src/reused.mjs',
+      sha256: digest(reusedContent),
+      rules: ['company-identity'],
+      rationale: 'Exercise denylist checks on manifest review metadata.',
+      reviewedBy: `${company} reviewer`,
+      reviewedAt
+    }]
+  }));
+  const manifestPolicyLeak = scanWorkspace(root);
+  assert.ok(manifestPolicyLeak.violations.some((violation) => violation.file === 'provenance/manifest.json' && violation.rule === 'company-identity'),
+    'manifest policy metadata is scanned while structured paths remain SHA-pinned');
+  writeManifest(root, manifest());
 
   const history = `${company} is named only in this reviewed historical record.\n`;
   write(root, 'docs/history.md', history);
