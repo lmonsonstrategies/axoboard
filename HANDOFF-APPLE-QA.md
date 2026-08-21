@@ -4,9 +4,10 @@
 
 - Workspace: `/home/ops/.openclaw/workspace-personal/projects/axoboard-apple-qa`
 - Branch: `feat/apple-ui-qa`
-- Base: `63877ddd82ba666ffcee80d0b6a0403e5b6e9aac`
-- Commits: `2d22dec` scaffold preservation; `a654dcc` final implementation
-- Push/release/production writes: none
+- Original base: `63877ddd82ba666ffcee80d0b6a0403e5b6e9aac`
+- Current foundation: merged `origin/main@40b414cc51d65dd3c9c76a92b5a62d4edd2196eb` in `45a6444`
+- QA commits: `2d22dec` scaffold preservation; `a654dcc` implementation; `e3ae3cb` source-manifest normalization; `786d6f7` SHA-bound provenance integration
+- Branch transport: `feat/apple-ui-qa` pushed over the pinned SSH/443 AxoBoard deploy-key route; no `main`, Railway, or production mutation
 
 ## Outcome
 
@@ -16,8 +17,10 @@ Current product does **not** pass Apple acceptance: the focused local audit foun
 
 ## Verification proof
 
-- `npm run qa:apple:lint`: 27 modules passed.
+- `npm run qa:apple:lint`: 32 modules passed after release-foundation integration.
 - `npm run qa:apple:test`: 13/13 passed.
+- `npm run qa:apple:verify`: deterministic good fixture passed and deliberate bad fixture produced every required blocker.
+- `npm run verify`: passed with disposable PostgreSQL and no skipped database suite; provenance scanned 204 files with SHA-bound exceptions; dependency audit reported zero vulnerabilities.
 - `npm run check`; `npm run test:smoke`; `npm audit --omit=dev`: passed, public smoke without PostgreSQL, 0 vulnerabilities.
 - Good fixture: 26/26 checks, zero P0–P3; screenshots/report: `reports/runs/final-fixture-pass-20260821/`.
 - Bad fixture: expected-failure contract passed; every required blocker detected; report: `reports/runs/final-fixture-bad-20260821/`.
@@ -63,4 +66,4 @@ Current product does **not** pass Apple acceptance: the focused local audit foun
 
 ## Rollback / next
 
-Rollback: `git revert a654dcc 2d22dec`. Next: Copper review, then fix product P1s and obtain independent baseline, qualitative, and disposable-tenant approvals. No push was performed.
+Rollback the integration with ordinary revert commits; do not rewrite shared history. Revert the current handoff tip, `786d6f7`, merge `45a6444`, and the QA implementation commits as needed. Next: exact-SHA CI plus independent review, then fix product P1s and obtain independent baseline, qualitative, and disposable-tenant approvals. The harness remains a release gate; it does not certify the currently red product.
