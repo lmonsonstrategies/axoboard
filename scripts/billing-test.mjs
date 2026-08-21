@@ -4,19 +4,20 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import Stripe from 'stripe';
+import { allocateLoopbackPorts, integrationDatabase, recordDatabaseSuitePass } from './test-support.mjs';
 
-if (!process.env.DATABASE_URL) {
+const databaseUrl = integrationDatabase('billing');
+if (!databaseUrl) {
   console.log('AxoBoard Stripe billing test skipped: DATABASE_URL is not configured.');
   process.exit(0);
 }
 const { Pool } = pg;
-const appPort = 43220;
-const stripePort = 43221;
+const [appPort, stripePort] = await allocateLoopbackPorts(2);
 const baseUrl = `http://127.0.0.1:${appPort}`;
 const webhookSecret = 'whsec_axoboard_billing_test_secret';
 const starterPrice = 'price_axoboard_starter_test';
 const stripeSigner = new Stripe('sk_test_signer');
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false, max: 2 });
+const pool = new Pool({ connectionString: databaseUrl, ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false, max: 2 });
 const testEmails = [];
 const testWorkspaceIds = [];
 const testEventIds = [];
@@ -185,6 +186,7 @@ try {
   assert.equal((await pool.query('SELECT status FROM subscriptions WHERE workspace_id = $1', [first.workspaceId])).rows[0].status, 'past_due');
   assert.equal((await fetch(`${baseUrl}/app`, { headers: { Cookie: first.cookie }, redirect: 'manual' })).status, 302);
 
+  recordDatabaseSuitePass('billing', { coverage: 'checkout, signed webhooks, entitlements, tenant isolation' });
   console.log('AxoBoard Stripe billing test passed: Checkout fail-closed, signed/idempotent webhooks, ordering, portal, revocation, and tenant isolation.');
   completed = true;
 } finally {

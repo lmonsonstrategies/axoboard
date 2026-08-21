@@ -12,14 +12,18 @@ Railway production follows only `main`. Feature branches never deploy to `axoboa
 
 ## Normal release
 
-1. Create a focused branch: `feat/<short-name>` or `fix/<short-name>` from current `origin/main`.
+1. Create a focused branch: `feat/<short-name>`, `fix/<short-name>`, or `release/<short-name>` from current `origin/main`.
 2. Preserve unrelated work and run the smallest relevant local tests while editing.
-3. Before the final commit, run `npm run verify` once. Use local Docker/Gitleaks only when changing the image, dependencies, build pipeline, auth, secrets, or deployment surface; CI always runs all three gates.
+3. On the final unchanged commit, run `npm run verify` once. Locally it provisions and removes a PostgreSQL 18 container on a random loopback port. GitHub Actions supplies an isolated PostgreSQL service. A caller-provided local `DATABASE_URL` is accepted only when it is loopback-only and explicitly attested with `AXOBOARD_VERIFY_DATABASE_DISPOSABLE=1`. Use local Docker/Gitleaks image and history gates when changing the image, dependencies, build pipeline, auth, secrets, or deployment surface; CI always runs all three gates.
 4. Commit and push the branch. GitHub runs PostgreSQL tests, the full-history secret scan, and the cached production-image build in parallel.
 5. Run `npm run release:check` for a read-only release preflight.
 6. Run `npm run release` to fast-forward the exact CI-passed SHA to `main`, wait for main CI and Railway, and verify production automatically.
 
-The release command refuses dirty worktrees, stale branches, non-fast-forward promotion, unpushed commits, and feature SHAs without successful CI. It never force-pushes.
+The release command refuses dirty worktrees, stale branches, non-fast-forward promotion, unpushed commits, and feature SHAs without successful CI. It accepts the same `feat/*`, `fix/*`, and `release/*` families that trigger push CI. It never force-pushes.
+
+`npm run verify` is the only full-suite entry point. It removes fixed app/provider ports, forces database-backed execution, and requires structured execution receipts from the smoke, engagement, automation, display, billing, and Google suites. Missing PostgreSQL or a missing receipt is a failure in CI/full verification; standalone local suite commands may still report that database coverage was skipped.
+
+Release preflight resolves `ci.yml` through the GitHub Actions API and pins its numeric workflow ID. A passing run must also match the AxoBoard repository, workflow name/path, push event, branch, exact 40-character head SHA, `completed` status, and `success` conclusion. The same identity contract is applied to the post-promotion `main` run.
 
 ## Risk-tiered local validation
 
@@ -29,6 +33,14 @@ The release command refuses dirty worktrees, stale branches, non-fast-forward pr
 - Every pushed branch still receives the same remote test, secret, and image gates; risk tiers only prevent wasteful local repetition.
 
 The release script polls GitHub Actions and `/healthz`, so read-only status checks need no Railway or GitHub token. Git push authentication remains the only publishing credential.
+
+## One-way provenance gate
+
+`npm run test:provenance` scans tracked and unignored files for legacy company identity/domains/workspace paths, credential material, provider or tenant IDs, branded assets, and business-specific assumptions. New findings fail the release.
+
+Any reuse from an upstream repository must be recorded in `provenance/manifest.json`: the repository must appear in `allowedSources`, the entry must pin a full lowercase 40-character source commit SHA, and every destination must exist as a regular file. The manifest is strict—unknown fields, unsafe paths, duplicate destinations, malformed timestamps, or malformed JSON fail closed.
+
+Historical review artifacts may be exempted only by exact file SHA-256 and named rule. Changing one byte invalidates the exception and restores scanning. Provenance policy files cannot exempt themselves.
 
 Database migrations run automatically before the HTTP listener starts. Each migration is transactional, serialized with an advisory lock, and checksum-verified against `schema_migrations`. A migration failure prevents the new container from becoming healthy; Railway retains the prior healthy deployment for rollback. Never modify an applied migration file.
 

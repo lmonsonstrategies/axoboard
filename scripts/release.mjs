@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
+import {
+  findExpectedReleaseWorkflowRun,
+  isExpectedOriginUrl,
+  isReleaseBranch,
+  isSuccessfulReleaseWorkflowRun,
+  RELEASE_REPOSITORY,
+  RELEASE_WORKFLOW
+} from '../lib/release-policy.mjs';
 
-const repository = process.env.GITHUB_REPOSITORY || 'lmonsonstrategies/axoboard';
+const repository = String(process.env.GITHUB_REPOSITORY || RELEASE_REPOSITORY);
+assert.equal(repository.toLowerCase(), RELEASE_REPOSITORY, `release repository must be ${RELEASE_REPOSITORY}`);
 const baseUrl = String(process.env.BASE_URL || 'https://axoboard.io').replace(/\/$/, '');
 const pollMs = Number(process.env.RELEASE_POLL_MS || 10_000);
 const timeoutMs = Number(process.env.RELEASE_TIMEOUT_MS || 20 * 60_000);
@@ -16,12 +25,32 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function githubRuns(sha, branch = '') {
-  const url = new URL(`https://api.github.com/repos/${repository}/actions/runs`);
+async function githubJson(path) {
+  const response = await fetch(`https://api.github.com/repos/${repository}${path}`, {
+    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'axoboard-release', 'X-GitHub-Api-Version': '2022-11-28' }
+  });
+  assert.equal(response.status, 200, `GitHub Actions API returned ${response.status} for ${path}`);
+  return response.json();
+}
+
+async function expectedWorkflow() {
+  const workflow = await githubJson(`/actions/workflows/${encodeURIComponent(RELEASE_WORKFLOW.file)}`);
+  assert.ok(Number.isInteger(workflow.id) && workflow.id > 0, 'release workflow id is invalid');
+  assert.equal(workflow.name, RELEASE_WORKFLOW.name, 'release workflow name changed');
+  assert.equal(workflow.path, RELEASE_WORKFLOW.path, 'release workflow path changed');
+  assert.equal(workflow.state, 'active', 'release workflow must be active');
+  return workflow;
+}
+
+async function githubRuns(workflowId, sha, branch) {
+  const url = new URL(`https://api.github.com/repos/${repository}/actions/workflows/${workflowId}/runs`);
   url.searchParams.set('head_sha', sha);
-  if (branch) url.searchParams.set('branch', branch);
+  url.searchParams.set('branch', branch);
+  url.searchParams.set('event', RELEASE_WORKFLOW.event);
   url.searchParams.set('per_page', '20');
-  const response = await fetch(url, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'axoboard-release' } });
+  const response = await fetch(url, {
+    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'axoboard-release', 'X-GitHub-Api-Version': '2022-11-28' }
+  });
   assert.equal(response.status, 200, `GitHub Actions API returned ${response.status}`);
   return (await response.json()).workflow_runs || [];
 }
@@ -41,15 +70,20 @@ async function waitFor(label, check) {
 const branch = run('git', ['branch', '--show-current']);
 const sha = run('git', ['rev-parse', 'HEAD']);
 const shortSha = sha.slice(0, 7);
-assert.match(branch, /^(feat|fix|release)\//, `release from feat/*, fix/*, or release/*; current branch is ${branch}`);
+assert.ok(isReleaseBranch(branch), `release from feat/*, fix/*, or release/*; current branch is ${branch}`);
 assert.equal(run('git', ['status', '--porcelain']), '', 'worktree must be clean before release');
+assert.ok(isExpectedOriginUrl(run('git', ['remote', 'get-url', 'origin']), repository), `origin must be the pinned ${repository} SSH repository`);
 run('git', ['fetch', '--quiet', 'origin', 'main', branch]);
 assert.equal(spawnSync('git', ['merge-base', '--is-ancestor', 'origin/main', sha]).status, 0, 'release must fast-forward from origin/main');
 assert.equal(run('git', ['rev-parse', `origin/${branch}`]), sha, `push ${branch} before release`);
 
-const featureRun = (await githubRuns(sha, branch)).find((item) => item.event === 'push' && item.status === 'completed');
-assert.ok(featureRun, `no completed feature CI run found for ${shortSha}`);
+const workflow = await expectedWorkflow();
+const candidate = { repository, sha, branch, workflowId: workflow.id };
+const featureRun = findExpectedReleaseWorkflowRun(await githubRuns(workflow.id, sha, branch), candidate);
+assert.ok(featureRun, `no ${RELEASE_WORKFLOW.name} (${RELEASE_WORKFLOW.path}) push run found for ${branch}@${shortSha}`);
+assert.equal(featureRun.status, 'completed', `feature CI is ${featureRun.status}: ${featureRun.html_url}`);
 assert.equal(featureRun.conclusion, 'success', `feature CI concluded ${featureRun.conclusion}: ${featureRun.html_url}`);
+assert.ok(isSuccessfulReleaseWorkflowRun(featureRun, candidate), 'feature CI identity or success contract did not match');
 console.log(`Preflight passed: ${branch}@${shortSha}; ${featureRun.html_url}`);
 
 if (!promote) {
@@ -61,10 +95,11 @@ run('git', ['push', 'origin', `${sha}:refs/heads/main`], { stdio: 'inherit' });
 console.log(`Promoted ${shortSha} to main.`);
 
 await waitFor('main CI', async () => {
-  const item = (await githubRuns(sha, 'main')).find((candidate) => candidate.event === 'push');
+  const mainCandidate = { repository, sha, branch: 'main', workflowId: workflow.id };
+  const item = findExpectedReleaseWorkflowRun(await githubRuns(workflow.id, sha, 'main'), mainCandidate);
   if (!item) return { done: false };
   if (item.status === 'completed' && item.conclusion !== 'success') return { failed: `${item.conclusion} (${item.html_url})` };
-  return item.status === 'completed' ? { done: true, value: item } : { done: false };
+  return isSuccessfulReleaseWorkflowRun(item, mainCandidate) ? { done: true, value: item } : { done: false };
 });
 
 await waitFor('Railway production deployment', async () => {

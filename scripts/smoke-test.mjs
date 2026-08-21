@@ -3,10 +3,13 @@ import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { request as httpRequest } from 'node:http';
 import pg from 'pg';
+import { allocateLoopbackPorts, integrationDatabase, recordDatabaseSuitePass } from './test-support.mjs';
 
 const { Pool } = pg;
+const databaseUrl = integrationDatabase('smoke');
 
-const port = 43219;
+const [allocatedPort] = await allocateLoopbackPorts();
+const port = allocatedPort;
 const baseUrl = `http://127.0.0.1:${port}`;
 const child = spawn(process.execPath, ['server.mjs'], {
   env: { ...process.env, PORT: String(port), NODE_ENV: 'test' },
@@ -16,8 +19,8 @@ let logs = '';
 let testWorkspaceId = null;
 let testUserId = null;
 let testEmail = null;
-const testPool = process.env.DATABASE_URL
-  ? new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false, max: 2 })
+const testPool = databaseUrl
+  ? new Pool({ connectionString: databaseUrl, ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false, max: 2 })
   : null;
 child.stdout.on('data', (chunk) => { logs += chunk; });
 child.stderr.on('data', (chunk) => { logs += chunk; });
@@ -92,9 +95,9 @@ function rawResponse(path, headers = {}) {
 
 try {
   const health = await waitForHealth();
-  assert.equal(health.database, process.env.DATABASE_URL ? 'healthy' : 'not_configured', 'database health state');
-  assert.equal(health.automationCore, process.env.DATABASE_URL ? 'configured' : 'not_configured', 'automation core health state');
-  assert.ok(process.env.DATABASE_URL ? ['starting', 'healthy'].includes(health.automationWorker) : health.automationWorker === 'not_configured', 'automation worker exposes an honest startup state');
+  assert.equal(health.database, databaseUrl ? 'healthy' : 'not_configured', 'database health state');
+  assert.equal(health.automationCore, databaseUrl ? 'configured' : 'not_configured', 'automation core health state');
+  assert.ok(databaseUrl ? ['starting', 'healthy'].includes(health.automationWorker) : health.automationWorker === 'not_configured', 'automation worker exposes an honest startup state');
   const landing = await assertRoute('/', 200, /Your team should[\s\S]*<em>feel<\/em>[\s\S]*the numbers[\s\S]*moving/i);
   assert.match(landing.headers.get('content-security-policy') || '', /default-src 'self'/);
   const landingHtml = await (await fetch(`${baseUrl}/`)).text();
@@ -143,7 +146,7 @@ try {
   await assertRoute('/%2e%2e/%2e%2e/etc/passwd', 404);
   assert.ok([400, 404].includes(await rawStatus('/%2e%2e/%2e%2e/etc/passwd')), 'raw encoded traversal is rejected');
 
-  if (process.env.DATABASE_URL) {
+  if (databaseUrl) {
     const anonymousSession = await (await fetch(`${baseUrl}/api/auth/session`)).json();
     assert.deepEqual(anonymousSession, { authenticated: false, canAccessApp: false });
     const email = `qa-${Date.now()}@example.com`;
@@ -211,7 +214,8 @@ try {
     const anonymousSession = await (await fetch(`${baseUrl}/api/auth/session`)).json();
     assert.deepEqual(anonymousSession, { authenticated: false, canAccessApp: false, accountStorage: 'not_configured' });
   }
-  console.log(`AxoBoard smoke test passed${process.env.DATABASE_URL ? ' with PostgreSQL auth' : ' (public routes; PostgreSQL not configured)'}.`);
+  if (databaseUrl) recordDatabaseSuitePass('smoke', { coverage: 'auth, entitlement, migrations, protected assets' });
+  console.log(`AxoBoard smoke test passed${databaseUrl ? ' with PostgreSQL auth' : ' (public routes; PostgreSQL not configured)'}.`);
 } finally {
   if (child.exitCode === null && child.signalCode === null) {
     child.kill('SIGTERM');

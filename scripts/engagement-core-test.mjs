@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { calculateGoalIntelligence, recordSnapshotEngagement } from '../lib/engagement-core.mjs';
+import { integrationDatabase, recordDatabaseSuitePass, strictVerificationRequired } from './test-support.mjs';
+
+const databaseUrl = integrationDatabase('engagement');
+let databaseCoverage = false;
 
 const monthly = calculateGoalIntelligence({
   actualValue: 82400,
@@ -46,12 +50,14 @@ assert.deepEqual(lowerIsBetter.crossedMilestones, [], 'lower-is-better goals do 
 assert.throws(() => calculateGoalIntelligence({ actualValue: 1, targetValue: 0 }), /cannot be zero/);
 assert.throws(() => calculateGoalIntelligence({ actualValue: 1, targetValue: 2, timezone: 'Mars/Olympus' }), /Timezone/);
 
-if (process.env.DATABASE_URL) {
+if (databaseUrl) {
   const { Pool } = pg;
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL,
+  const pool = new Pool({ connectionString: databaseUrl,
     ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false, max: 2 });
   const schema = await pool.query("SELECT to_regclass('public.goal_configs') AS goal_configs");
+  if (strictVerificationRequired()) assert.ok(schema.rows[0].goal_configs, 'migration 011 must run before full engagement verification');
   if (schema.rows[0].goal_configs) {
+    databaseCoverage = true;
     const workspaceId = randomUUID();
     const connectionId = randomUUID();
     const mappingId = randomUUID();
@@ -107,4 +113,5 @@ if (process.env.DATABASE_URL) {
   await pool.end();
 }
 
+if (databaseCoverage) recordDatabaseSuitePass('engagement', { coverage: 'goal persistence and retirement' });
 console.log('AxoBoard engagement core test passed: calendar-aware pace, projections, direction, milestones, and goal retirement.');

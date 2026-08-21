@@ -5,6 +5,7 @@ import { createServer } from 'node:http';
 import pg from 'pg';
 import { createVault } from '../lib/crypto-vault.mjs';
 import { googleIntegrationInternals } from '../lib/google-integration.mjs';
+import { allocateLoopbackPorts, integrationDatabase, recordDatabaseSuitePass } from './test-support.mjs';
 
 const repPayload = googleIntegrationInternals.displayPayload(
   [['Rep', 'Sales'], ['Andrew', '10'], ['Jacob', '20']],
@@ -123,19 +124,19 @@ assert.throws(
   'paired comparisons must contain one prepared value for every displayed label'
 );
 
-if (!process.env.DATABASE_URL) {
+const databaseUrl = integrationDatabase('google');
+if (!databaseUrl) {
   console.log('AxoBoard Google integration test skipped: DATABASE_URL is not configured.');
   process.exit(0);
 }
 
 const { Pool } = pg;
-const appPort = 43222;
-const providerPort = 43223;
+const [appPort, providerPort] = await allocateLoopbackPorts(2);
 const baseUrl = `http://127.0.0.1:${appPort}`;
 const providerBaseUrl = `http://127.0.0.1:${providerPort}`;
 const encryptionKey = randomBytes(32).toString('base64');
 const vault = createVault(encryptionKey);
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false, max: 2 });
+const pool = new Pool({ connectionString: databaseUrl, ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false, max: 2 });
 const testEmails = [];
 const workspaceIds = [];
 let expectedChallenge = '';
@@ -966,6 +967,7 @@ try {
   const emptyList = await api('/api/axoboard/kpis', { cookie: first.cookie });
   assert.deepEqual((await emptyList.json()).kpis, [], 'soft-deleted KPIs no longer render on the workspace dashboard');
 
+  recordDatabaseSuitePass('google', { coverage: 'OAuth, mapping, sync, disconnect, tenant isolation' });
   console.log('AxoBoard Google integration test passed: OAuth, recent-first discovery, virtual-scroll grid preview, non-adjacent ranges, rep-metric-goal scorecards, header-aware comparisons, workspace layout, delete, sync, disconnect, and tenant isolation.');
 } finally {
   app.kill('SIGTERM');
