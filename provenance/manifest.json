@@ -1,0 +1,168 @@
+{
+  "$schema": "./manifest.schema.json",
+  "version": 1,
+  "allowedSources": [],
+  "entries": [],
+  "exceptions": [
+    {
+      "path": ".state.md",
+      "sha256": "11ff02f5c1cac6e70af2a3f1acafae3faa14d8d5ea9ce53b37d274b002160a3d",
+      "rules": ["company-identity", "legacy-workspace-path", "credential-material", "business-assumption"],
+      "rationale": "Preserve the exact historical project-state audit record.",
+      "reviewedBy": "AxoBoard release gate",
+      "reviewedAt": "2026-08-21T18:00:00.000Z"
+    },
+    {
+      "path": "artifacts/qa/murphy-blank-dashboard-desktop.png",
+      "sha256": "7128dd451df7f6b3e2c33389cf8cbac988314ea91f9ca689595b1cd809bf61b9",
+      "rules": ["brand-asset"],
+      "rationale": "Retain an immutable historical tenant-isolation QA artifact.",
+      "reviewedBy": "AxoBoard release gate",
+      "reviewedAt": "2026-08-21T18:00:00.000Z"
+    },
+    {
+      "path": "artifacts/qa/murphy-blank-dashboard-mobile.png",
+      "sha256": "46fc47c8a30bfb77bb004822ef45001b9b50f4d3a6248711641515495540fff4",
+      "rules": ["brand-asset"],
+      "rationale": "Retain an immutable historical tenant-isolation QA artifact.",
+      "reviewedBy": "AxoBoard release gate",
+      "reviewedAt": "2026-08-21T18:00:00.000Z"
+    },
+    {
+      "path": "artifacts/qa/murphy-blank-integrations-desktop.png",
+      "sha256": "ad2a848b8998295658074a87bfd3dc74664db23d52dd69a6c4a7acc64950d288",
+      "rules": ["brand-asset"],
+      "rationale": "Retain an immutable historical tenant-isolation QA artifact.",
+      "reviewedBy": "AxoBoard release gate",
+      "reviewedAt": "2026-08-21T18:00:00.000Z"
+    },
+    {
+      "path": "artifacts/qa/murphy-fresh-oauth-google-desktop.png",
+      "sha256": "ff1c9ea574cba466fe761a7022294967ebb476c15e1bde8e98130c2d28e248be",
+      "rules": ["brand-asset"],
+      "rationale": "Retain an immutable historical tenant-isolation QA artifact.",
+      "reviewedBy": "AxoBoard release gate",
+      "reviewedAt": "2026-08-21T18:00:00.000Z"
+    },
+    {
+      "path": "artifacts/qa/murphy-fresh-oauth-mobile.png",
+      "sha256": "5dd1234584c2ddd1efde7aad7ddf1273f9b95ef28e625259b2ac8e9d71ccd70b",
+      "rules": ["brand-asset"],
+      "rationale": "Retain an immutable historical tenant-isolation QA artifact.",
+      "reviewedBy": "AxoBoard release gate",
+      "reviewedAt": "2026-08-21T18:00:00.000Z"
+    },
+    {
+      "path": "artifacts/qa/murphy-synthetic-kpis-desktop.png",
+      "sha256": "989a4ecc74ea46f5f8c69f72eedecb19c4abeb0faa3dd1ebcfdbd21e43ade2b7",
+      "rules": ["brand-asset"],
+      "rationale": "Retain an immutable historical tenant-isolation QA artifact.",
+      "reviewedBy": "AxoBoard release gate",
+      "reviewedAt": "2026-08-21T18:00:00.000Z"
+    },
+    {
+      "path": "docs/BLANK_CUSTOMER_OAUTH_TEST_PLAN.md",
+      "sha256": "8343ff76e7601968bac19354e9f212df90ce1b8baf267beb56b2120312d57954",
+      "rules": ["company-identity"],
+      "rationale": "Preserve the reviewed historical blank-customer isolation plan.",
+      "reviewedBy": "AxoBoard release gate",
+      "reviewedAt": "2026-08-21T18:00:00.000Z"
+    },
+    {
+      "path": "docs/CUSTOMIZATION_PRODUCT_SPEC.md",
+      "sha256": "45491218364037c16bb9be68e88c998d0b3cca15289fc8a2d1ea8516e701ce3b",
+      "rules": ["company-identity", "business-assumption"],
+      "rationale": "Preserve the exact historical genericization requirements.",
+      "reviewedBy": "AxoBoard release gate",
+      "reviewedAt": "2026-08-21T18:00:00.000Z"
+    },
+    {
+      "path": "docs/INTEGRATIONS_PRODUCT_SPEC.md",
+      "sha256": "7aeaee8cca1447598e707089bc285bf2060dc25ea0ca5f4c7405c879dd12a28a",
+      "rules": ["company-identity"],
+      "rationale": "Preserve the exact historical integration-boundary rationale.",
+      "reviewedBy": "AxoBoard release gate",
+      "reviewedAt": "2026-08-21T18:00:00.000Z"
+    },
+    {
+      "path": "docs/INTEGRATION_LAUNCH_CHECKLIST.md",
+      "sha256": "562b89b5ad6c3986ee177fe85cd6e3a40a4a8a9036e0235179e91dba403d1408",
+      "rules": ["company-identity"],
+      "rationale": "Preserve the exact historical credential-separation warning.",
+      "reviewedBy": "AxoBoard release gate",
+      "reviewedAt": "2026-08-21T18:00:00.000Z"
+    },
+    {
+      "path": "docs/MARKET_ANALYSIS.md",
+      "sha256": "6933928aae70f44933c95883cd7fc9f07d16957aab160c80cd05ec0ae50f9cbb",
+      "rules": ["company-identity"],
+      "rationale": "Preserve the exact historical market-validation analysis.",
+      "reviewedBy": "AxoBoard release gate",
+      "reviewedAt": "2026-08-21T18:00:00.000Z"
+    },
+    {
+      "path": "docs/MOBILE_USAGE_WORKSHEET.md",
+      "sha256": "f4fd31dc9d74a1c68e7baa09aafe743161a81f925f992b40c13e53ba99c73e00",
+      "rules": ["company-identity", "brand-asset"],
+      "rationale": "Preserve exact references to reviewed historical QA evidence.",
+      "reviewedBy": "AxoBoard release gate",
+      "reviewedAt": "2026-08-21T18:00:00.000Z"
+    },
+    {
+      "path": "docs/NANGO_IMPLEMENTATION_PLAN.md",
+      "sha256": "2f0ca9a5152d0641052e9712ba21076864d07f7e179807103e3e6b5a0dfc4ec2",
+      "rules": ["company-identity", "company-domain", "legacy-workspace-path", "credential-material"],
+      "rationale": "Preserve the exact historical prototype and migration record.",
+      "reviewedBy": "AxoBoard release gate",
+      "reviewedAt": "2026-08-21T18:00:00.000Z"
+    },
+    {
+      "path": "docs/PRODUCT_BLUEPRINT.md",
+      "sha256": "1539dabea1e156a5b8a858d6673e2eceabee083c542029d3509d8974046c21cf",
+      "rules": ["company-identity", "business-assumption"],
+      "rationale": "Preserve the exact historical one-way product-boundary plan.",
+      "reviewedBy": "AxoBoard release gate",
+      "reviewedAt": "2026-08-21T18:00:00.000Z"
+    },
+    {
+      "path": "docs/RELEASE_RUNBOOK.md",
+      "sha256": "dd30029a96afd928ee3bb912f95e47f8516fbc8331ea5a829afbeeb1d4f94743",
+      "rules": ["company-identity"],
+      "rationale": "Preserve the exact legacy-identity negative release assertion.",
+      "reviewedBy": "AxoBoard release gate",
+      "reviewedAt": "2026-08-21T18:00:00.000Z"
+    },
+    {
+      "path": "docs/WHITE_LABEL_ENGAGEMENT_WIREFRAME.md",
+      "sha256": "8f0ef7b7d847cc24867e422836eeda9bc7aa5593111b0c019c7ea88ca698dbdf",
+      "rules": ["company-identity"],
+      "rationale": "Preserve the exact historical white-label rejection criterion.",
+      "reviewedBy": "AxoBoard release gate",
+      "reviewedAt": "2026-08-21T18:00:00.000Z"
+    },
+    {
+      "path": "scripts/browser-performance-audit.mjs",
+      "sha256": "36c3173413c785cf7ab3df8a02181b296d717db61b2887c997a1031fdb4b45ea",
+      "rules": ["tenant-provider-id"],
+      "rationale": "Allow exact synthetic workspace selectors in a QA harness.",
+      "reviewedBy": "AxoBoard release gate",
+      "reviewedAt": "2026-08-21T18:00:00.000Z"
+    },
+    {
+      "path": "scripts/google-integration-test.mjs",
+      "sha256": "c3c4ceba5f915cc1ea4cfb83b779795af01c4eb076b475569518113985c895cb",
+      "rules": ["tenant-provider-id", "credential-material"],
+      "rationale": "Allow exact synthetic provider IDs and secrets in the test double.",
+      "reviewedBy": "AxoBoard release gate",
+      "reviewedAt": "2026-08-21T18:00:00.000Z"
+    },
+    {
+      "path": "scripts/smoke-test.mjs",
+      "sha256": "0b90e3d5f03dea98b18789c74b33881810847ed12aebd6417a1296af0c1fc6f1",
+      "rules": ["company-identity"],
+      "rationale": "Allow the exact negative legacy-identity smoke assertion.",
+      "reviewedBy": "AxoBoard release gate",
+      "reviewedAt": "2026-08-21T18:00:00.000Z"
+    }
+  ]
+}
