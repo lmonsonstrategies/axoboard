@@ -10,7 +10,7 @@ const healthyBody = {
   automationCore: 'configured',
   automationEventProducer: 'configured',
   automationWorker: 'idle',
-  tenantId: 'tenant-must-not-escape',
+  tenant: { id: 'tenant-must-not-escape' },
   account: { email: 'operator@example.test' },
   headers: { authorization: 'Bearer must-not-escape' },
   rawError: 'database password must-not-escape'
