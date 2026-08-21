@@ -4,8 +4,9 @@
 
 ```text
 feature/fix branch → focused local tests → push → parallel remote CI
-              → one-command fast-forward → main CI → Railway exact SHA
-              → automated production verification → release complete
+              → one-command fast-forward → main CI → Railway deployment SUCCESS
+              → exact-SHA route → automated production verification
+              → same-deployment recheck → release complete
 ```
 
 Railway production follows only `main`. Feature branches never deploy to `axoboard.io`.
@@ -17,13 +18,15 @@ Railway production follows only `main`. Feature branches never deploy to `axoboa
 3. On the final unchanged commit, run `npm run verify` once. Locally it provisions and removes a PostgreSQL 18 container on a random loopback port. GitHub Actions supplies an isolated PostgreSQL service. A caller-provided local `DATABASE_URL` is accepted only when it is loopback-only and explicitly attested with `AXOBOARD_VERIFY_DATABASE_DISPOSABLE=1`. Use local Docker/Gitleaks image and history gates when changing the image, dependencies, build pipeline, auth, secrets, or deployment surface; CI always runs all three gates.
 4. Commit and push the branch. GitHub runs PostgreSQL tests, the full-history secret scan, and the cached production-image build in parallel.
 5. Run `npm run release:check` for a read-only release preflight.
-6. Run `npm run release` to fast-forward the exact CI-passed SHA to `main`, wait for main CI and Railway, and verify production automatically.
+6. Run `npm run release` to fast-forward the exact CI-passed SHA to `main`, wait for main CI, require the post-promotion deployment on the pinned Railway project/environment/service to reach terminal `SUCCESS`, and verify production automatically.
 
 The release command refuses dirty worktrees, stale branches, non-fast-forward promotion, unpushed commits, and feature SHAs without successful CI. It accepts the same `feat/*`, `fix/*`, and `release/*` families that trigger push CI. It never force-pushes.
 
 `npm run verify` is the only full-suite entry point. It removes fixed app/provider ports, forces database-backed execution, and requires structured execution receipts from the smoke, engagement, automation, display, billing, and Google suites. Missing PostgreSQL or a missing receipt is a failure in CI/full verification; standalone local suite commands may still report that database coverage was skipped.
 
 Release preflight resolves `ci.yml` through the GitHub Actions API and pins its numeric workflow ID. A passing run must also match the AxoBoard repository, workflow name/path, push event, branch, exact 40-character head SHA, `completed` status, and `success` conclusion. The same identity contract is applied to the post-promotion `main` run.
+
+Production promotion also pins the Railway project, production environment, and AxoBoard service IDs. Before mutating `main`, the release proves Railway CLI access and snapshots all visible deployment IDs; none of those older deployments can satisfy the release. The newest post-promotion deployment must identify the AxoBoard repository, `main`, the exact release SHA, and a non-build-only deployment; only Railway status `SUCCESS` can pass. A target-SHA `/healthz` response while Railway is still building, deploying, or configuring does not pass. After production smoke, the script rechecks that the same deployment ID remains `SUCCESS` and that `/healthz` still serves the exact SHA.
 
 ## Risk-tiered local validation
 
@@ -32,7 +35,7 @@ Release preflight resolves `ci.yml` through the GitHub Actions API and pins its 
 - Database, auth, billing, tenant boundaries, migrations, dependencies, Docker, or CI: full local suite plus the relevant infrastructure proof.
 - Every pushed branch still receives the same remote test, secret, and image gates; risk tiers only prevent wasteful local repetition.
 
-The release script polls GitHub Actions and `/healthz`, so read-only status checks need no Railway or GitHub token. Git push authentication remains the only publishing credential.
+The release script polls GitHub Actions, the authenticated Railway CLI, and `/healthz`. The local operator therefore needs read-only Railway account access plus Git push authentication. Project, environment, and service IDs are non-secret policy constants; Railway credentials and variables remain outside Git.
 
 ## One-way provenance gate
 
@@ -46,6 +49,7 @@ Database migrations run automatically before the HTTP listener starts. Each migr
 
 ## Production success signal
 
+- The exact post-promotion deployment on the pinned Railway service reports `SUCCESS`, and the same deployment ID remains successful after smoke verification.
 - `/healthz` returns `200`, `ok: true`, the expected commit SHA, and a healthy database when persistence is enabled.
 - `/`, `/signup`, and `/login` return the intended public pages.
 - Anonymous `/app` redirects to `/login`.
