@@ -775,9 +775,49 @@ try {
   assert.equal(bootstrapBody.kpis.kpis.length, 1);
   assert.deepEqual(bootstrapBody.dashboard.dashboard.layout.kpiOrder, [createdKpi.id]);
 
+  const firstConnectedAt = new Date('2026-08-21T10:00:00.000Z');
+  const firstKpiAt = new Date('2026-08-21T10:09:59.000Z');
+  await pool.query('UPDATE integration_connections SET created_at=$1 WHERE id=$2 AND workspace_id=$3', [firstConnectedAt, connection.id, first.workspaceId]);
+  await pool.query('UPDATE kpi_mappings SET created_at=$1 WHERE id=$2 AND workspace_id=$3', [firstKpiAt, createdKpi.id, first.workspaceId]);
+  await pool.query(`INSERT INTO kpi_mappings
+    (id,workspace_id,connection_id,name,provider,spreadsheet_id,spreadsheet_title,sheet_id,sheet_title,a1_range,aggregation,status,created_at)
+    VALUES ($1,$2,$3,'Deleted KPI','google_sheets','deleted-sheet','Deleted Sheet',0,'Summary','A1','single_value','deleted',$4)`,
+  [randomUUID(), first.workspaceId, connection.id, new Date('2026-08-21T10:00:01.000Z')]);
+  const isolatedConnectionId = randomUUID();
+  const isolatedKpiId = randomUUID();
+  const isolatedConnectedAt = new Date('2026-08-20T08:00:00.000Z');
+  const isolatedKpiAt = new Date('2026-08-20T08:20:00.000Z');
+  await pool.query(`INSERT INTO integration_connections
+    (id,workspace_id,provider,external_account_id,external_account_email,scopes,status,token_ciphertext,token_iv,token_auth_tag,created_at)
+    VALUES ($1,$2,'google_sheets','isolated-account','isolated@example.com','{}','healthy',$3,$4,$5,$6)`,
+  [isolatedConnectionId, second.workspaceId, Buffer.from('ciphertext'), Buffer.alloc(12), Buffer.alloc(16), isolatedConnectedAt]);
+  await pool.query(`INSERT INTO kpi_mappings
+    (id,workspace_id,connection_id,name,provider,spreadsheet_id,spreadsheet_title,sheet_id,sheet_title,a1_range,aggregation,status,created_at)
+    VALUES ($1,$2,$3,'Isolated KPI','google_sheets','isolated-sheet','Isolated Sheet',0,'Summary','A1','single_value','active',$4)`,
+  [isolatedKpiId, second.workspaceId, isolatedConnectionId, isolatedKpiAt]);
+
+  const ownerActivationBootstrap = await api('/api/axoboard/bootstrap', { cookie: first.cookie });
+  const ownerActivationBody = await ownerActivationBootstrap.json();
+  assert.deepEqual(ownerActivationBody.engagement.activation, {
+    connectedAt: firstConnectedAt.toISOString(), firstKpiAt: firstKpiAt.toISOString(), secondsToFirstKpi: 599,
+    reachedFirstKpi: true, underTenMinutes: true
+  }, 'owner activation timing is derived only from the authenticated workspace');
+
+  const isolatedActivationBootstrap = await api('/api/axoboard/bootstrap', { cookie: second.cookie });
+  const isolatedActivationBody = await isolatedActivationBootstrap.json();
+  assert.deepEqual(isolatedActivationBody.engagement.activation, {
+    connectedAt: isolatedConnectedAt.toISOString(), firstKpiAt: isolatedKpiAt.toISOString(), secondsToFirstKpi: 1200,
+    reachedFirstKpi: true, underTenMinutes: false
+  }, 'another owner receives only its workspace activation timing');
+  assert.notEqual(isolatedActivationBody.engagement.activation.connectedAt, ownerActivationBody.engagement.activation.connectedAt);
+  assert.notEqual(isolatedActivationBody.engagement.activation.firstKpiAt, ownerActivationBody.engagement.activation.firstKpiAt);
+  assert.notEqual(isolatedActivationBody.engagement.activation.secondsToFirstKpi, ownerActivationBody.engagement.activation.secondsToFirstKpi);
+  await pool.query('DELETE FROM integration_connections WHERE id=$1 AND workspace_id=$2', [isolatedConnectionId, second.workspaceId]);
+
   const adminBootstrap = await api('/api/axoboard/bootstrap', { cookie: admin.cookie });
   const adminBootstrapBody = await adminBootstrap.json();
   assert.equal(adminBootstrap.status, 200);
+  assert.deepEqual(adminBootstrapBody.engagement.activation, ownerActivationBody.engagement.activation, 'admin receives workspace activation timing');
   assert.equal(adminBootstrapBody.session.capabilities.manageAutomationDrafts, true);
   assert.equal(adminBootstrapBody.session.capabilities.publishAutomations, true);
   assert.equal(adminBootstrapBody.session.capabilities.manageAutomationDestinations, true);
@@ -786,6 +826,7 @@ try {
   const editorBootstrap = await api('/api/axoboard/bootstrap', { cookie: editor.cookie });
   const editorBootstrapBody = await editorBootstrap.json();
   assert.equal(editorBootstrap.status, 200);
+  assert.deepEqual(editorBootstrapBody.engagement.activation, { reachedFirstKpi: true }, 'editor receives no exact activation timing');
   assert.equal(editorBootstrapBody.session.capabilities.manageKpis, true);
   assert.equal(editorBootstrapBody.session.capabilities.readDisplays, false);
   assert.equal(editorBootstrapBody.session.capabilities.readEvents, true);
@@ -806,6 +847,7 @@ try {
   const viewerBootstrapText = await viewerBootstrap.text();
   const viewerBootstrapBody = JSON.parse(viewerBootstrapText);
   assert.equal(viewerBootstrap.status, 200);
+  assert.deepEqual(viewerBootstrapBody.engagement.activation, { reachedFirstKpi: true }, 'viewer receives only safe activation completion state');
   assert.equal(viewerBootstrapBody.session.capabilities.readKpis, true);
   assert.equal(viewerBootstrapBody.session.capabilities.manageKpis, false);
   assert.equal(viewerBootstrapBody.session.capabilities.readDisplays, false);
