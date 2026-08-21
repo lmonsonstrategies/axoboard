@@ -2,14 +2,16 @@ import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { createDisplayRuntime } from '../lib/display-runtime.mjs';
+import { integrationDatabase, recordDatabaseSuitePass } from './test-support.mjs';
 
-if (!process.env.DATABASE_URL) {
+const databaseUrl = integrationDatabase('display');
+if (!databaseUrl) {
   console.log('AxoBoard display runtime test skipped: DATABASE_URL is not configured.');
   process.exit(0);
 }
 
 const { Pool } = pg;
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false, max: 2 });
+const pool = new Pool({ connectionString: databaseUrl, ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false, max: 2 });
 const workspaceId = randomUUID();
 const otherWorkspaceId = randomUUID();
 const userId = randomUUID();
@@ -190,4 +192,5 @@ assert.equal(disabledRuntime.ready, false, 'the runtime supports an emergency fe
 await pool.query('DELETE FROM workspaces WHERE id=ANY($1::uuid[])', [[workspaceId, otherWorkspaceId]]);
 await pool.query('DELETE FROM users WHERE id=ANY($1::uuid[])', [[userId, adminUserId, editorUserId, viewerUserId, otherUserId]]);
 await pool.end();
+recordDatabaseSuitePass('display', { coverage: 'pairing, sessions, RBAC, tenant isolation' });
 console.log('AxoBoard display runtime test passed: one-time pairing, persistent token, remote configuration, revocation, and tenant isolation.');

@@ -2,15 +2,17 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { classifyAutomationWorkerHealth, createAutomationRuntime } from '../lib/automation-runtime.mjs';
+import { integrationDatabase, recordDatabaseSuitePass } from './test-support.mjs';
 
-if (!process.env.DATABASE_URL) {
+const databaseUrl = integrationDatabase('automation');
+if (!databaseUrl) {
   console.log('AxoBoard automation runtime test skipped: DATABASE_URL is not configured.');
   process.exit(0);
 }
 
 const { Pool } = pg;
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: databaseUrl,
   ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false,
   max: 4
 });
@@ -482,6 +484,7 @@ try {
   res = await api(disabled, 'GET', '/api/axoboard/automations', owner);
   assert.equal(res.status, 503, 'feature flag disables routes and workers');
 
+  recordDatabaseSuitePass('automation', { coverage: 'RBAC, tenant isolation, versions, workers, retries' });
   console.log('AxoBoard automation runtime test passed: RBAC, tenant isolation, immutable versions, dry-run, activation, duration, idempotency, drift, retries, leases, and TV events.');
 } finally {
   await pool.query('DELETE FROM workspaces WHERE id=ANY($1::uuid[])', [[ids.workspace, ids.otherWorkspace]]).catch(() => {});
