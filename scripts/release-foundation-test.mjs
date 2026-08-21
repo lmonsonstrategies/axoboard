@@ -1,0 +1,94 @@
+import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import {
+  findExpectedReleaseWorkflowRun,
+  isExpectedOriginUrl,
+  isExpectedReleaseWorkflowRun,
+  isReleaseBranch,
+  isSuccessfulReleaseWorkflowRun,
+  RELEASE_REPOSITORY,
+  RELEASE_WORKFLOW
+} from '../lib/release-policy.mjs';
+import {
+  allocateLoopbackPorts,
+  assertDatabaseSuiteReceipts,
+  integrationDatabase,
+  recordDatabaseSuitePass,
+  REQUIRED_DATABASE_SUITES
+} from './test-support.mjs';
+
+for (const branch of ['feat/new-dashboard', 'fix/operator-release-foundation', 'release/2026.08.21']) {
+  assert.equal(isReleaseBranch(branch), true, `${branch} is a releasable branch`);
+}
+for (const branch of ['', 'main', 'feature/nope', 'hotfix/nope', 'fix/', 'Fix/uppercase']) {
+  assert.equal(isReleaseBranch(branch), false, `${branch || '<empty>'} is not a releasable branch`);
+}
+
+assert.equal(isExpectedOriginUrl('git@github-personal:lmonsonstrategies/axoboard.git'), true);
+assert.equal(isExpectedOriginUrl('git@github.com:lmonsonstrategies/axoboard.git'), true);
+assert.equal(isExpectedOriginUrl('ssh://git@ssh.github.com:443/lmonsonstrategies/axoboard.git'), true);
+assert.equal(isExpectedOriginUrl('git@github.com:another-owner/axoboard.git'), false);
+
+const workflowId = 123456;
+const sha = 'a'.repeat(40);
+const branch = 'fix/operator-release-foundation';
+const run = {
+  workflow_id: workflowId,
+  name: RELEASE_WORKFLOW.name,
+  path: RELEASE_WORKFLOW.path,
+  event: RELEASE_WORKFLOW.event,
+  head_sha: sha,
+  head_branch: branch,
+  status: 'completed',
+  conclusion: 'success',
+  repository: { full_name: RELEASE_REPOSITORY },
+  head_repository: { full_name: RELEASE_REPOSITORY }
+};
+const candidate = { repository: RELEASE_REPOSITORY, sha, branch, workflowId };
+assert.equal(isExpectedReleaseWorkflowRun(run, candidate), true);
+assert.equal(isSuccessfulReleaseWorkflowRun(run, candidate), true);
+assert.equal(findExpectedReleaseWorkflowRun([{ ...run, event: 'pull_request' }, run], candidate), run);
+
+const identityMutations = {
+  workflow_id: workflowId + 1,
+  name: 'A different workflow',
+  path: '.github/workflows/other.yml',
+  event: 'workflow_dispatch',
+  head_sha: 'b'.repeat(40),
+  head_branch: 'fix/other',
+  repository: { full_name: 'someone/else' },
+  head_repository: { full_name: 'someone/fork' }
+};
+for (const [field, value] of Object.entries(identityMutations)) {
+  assert.equal(isExpectedReleaseWorkflowRun({ ...run, [field]: value }, candidate), false, `${field} is pinned`);
+}
+assert.equal(isSuccessfulReleaseWorkflowRun({ ...run, status: 'in_progress' }, candidate), false, 'CI must be completed');
+assert.equal(isSuccessfulReleaseWorkflowRun({ ...run, conclusion: 'failure' }, candidate), false, 'CI must succeed');
+
+const workflow = readFileSync(resolve('.github/workflows/ci.yml'), 'utf8');
+assert.match(workflow, /^name:\s+AxoBoard release gate$/m);
+for (const family of ['feat', 'fix', 'release']) {
+  assert.match(workflow, new RegExp(`^\\s+- '${family}/\\*\\*'$`, 'm'), `CI push trigger includes ${family}/**`);
+}
+
+const ports = await allocateLoopbackPorts(8);
+assert.equal(new Set(ports).size, ports.length, 'isolated port allocation never shares a port');
+assert.ok(ports.every((port) => Number.isInteger(port) && port > 0 && port <= 65_535));
+assert.equal(integrationDatabase('billing', {}), null, 'standalone local suites may explicitly report a skip');
+assert.throws(() => integrationDatabase('billing', { CI: 'true' }), /requires disposable PostgreSQL/, 'CI refuses a database skip');
+assert.throws(() => integrationDatabase('billing', { AXOBOARD_FULL_VERIFY: '1' }), /requires disposable PostgreSQL/, 'full verification refuses a database skip');
+
+const receiptsDirectory = mkdtempSync(join(tmpdir(), 'axoboard-receipt-test-'));
+try {
+  const receiptEnv = { DATABASE_URL: 'postgresql://placeholder.invalid/test', AXOBOARD_VERIFY_RECEIPTS_DIR: receiptsDirectory };
+  for (const suite of REQUIRED_DATABASE_SUITES) recordDatabaseSuitePass(suite, { deterministicTest: true }, receiptEnv);
+  assert.deepEqual(assertDatabaseSuiteReceipts(receiptsDirectory), REQUIRED_DATABASE_SUITES);
+  rmSync(resolve(receiptsDirectory, 'google.json'));
+  assert.throws(() => assertDatabaseSuiteReceipts(receiptsDirectory), /required integration suite did not produce a valid receipt: google/);
+} finally {
+  rmSync(receiptsDirectory, { recursive: true, force: true });
+}
+
+console.log('AxoBoard release foundation test passed: branch parity, pinned CI identity, dynamic ports, fail-closed database coverage, and execution receipts.');
