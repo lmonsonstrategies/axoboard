@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildPlan, parseArguments } from '../../src/audit.mjs';
+import { assessBrowserCoverage, buildPlan, parseArguments, resolveBrowserEngines } from '../../src/audit.mjs';
 import { loadConfig, materializeRoutes, validateBaseUrl } from '../../src/config.mjs';
 
 test('quality configuration validates and inventories every required surface', async () => {
@@ -12,6 +12,7 @@ test('quality configuration validates and inventories every required surface', a
   assert.ok(config.viewports.some((viewport) => viewport.width === 320));
   assert.ok(config.viewports.some((viewport) => viewport.width >= 1728));
   assert.ok(config.viewports.some((viewport) => viewport.id.startsWith('tv-')));
+  assert.deepEqual(config.browserEngines, ['chromium', 'firefox', 'webkit']);
 });
 
 test('base URL allowlist rejects credentials, paths, and external origins', async () => {
@@ -43,4 +44,18 @@ test('dry-run plan filters without launching a fixed-port server', async () => {
 
 test('release gate cannot bypass approved visual baselines', () => {
   assert.throws(() => parseArguments(['--target', 'local', '--mode', 'gate', '--no-baselines']), /prohibited in gate mode/);
+});
+
+test('gate and harness modes cannot omit a browser engine', async () => {
+  const config = await loadConfig();
+  assert.throws(() => resolveBrowserEngines(config, parseArguments(['--target', 'fixture', '--mode', 'harness', '--browser', 'chromium,firefox'])), /cannot omit required browser engines/);
+  assert.deepEqual(resolveBrowserEngines(config, parseArguments(['--target', 'fixture', '--mode', 'diagnostic', '--browser', 'webkit'])), ['webkit']);
+});
+
+test('missing, incomplete, or failed browser execution fails coverage closed', () => {
+  const required = ['chromium', 'firefox', 'webkit'];
+  const complete = required.flatMap((browserEngine) => [{ browserEngine }, { browserEngine }]);
+  assert.equal(assessBrowserCoverage(required, 2, complete).complete, true);
+  assert.equal(assessBrowserCoverage(required, 2, complete.filter((result) => result.browserEngine !== 'webkit')).complete, false);
+  assert.equal(assessBrowserCoverage(required, 2, complete, [{ browserEngine: 'firefox', message: 'launch failed' }]).complete, false);
 });

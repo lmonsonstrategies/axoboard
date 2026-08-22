@@ -39,6 +39,20 @@ jobs:
       - run: npm ci
       - run: npm run verify
 
+  apple-qa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install required Apple QA browser engines
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Run deterministic three-engine Apple QA gate
+        run: npm run qa:apple:ci
+
   secrets:
     runs-on: ubuntu-latest
     steps:

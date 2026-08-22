@@ -31,9 +31,10 @@
     "qa:apple:test": "node --test tests/apple-qa/*.test.mjs",
     "qa:apple:candidate": "node src/audit.mjs --target url --mode gate",
     "qa:apple:playwright": "playwright test tests/apple-qa/*.spec.mjs",
-    "qa:apple:smoke": "playwright test tests/apple-qa/public-surface.spec.mjs --project=desktop-1440",
+    "qa:apple:smoke": "playwright test tests/apple-qa/public-surface.spec.mjs --project=chromium-desktop-1440",
     "qa:apple:lint": "node scripts/check-source.mjs",
-    "qa:apple:verify": "npm run qa:apple:lint && npm run qa:apple:test && npm run qa:apple:fixture && npm run qa:apple:fixture:bad"
+    "qa:apple:verify": "npm run qa:apple:lint && npm run qa:apple:test && npm run qa:apple:fixture && npm run qa:apple:fixture:bad",
+    "qa:apple:ci": "npm run qa:apple:verify"
   },
   "dependencies": {
     "pg": "^8.16.3",

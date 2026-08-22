@@ -3,6 +3,7 @@
   "schemaVersion": 1,
   "product": "AxoBoard",
   "mode": "public-non-mutating",
+  "browserEngines": ["chromium", "firefox", "webkit"],
   "failOn": ["P0", "P1"],
   "allowedBaseUrls": [
     "https://axoboard.io",
@@ -36,18 +37,40 @@
   "humanOnlyScenarios": [
     {
       "id": "authenticated-app-critical-states",
+      "type": "authenticated-app",
       "surface": "app",
       "states": ["default", "empty", "loading", "error"],
       "viewports": ["phone-375", "tablet-portrait", "desktop-1440"],
       "themes": ["light"],
+      "requiredMatrix": [
+        { "state": "default", "role": "owner", "device": "phone", "theme": "light", "viewport": "phone-375" },
+        { "state": "default", "role": "viewer", "device": "desktop", "theme": "light", "viewport": "desktop-1440" },
+        { "state": "empty", "role": "owner", "device": "tablet", "theme": "light", "viewport": "tablet-portrait" },
+        { "state": "empty", "role": "viewer", "device": "phone", "theme": "light", "viewport": "phone-375" },
+        { "state": "loading", "role": "owner", "device": "desktop", "theme": "light", "viewport": "desktop-1440" },
+        { "state": "loading", "role": "viewer", "device": "phone", "theme": "light", "viewport": "phone-375" },
+        { "state": "error", "role": "owner", "device": "desktop", "theme": "light", "viewport": "desktop-1440" },
+        { "state": "error", "role": "viewer", "device": "phone", "theme": "light", "viewport": "phone-375" }
+      ],
       "blocker": "Requires a disposable non-production tenant and authenticated browser state; customer and production credentials are prohibited."
     },
     {
       "id": "paired-tv-live-state",
+      "type": "paired-tv",
       "surface": "tv",
       "states": ["live", "offline", "stale", "celebration"],
       "viewports": ["tablet-landscape", "tv-1920"],
       "themes": ["dark"],
+      "requiredMatrix": [
+        { "state": "live", "role": "display-device", "device": "landscape-tablet", "theme": "dark", "viewport": "tablet-landscape" },
+        { "state": "live", "role": "display-device", "device": "tv", "theme": "dark", "viewport": "tv-1920" },
+        { "state": "offline", "role": "display-device", "device": "landscape-tablet", "theme": "dark", "viewport": "tablet-landscape" },
+        { "state": "offline", "role": "display-device", "device": "tv", "theme": "dark", "viewport": "tv-1920" },
+        { "state": "stale", "role": "display-device", "device": "landscape-tablet", "theme": "dark", "viewport": "tablet-landscape" },
+        { "state": "stale", "role": "display-device", "device": "tv", "theme": "dark", "viewport": "tv-1920" },
+        { "state": "celebration", "role": "display-device", "device": "landscape-tablet", "theme": "dark", "viewport": "tablet-landscape" },
+        { "state": "celebration", "role": "display-device", "device": "tv", "theme": "dark", "viewport": "tv-1920" }
+      ],
       "blocker": "Requires a disposable paired display token backed by synthetic data; production display tokens are prohibited."
     }
   ],
@@ -77,6 +100,10 @@
     { "id": "tv-1920", "width": 1920, "height": 1080, "dpr": 1 }
   ],
   "canonicalScreenshotViewports": ["phone-375", "tablet-portrait", "desktop-1440", "tv-1920"],
+  "evidencePolicy": {
+    "maximumAgeHours": 72,
+    "maximumClockSkewMinutes": 5
+  },
   "budgets": {
     "horizontalOverflowPx": 1,
     "minimumTouchTargetPx": 44,

@@ -2,10 +2,10 @@ import { createHash } from 'node:crypto';
 
 const severities = ['P0', 'P1', 'P2', 'P3'];
 
-export function createFinding({ rule, severity, route, state = 'default', theme = 'light', viewport, selector = null, message, evidence = {}, screenshot = null, source = 'automated' }) {
+export function createFinding({ rule, severity, route, state = 'default', theme = 'light', viewport, browserEngine = 'unknown', selector = null, message, evidence = {}, screenshot = null, source = 'automated' }) {
   if (!severities.includes(severity)) throw new Error(`Unknown severity ${severity}`);
   if (!rule || !route || !viewport || !message) throw new Error('Finding is missing required identity fields.');
-  const fingerprint = [rule, route, state, theme, viewport, selector || '', JSON.stringify(evidence)].join('|');
+  const fingerprint = [rule, route, state, theme, viewport, browserEngine, selector || '', JSON.stringify(evidence)].join('|');
   return {
     id: `${rule}-${createHash('sha256').update(fingerprint).digest('hex').slice(0, 12)}`,
     rule,
@@ -15,6 +15,7 @@ export function createFinding({ rule, severity, route, state = 'default', theme 
     state,
     theme,
     viewport,
+    browserEngine,
     selector,
     message,
     evidence,

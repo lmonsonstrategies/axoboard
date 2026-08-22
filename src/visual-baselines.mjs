@@ -7,7 +7,7 @@ import { PNG } from 'pngjs';
 const safePart = (value) => String(value).replace(/[^a-z0-9_-]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
 
 export function screenshotName(identity) {
-  return [identity.routeId, identity.state, identity.theme, identity.viewport].map(safePart).join('--') + '.png';
+  return [identity.routeId, identity.state, identity.theme, identity.viewport, identity.browserEngine].filter(Boolean).map(safePart).join('--') + '.png';
 }
 
 export async function sha256File(path) {
@@ -111,7 +111,7 @@ export async function writeBaselineProposal(records, outputRoot, metadata) {
     generatedAt: new Date().toISOString(),
     ...metadata,
     changes: changes.map((record) => ({
-      identity: { routeId: record.routeId, state: record.state, theme: record.theme, viewport: record.viewport },
+      identity: { routeId: record.routeId, state: record.state, theme: record.theme, viewport: record.viewport, browserEngine: record.browserEngine },
       candidatePath: relative(outputRoot, record.candidate.candidatePath),
       candidateHash: record.candidate.candidateHash,
       approvedPath: record.approvedPath,

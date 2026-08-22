@@ -6,6 +6,14 @@ const baseURL = process.env.AXOBOARD_BASE_URL;
 if (!baseURL) throw new Error('AXOBOARD_BASE_URL is required for Playwright candidate tests. Use npm run qa:apple for an isolated local run.');
 const executablePath = resolveChromiumExecutable();
 
+function launchOptions(browserEngine) {
+  if (browserEngine !== 'chromium') return {};
+  return {
+    ...(executablePath ? { executablePath } : {}),
+    args: ['--no-sandbox', '--disable-dev-shm-usage']
+  };
+}
+
 export default defineConfig({
   testDir: './tests/apple-qa',
   testMatch: /.*\.spec\.mjs/,
@@ -19,11 +27,6 @@ export default defineConfig({
   outputDir: 'test-results',
   use: {
     baseURL,
-    browserName: 'chromium',
-    launchOptions: {
-      ...(executablePath ? { executablePath } : {}),
-      args: ['--no-sandbox', '--disable-dev-shm-usage']
-    },
     actionTimeout: 7_500,
     navigationTimeout: 20_000,
     ignoreHTTPSErrors: false,
@@ -34,13 +37,16 @@ export default defineConfig({
     locale: 'en-US',
     timezoneId: 'America/Denver'
   },
-  projects: quality.viewports.map((viewport) => ({
-    name: viewport.id,
+  projects: quality.browserEngines.flatMap((browserEngine) => quality.viewports.map((viewport) => ({
+    name: `${browserEngine}-${viewport.id}`,
+    metadata: { browserEngine, viewportId: viewport.id },
     use: {
+      browserName: browserEngine,
+      launchOptions: launchOptions(browserEngine),
       viewport: { width: viewport.width, height: viewport.height },
       deviceScaleFactor: viewport.dpr,
-      isMobile: viewport.width < 640,
+      ...(browserEngine === 'firefox' ? {} : { isMobile: viewport.width < 640 }),
       hasTouch: viewport.width < 1024
     }
-  }))
+  })))
 });

@@ -1,20 +1,28 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "kind": "axoboard-human-authenticated-qa-evidence",
   "reviewer": "",
   "reviewedAt": "",
   "environment": "disposable-non-production",
+  "candidateSha": "0000000000000000000000000000000000000000",
+  "targetOrigin": "http://127.0.0.1:4173",
+  "syntheticTenant": {
+    "tenantId": "synthetic-tenant-example",
+    "workspaceId": "synthetic-workspace-example"
+  },
   "scenarios": [
     {
       "id": "authenticated-app-critical-states",
-      "passed": false,
-      "artifactManifest": "",
+      "type": "authenticated-app",
+      "runId": "qa-auth-app-example",
+      "artifactManifest": "authenticated-app/manifest.json",
       "notes": ""
     },
     {
       "id": "paired-tv-live-state",
-      "passed": false,
-      "artifactManifest": "",
+      "type": "paired-tv",
+      "runId": "qa-paired-tv-example",
+      "artifactManifest": "paired-tv/manifest.json",
       "notes": ""
     }
   ]

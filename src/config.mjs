@@ -22,6 +22,27 @@ export async function loadConfig() {
     const detail = validate.errors.map((error) => `${error.instancePath || '/'} ${error.message}`).join('; ');
     throw new Error(`Invalid quality configuration: ${detail}`);
   }
+  const knownViewports = new Set(config.viewports.map((viewport) => viewport.id));
+  for (const scenario of config.humanOnlyScenarios) {
+    if ((scenario.type === 'authenticated-app') !== (scenario.surface === 'app')) throw new Error(`Human scenario ${scenario.id} has an inconsistent type/surface binding.`);
+    const matrixIds = new Set();
+    const observed = { states: new Set(), viewports: new Set(), themes: new Set() };
+    for (const entry of scenario.requiredMatrix) {
+      const id = [entry.state, entry.role, entry.device, entry.theme, entry.viewport].join('|');
+      if (matrixIds.has(id)) throw new Error(`Human scenario ${scenario.id} contains duplicate matrix cell ${id}.`);
+      matrixIds.add(id);
+      if (!scenario.states.includes(entry.state) || !scenario.viewports.includes(entry.viewport) || !scenario.themes.includes(entry.theme) || !knownViewports.has(entry.viewport)) {
+        throw new Error(`Human scenario ${scenario.id} matrix cell ${id} is outside its declared state/theme/viewport inventory.`);
+      }
+      observed.states.add(entry.state);
+      observed.viewports.add(entry.viewport);
+      observed.themes.add(entry.theme);
+    }
+    for (const field of ['states', 'viewports', 'themes']) {
+      const missing = scenario[field].filter((value) => !observed[field].has(value));
+      if (missing.length) throw new Error(`Human scenario ${scenario.id} matrix does not cover ${field}: ${missing.join(', ')}.`);
+    }
+  }
   return config;
 }
 

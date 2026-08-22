@@ -3,12 +3,16 @@
   "$id": "https://axoboard.io/schemas/apple-qa-quality-budgets-v1.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "product", "mode", "failOn", "allowedBaseUrls", "routes", "fixtureRoutes", "badFixtureRoutes", "humanOnlyScenarios", "viewports", "budgets", "qualityPolicy"],
+  "required": ["schemaVersion", "product", "mode", "browserEngines", "failOn", "allowedBaseUrls", "routes", "fixtureRoutes", "badFixtureRoutes", "humanOnlyScenarios", "viewports", "evidencePolicy", "budgets", "qualityPolicy"],
   "properties": {
     "$schema": { "type": "string" },
     "schemaVersion": { "const": 1 },
     "product": { "const": "AxoBoard" },
     "mode": { "const": "public-non-mutating" },
+    "browserEngines": {
+      "type": "array",
+      "const": ["chromium", "firefox", "webkit"]
+    },
     "failOn": {
       "type": "array",
       "items": { "enum": ["P0", "P1", "P2", "P3"] },
@@ -36,13 +40,30 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "surface", "states", "viewports", "themes", "blocker"],
+        "required": ["id", "type", "surface", "states", "viewports", "themes", "requiredMatrix", "blocker"],
         "properties": {
           "id": { "type": "string", "minLength": 1 },
+          "type": { "enum": ["authenticated-app", "paired-tv"] },
           "surface": { "enum": ["app", "tv"] },
           "states": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
           "viewports": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
           "themes": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["light", "dark"] } },
+          "requiredMatrix": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["state", "role", "device", "theme", "viewport"],
+              "properties": {
+                "state": { "type": "string", "minLength": 1 },
+                "role": { "type": "string", "minLength": 1 },
+                "device": { "type": "string", "minLength": 1 },
+                "theme": { "enum": ["light", "dark"] },
+                "viewport": { "type": "string", "minLength": 1 }
+              }
+            }
+          },
           "blocker": { "type": "string", "minLength": 20 }
         }
       }
@@ -79,6 +100,15 @@
       }
     },
     "canonicalScreenshotViewports": { "type": "array", "items": { "type": "string" } },
+    "evidencePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maximumAgeHours", "maximumClockSkewMinutes"],
+      "properties": {
+        "maximumAgeHours": { "type": "number", "minimum": 1, "maximum": 168 },
+        "maximumClockSkewMinutes": { "type": "number", "minimum": 0, "maximum": 15 }
+      }
+    },
     "budgets": {
       "type": "object",
       "additionalProperties": { "type": "number", "minimum": 0 },

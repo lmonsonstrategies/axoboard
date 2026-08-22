@@ -331,6 +331,8 @@ export async function auditKeyboard(page, maxStops = 35) {
   const sequence = [];
   let repeated = 0;
   let previous = null;
+  let trapped = false;
+  let escapeProbeMoved = null;
   const iterations = Math.min(maxStops, focusableCount + 2);
   for (let index = 0; index < iterations; index += 1) {
     await page.keyboard.press('Tab');
@@ -378,12 +380,21 @@ export async function auditKeyboard(page, maxStops = 35) {
     previous = stop.selector;
     if (repeated >= 2 && focusableCount > 1) break;
   }
+  if (repeated >= 2 && focusableCount > 1) {
+    const repeatedElement = await page.evaluateHandle(() => document.activeElement);
+    await page.keyboard.press('Shift+Tab');
+    await page.evaluate(() => new Promise((resolveFrame) => requestAnimationFrame(resolveFrame)));
+    escapeProbeMoved = await page.evaluate((before) => document.activeElement !== before, repeatedElement);
+    await repeatedElement.dispose();
+    trapped = !escapeProbeMoved;
+  }
   return {
     stops,
-    trapped: repeated >= 2 && focusableCount > 1,
-    selector: repeated >= 2 ? previous : null,
+    trapped,
+    selector: trapped ? previous : null,
     focusableCount,
-    sequence
+    sequence,
+    escapeProbeMoved
   };
 }
 
@@ -467,8 +478,8 @@ export async function checkSameOriginLinks(requestContext, links, baseOrigin) {
   return output;
 }
 
-export async function runPageAudit({ page, requestContext, route, viewport, theme = 'light', config, baseOrigin, checkLinks = false }) {
-  const context = { route: route.id, state: route.state, theme, viewport: viewport.id, budgets: config.budgets };
+export async function runPageAudit({ page, requestContext, route, viewport, theme = 'light', browserEngine = 'unknown', config, baseOrigin, checkLinks = false }) {
+  const context = { route: route.id, state: route.state, theme, viewport: viewport.id, browserEngine, budgets: config.budgets };
   const runtime = attachRuntimeObservers(page, baseOrigin);
   await enforceReadOnlyNetwork(page, runtime);
   await installPerformanceObservers(page);
@@ -518,6 +529,7 @@ export async function runPageAudit({ page, requestContext, route, viewport, them
       state: route.state,
       theme,
       viewport: viewport.id,
+      browserEngine,
       selector: null,
       message: `Route returned ${response?.status() || 'no response'}.`,
       evidence: { status: response?.status() || null },
@@ -536,6 +548,7 @@ export async function runPageAudit({ page, requestContext, route, viewport, them
       state: route.state,
       theme,
       viewport: viewport.id,
+      browserEngine,
       selector: null,
       message: `Expected navigation to ${route.expectedPath}; finished at ${finalUrl.pathname}.`,
       evidence: { expectedPath: route.expectedPath, actualPath: finalUrl.pathname },
@@ -548,6 +561,7 @@ export async function runPageAudit({ page, requestContext, route, viewport, them
     routeId: route.id,
     state: route.state,
     theme,
+    browserEngine,
     surface: route.surface,
     viewport,
     title: snapshot.title,
