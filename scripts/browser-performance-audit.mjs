@@ -27,6 +27,7 @@ await new Promise((resolve, reject) => {
 let commandId = 0;
 const pending = new Map();
 const events = new Map();
+const networkRequests = [];
 socket.addEventListener('message', ({ data }) => {
   const message = JSON.parse(data);
   if (message.id) {
@@ -37,6 +38,7 @@ socket.addEventListener('message', ({ data }) => {
     else waiter.resolve(message.result || {});
     return;
   }
+  if (message.method === 'Network.requestWillBeSent') networkRequests.push(message.params?.request?.url || '');
   const waiters = events.get(message.method) || [];
   events.delete(message.method);
   waiters.forEach((resolve) => resolve(message.params || {}));
@@ -68,6 +70,12 @@ async function navigate(url) {
 await send('Page.enable');
 await send('Runtime.enable');
 await send('Network.enable');
+await send('Page.addScriptToEvaluateOnNewDocument', { source: `
+  window.__axoLayoutShift = 0;
+  new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) if (!entry.hadRecentInput) window.__axoLayoutShift += entry.value;
+  }).observe({ type: 'layout-shift', buffered: true });
+` });
 await send('Network.setCacheDisabled', { cacheDisabled: true });
 await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
 await send('Network.setCookie', { name: cookieName, value: decodeURIComponent(cookieValue), url: baseUrl, httpOnly: true, sameSite: 'Lax' });
@@ -77,13 +85,22 @@ await send('Page.bringToFront');
 const firstLoad = await evaluate(`(async () => {
   const deadline = performance.now() + 5000;
   while (!performance.getEntriesByName(location.origin + '/api/axoboard/bootstrap').length && performance.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 25));
-  const resources = performance.getEntriesByType('resource').map((entry) => ({ name: new URL(entry.name).pathname, transferSize: entry.transferSize, encodedBodySize: entry.encodedBodySize, duration: entry.duration }));
+  await document.fonts.ready;
+  const resources = performance.getEntriesByType('resource').map((entry) => ({ url: entry.name, name: new URL(entry.name).pathname, transferSize: entry.transferSize, encodedBodySize: entry.encodedBodySize, duration: entry.duration }));
   return {
     domInteractive: performance.getEntriesByType('navigation')[0]?.domInteractive || null,
     apiRequests: resources.filter((entry) => entry.name.startsWith('/api/')).map((entry) => entry.name),
     assetBytes: resources.filter((entry) => ['/app.js','/styles.css'].includes(entry.name)).reduce((total, entry) => total + entry.transferSize, 0),
     assetBodyBytes: resources.filter((entry) => ['/app.js','/styles.css'].includes(entry.name)).reduce((total, entry) => total + entry.encodedBodySize, 0),
-    resources
+    resources,
+    typography: {
+      fontsLoaded: document.fonts.status === 'loaded',
+      bodyFont: document.fonts.check('16px "DM Sans"'),
+      displayFont: document.fonts.check('700 48px "Fredoka"'),
+      layoutShift: window.__axoLayoutShift || 0,
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: innerWidth
+    }
   };
 })()`);
 
@@ -257,6 +274,9 @@ const mobile = await evaluate(`(() => {
   closeSpreadsheetPicker();
   return { modal: { width: modal.width, height: modal.height }, driveModal: { width: driveModal.width, height: driveModal.height }, button: { width: button.width, height: button.height }, documentWidth: document.documentElement.scrollWidth, viewportWidth: innerWidth };
 })()`);
+await send('Emulation.setPageScaleFactor', { pageScaleFactor: 2 });
+const zoom200 = await evaluate(`(() => ({ documentWidth: document.documentElement.scrollWidth, viewportWidth: innerWidth, activeElement: document.activeElement?.tagName || null }))()`);
+await send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 });
 
 await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
 await send('Network.setCacheDisabled', { cacheDisabled: false });
@@ -266,10 +286,17 @@ const warmLoad = await evaluate(`(() => {
   return { assetBytes: resources.filter((entry) => ['/app.js','/styles.css'].includes(entry.name)).reduce((total, entry) => total + entry.transferSize, 0), assetBodyBytes: resources.filter((entry) => ['/app.js','/styles.css'].includes(entry.name)).reduce((total, entry) => total + entry.encodedBodySize, 0), resources };
 })()`);
 
-console.log(JSON.stringify({ firstLoad, warmLoad, drivePicker, picker, laptopPicker, visualizations, television, mobile }, null, 2));
+const remoteFontRequests = networkRequests.filter((url) => /fonts\.(?:googleapis|gstatic)\.com/i.test(url));
+console.log(JSON.stringify({ firstLoad, warmLoad, drivePicker, picker, laptopPicker, visualizations, television, mobile, zoom200, remoteFontRequests }, null, 2));
 assert.deepEqual(firstLoad.apiRequests, ['/api/axoboard/bootstrap'], 'app startup uses one product bootstrap request');
 assert.ok(firstLoad.domInteractive < 1000, 'local app shell becomes interactive in under one second');
 assert.ok(firstLoad.assetBodyBytes < 100_000, 'compressed core JS and CSS remain under 100 KB');
+assert.equal(firstLoad.typography.fontsLoaded, true, 'local font loading reaches a settled state');
+assert.equal(firstLoad.typography.bodyFont, true, 'the locally served DM Sans face is available');
+assert.equal(firstLoad.typography.displayFont, true, 'the locally served Fredoka face is available');
+assert.ok(firstLoad.typography.layoutShift <= 0.05, 'layout shift stays at or below 0.05 while local fonts settle');
+assert.ok(firstLoad.typography.documentWidth <= firstLoad.typography.viewportWidth, 'desktop app has no page-level horizontal overflow');
+assert.deepEqual(remoteFontRequests, [], 'browser makes zero requests to remote font hosts');
 assert.equal(warmLoad.assetBodyBytes, 0, 'warm reload revalidates without retransferring core JS or CSS bodies');
 assert.equal(drivePicker.initialFiles, 3, 'Drive-style chooser renders every recent spreadsheet');
 assert.equal(drivePicker.filteredFiles, 1, 'Drive-style chooser filters files by name');
@@ -332,5 +359,6 @@ assert.ok(mobile.modal.width <= mobile.viewportWidth && mobile.modal.height <= 8
 assert.ok(mobile.driveModal.width <= mobile.viewportWidth && mobile.driveModal.height <= 844, 'mobile Drive chooser stays within the viewport');
 assert.ok(mobile.button.height >= 55, 'mobile Choose Cells action remains a prominent touch target');
 assert.equal(mobile.documentWidth, mobile.viewportWidth, 'mobile app has no page-level horizontal overflow');
+assert.equal(zoom200.documentWidth, zoom200.viewportWidth, 'app has no page-level horizontal overflow at 200 percent zoom');
 
 socket.close();

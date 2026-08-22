@@ -1,4 +1,6 @@
-:root { color-scheme: dark; --customer-primary:#e96f98; --customer-secondary:#43bde8; --customer-success:#6ddb65; --stage:#182038; --text:#fff; --muted:rgba(255,255,255,.62); --font-display:"Fredoka",sans-serif; --font-body:"DM Sans",sans-serif; }
+@font-face { font-family:"DM Sans"; src:url("/assets/fonts/dm-sans/dm-sans-latin.woff2") format("woff2"); font-style:normal; font-weight:400 700; font-display:swap; }
+@font-face { font-family:"Fredoka"; src:url("/assets/fonts/fredoka/fredoka-latin.woff2") format("woff2"); font-style:normal; font-weight:500 700; font-display:swap; }
+:root { color-scheme: dark; --customer-primary:#e96f98; --customer-secondary:#43bde8; --customer-success:#6ddb65; --stage:#182038; --text:#fff; --muted:rgba(255,255,255,.62); --font-display:"Fredoka","Arial Rounded MT Bold",Arial,sans-serif; --font-body:"DM Sans",Arial,sans-serif; }
 * { box-sizing:border-box; }
 html,body { width:100%; min-height:100%; margin:0; overflow:hidden; background:#080d18; color:var(--text); font-family:var(--font-body); }
 button,input { font:inherit; }

@@ -1,3 +1,18 @@
+@font-face {
+  font-family: "DM Sans";
+  src: url("/assets/fonts/dm-sans/dm-sans-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Fredoka";
+  src: url("/assets/fonts/fredoka/fredoka-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: swap;
+}
+
 :root {
   color-scheme: light;
   --pink-700: #c94772;
@@ -38,8 +53,8 @@
   --radius-md: 14px;
   --radius-sm: 10px;
   --sidebar: 238px;
-  --font-display: "Fredoka", sans-serif;
-  --font-body: "DM Sans", sans-serif;
+  --font-display: "Fredoka", "Arial Rounded MT Bold", Arial, sans-serif;
+  --font-body: "DM Sans", Arial, sans-serif;
 }
 
 * { box-sizing: border-box; }
