@@ -142,7 +142,7 @@
     },
     {
       "path": "scripts/browser-performance-audit.mjs",
-      "sha256": "36c3173413c785cf7ab3df8a02181b296d717db61b2887c997a1031fdb4b45ea",
+      "sha256": "b14812dfc765e62a78109ee3d456c84df5323adffb8ddc2627111aad75f3cbe9",
       "rules": ["tenant-provider-id"],
       "rationale": "Allow exact synthetic workspace selectors in a QA harness.",
       "reviewedBy": "AxoBoard release gate",
@@ -158,7 +158,7 @@
     },
     {
       "path": "scripts/smoke-test.mjs",
-      "sha256": "0b90e3d5f03dea98b18789c74b33881810847ed12aebd6417a1296af0c1fc6f1",
+      "sha256": "b352997f690af79c0631b00ced56da86fcbcd4bdcd64c39ca34d647b5272fe71",
       "rules": ["company-identity"],
       "rationale": "Allow the exact negative legacy-identity smoke assertion.",
       "reviewedBy": "AxoBoard release gate",

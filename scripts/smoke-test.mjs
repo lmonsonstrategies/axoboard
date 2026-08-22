@@ -86,7 +86,7 @@ function rawResponse(path, headers = {}) {
     const request = httpRequest({ hostname: '127.0.0.1', port, path, method: 'GET', headers }, (response) => {
       const chunks = [];
       response.on('data', (chunk) => chunks.push(chunk));
-      response.on('end', () => resolveResponse({ status: response.statusCode, body: Buffer.concat(chunks).toString('utf8') }));
+      response.on('end', () => resolveResponse({ status: response.statusCode, headers: response.headers, body: Buffer.concat(chunks).toString('utf8') }));
     });
     request.on('error', rejectResponse);
     request.end();
@@ -99,7 +99,10 @@ try {
   assert.equal(health.automationCore, databaseUrl ? 'configured' : 'not_configured', 'automation core health state');
   assert.ok(databaseUrl ? ['starting', 'healthy'].includes(health.automationWorker) : health.automationWorker === 'not_configured', 'automation worker exposes an honest startup state');
   const landing = await assertRoute('/', 200, /Your team should[\s\S]*<em>feel<\/em>[\s\S]*the numbers[\s\S]*moving/i);
-  assert.match(landing.headers.get('content-security-policy') || '', /default-src 'self'/);
+  const contentSecurityPolicy = landing.headers.get('content-security-policy') || '';
+  assert.match(contentSecurityPolicy, /default-src 'self'/);
+  assert.match(contentSecurityPolicy, /font-src 'self'/);
+  assert.doesNotMatch(contentSecurityPolicy, /fonts\.(?:googleapis|gstatic)\.com/i, 'CSP contains no remote font hosts');
   const landingHtml = await (await fetch(`${baseUrl}/`)).text();
   assert.doesNotMatch(landingHtml, /murphy/i);
   assert.doesNotMatch(landingHtml, /See how it works/i);
@@ -136,6 +139,13 @@ try {
   assert.equal(tvHost.status, 200, 'dedicated TV host root status');
   assert.match(tvHost.body, /Enter your screen code/i, 'dedicated TV host root rewrites to player');
   for (const path of ['/marketing.css', '/marketing.js', '/auth.js', '/robots.txt', '/sitemap.xml', '/llms.txt', '/assets/favicon/favicon-32.png', '/assets/favicon/favicon-192.png', '/assets/providers/google-sheets.svg', '/assets/providers/shopify.svg', '/assets/providers/wix.svg', '/assets/providers/microsoft-excel.svg', '/assets/providers/hubspot.svg', '/assets/providers/salesforce.svg']) await assertRoute(path, 200);
+  for (const path of ['/assets/fonts/dm-sans/dm-sans-latin.woff2', '/assets/fonts/fredoka/fredoka-latin.woff2']) {
+    const font = await fetch(`${baseUrl}${path}`);
+    assert.equal(font.status, 200, `${path} status`);
+    assert.equal(font.headers.get('content-type'), 'font/woff2', `${path} content type`);
+    assert.equal(font.headers.get('x-content-type-options'), 'nosniff', `${path} disables MIME sniffing`);
+    assert.ok((await font.arrayBuffer()).byteLength > 0, `${path} body`);
+  }
   assert.match(await (await fetch(`${baseUrl}/robots.txt`)).text(), /User-agent: OAI-SearchBot[\s\S]*Sitemap: https:\/\/axoboard\.io\/sitemap\.xml/i);
   assert.match(await (await fetch(`${baseUrl}/sitemap.xml`)).text(), /<loc>https:\/\/axoboard\.io\/<\/loc>/i);
   assert.match(await (await fetch(`${baseUrl}/llms.txt`)).text(), /AxoBoard is currently in pre-launch development/i);
@@ -143,6 +153,8 @@ try {
   const protectedApp = await assertRoute('/app', 302);
   assert.equal(protectedApp.headers.get('location'), '/login');
   for (const path of ['/.env', '/server.mjs', '/package.json', '/Dockerfile', '/.git/config', '/landing.html', '/auth.html', '/unknown.js', '/assets/axoboard-logo-low-poly.png', '/assets/integrations/google-sheets.svg', '/assets/integrations/hubspot.svg', '/assets/favicon/favicon-source.png']) await assertRoute(path, 404);
+  for (const path of ['/assets/fonts/unknown.woff2', '/assets/fonts/dm-sans/OFL.txt', '/assets/fonts/fredoka/OFL.txt']) await assertRoute(path, 404);
+  assert.ok([400, 404].includes(await rawStatus('/assets/fonts/%2e%2e/%2e%2e/server.mjs')), 'font-prefix traversal is rejected');
   await assertRoute('/%2e%2e/%2e%2e/etc/passwd', 404);
   assert.ok([400, 404].includes(await rawStatus('/%2e%2e/%2e%2e/etc/passwd')), 'raw encoded traversal is rejected');
 
