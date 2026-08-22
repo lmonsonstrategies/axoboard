@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
   findExpectedReleaseWorkflowRun,
+  evaluateRailwayDeployment,
+  isExpectedProductionHealth,
   isExpectedOriginUrl,
   isExpectedReleaseWorkflowRun,
   isReleaseBranch,
@@ -67,6 +69,86 @@ for (const [field, value] of Object.entries(identityMutations)) {
 assert.equal(isSuccessfulReleaseWorkflowRun({ ...run, status: 'in_progress' }, candidate), false, 'CI must be completed');
 assert.equal(isSuccessfulReleaseWorkflowRun({ ...run, conclusion: 'failure' }, candidate), false, 'CI must succeed');
 
+const railwayDeployment = (status, overrides = {}) => ({
+  id: '41473706-b05b-4274-b3f9-85a8b70978e2',
+  status,
+  createdAt: '2026-08-21T23:24:24.789Z',
+  meta: {
+    repo: RELEASE_REPOSITORY,
+    branch: 'main',
+    commitHash: sha,
+    buildOnly: false
+  },
+  ...overrides
+});
+const transientHealth = { ok: true, version: sha };
+assert.equal(isExpectedProductionHealth(transientHealth, sha), true, 'the adversarial response briefly serves the target SHA');
+assert.equal(
+  evaluateRailwayDeployment([railwayDeployment('DEPLOYING')], { sha }).state,
+  'waiting',
+  'target-SHA health cannot complete a deployment still configuring'
+);
+const rolledBack = evaluateRailwayDeployment([railwayDeployment('FAILED')], { sha });
+assert.equal(rolledBack.state, 'failed', 'a target-SHA deployment that later fails is release-blocking');
+assert.match(rolledBack.reason, /terminal status FAILED/);
+assert.equal(evaluateRailwayDeployment([railwayDeployment('CANCELED')], { sha }).state, 'failed', 'Railway cancellation fails immediately');
+const superseded = evaluateRailwayDeployment([railwayDeployment('SUPERSEDED')], { sha });
+assert.equal(superseded.state, 'failed', 'an identity-matching superseded deployment fails immediately');
+assert.match(superseded.reason, /terminal status SUPERSEDED/);
+
+const succeeded = evaluateRailwayDeployment([railwayDeployment('SUCCESS')], { sha });
+assert.equal(succeeded.state, 'succeeded');
+assert.equal(succeeded.deployment.id, railwayDeployment('SUCCESS').id);
+assert.equal(isExpectedProductionHealth({ ok: true, version: 'b'.repeat(40) }, sha), false, 'successful deployment cannot excuse a stale route');
+const removedAfterSmoke = evaluateRailwayDeployment([railwayDeployment('REMOVED')], {
+  sha,
+  deploymentId: succeeded.deployment.id
+});
+assert.equal(removedAfterSmoke.state, 'failed', 'the accepted deployment is rechecked after production smoke');
+assert.equal(
+  evaluateRailwayDeployment([railwayDeployment('SUCCESS', { id: 'newer-deployment' })], {
+    sha,
+    deploymentId: succeeded.deployment.id
+  }).state,
+  'failed',
+  'a superseding deployment invalidates the accepted deployment identity'
+);
+assert.equal(
+  evaluateRailwayDeployment([railwayDeployment('SUCCESS', { meta: { ...railwayDeployment('SUCCESS').meta, commitHash: 'b'.repeat(40) } })], {
+    sha,
+  }).state,
+  'failed',
+  'the latest pinned-service deployment must match the exact release SHA'
+);
+assert.equal(
+  evaluateRailwayDeployment([railwayDeployment('SUCCESS')], {
+    sha,
+    excludedDeploymentIds: [railwayDeployment('SUCCESS').id]
+  }).state,
+  'waiting',
+  'a deployment observed before promotion cannot satisfy the release'
+);
+const malformedSuperseder = evaluateRailwayDeployment([
+  railwayDeployment('FAILED', { id: 'malformed-superseder', createdAt: 'not-a-timestamp' }),
+  railwayDeployment('SUCCESS')
+], { sha });
+assert.equal(malformedSuperseder.state, 'failed', 'an unorderable superseding deployment cannot be silently ignored');
+assert.match(malformedSuperseder.reason, /invalid creation timestamp/);
+for (const [label, createdAt] of [['null', null], ['boolean', false], ['number', 0], ['empty', '']]) {
+  const malformedType = evaluateRailwayDeployment([
+    railwayDeployment('FAILED', { id: `${label}-timestamp`, createdAt }),
+    railwayDeployment('SUCCESS')
+  ], { sha, deploymentId: railwayDeployment('SUCCESS').id });
+  assert.equal(malformedType.state, 'failed', `${label} Railway timestamp cannot hide a superseding failure`);
+  assert.match(malformedType.reason, /invalid creation timestamp/);
+}
+const ambiguousNewest = evaluateRailwayDeployment([
+  railwayDeployment('FAILED', { id: 'same-millisecond-failure' }),
+  railwayDeployment('SUCCESS')
+], { sha });
+assert.equal(ambiguousNewest.state, 'failed', 'same-timestamp deployments fail closed instead of trusting list order');
+assert.match(ambiguousNewest.reason, /ambiguous newest timestamp/);
+
 const workflow = readFileSync(resolve('.github/workflows/ci.yml'), 'utf8');
 assert.match(workflow, /^name:\s+AxoBoard release gate$/m);
 for (const family of ['feat', 'fix', 'release']) {
@@ -91,4 +173,4 @@ try {
   rmSync(receiptsDirectory, { recursive: true, force: true });
 }
 
-console.log('AxoBoard release foundation test passed: branch parity, pinned CI identity, dynamic ports, fail-closed database coverage, and execution receipts.');
+console.log('AxoBoard release foundation test passed: branch parity, pinned CI/Railway identity, rollback-resistant production checks, dynamic ports, fail-closed database coverage, and execution receipts.');

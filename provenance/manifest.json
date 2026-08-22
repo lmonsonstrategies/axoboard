@@ -6,7 +6,7 @@
   "exceptions": [
     {
       "path": ".state.md",
-      "sha256": "11ff02f5c1cac6e70af2a3f1acafae3faa14d8d5ea9ce53b37d274b002160a3d",
+      "sha256": "9eb770ed7db019f72f9953f4370063a1e3a111821aa55d20ca0f126f427c4d83",
       "rules": ["company-identity", "legacy-workspace-path", "credential-material", "business-assumption"],
       "rationale": "Preserve the exact historical project-state audit record.",
       "reviewedBy": "AxoBoard release gate",
@@ -126,7 +126,7 @@
     },
     {
       "path": "docs/RELEASE_RUNBOOK.md",
-      "sha256": "dd30029a96afd928ee3bb912f95e47f8516fbc8331ea5a829afbeeb1d4f94743",
+      "sha256": "39831de7016079e41db057f1b9c6d34fa0eb33e610d695333fd519cb3e13b0b9",
       "rules": ["company-identity"],
       "rationale": "Preserve the exact legacy-identity negative release assertion.",
       "reviewedBy": "AxoBoard release gate",
