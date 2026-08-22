@@ -6,11 +6,11 @@
   "exceptions": [
     {
       "path": ".state.md",
-      "sha256": "590de683fd1e870af7e0a5886f8f8209dc5924fe331fcab156d979a01902cd4b",
+      "sha256": "33bd8dafa913c8240f167a496ae1ed036984e7e731b939a8a170c7a68e3d2ace",
       "rules": ["company-identity", "legacy-workspace-path", "credential-material", "business-assumption"],
-      "rationale": "Preserve the exact historical project-state audit record plus the reviewed Apple QA handoff entry.",
+      "rationale": "Preserve the exact historical project-state audit record plus the reviewed Apple QA and health-SLO handoff entries.",
       "reviewedBy": "AxoBoard release gate",
-      "reviewedAt": "2026-08-21T18:00:00.000Z"
+      "reviewedAt": "2026-08-22T00:30:00.000Z"
     },
     {
       "path": "config/quality-budgets.json",
@@ -146,7 +146,7 @@
     },
     {
       "path": "docs/RELEASE_RUNBOOK.md",
-      "sha256": "dd30029a96afd928ee3bb912f95e47f8516fbc8331ea5a829afbeeb1d4f94743",
+      "sha256": "39831de7016079e41db057f1b9c6d34fa0eb33e610d695333fd519cb3e13b0b9",
       "rules": ["company-identity"],
       "rationale": "Preserve the exact legacy-identity negative release assertion.",
       "reviewedBy": "AxoBoard release gate",

@@ -2,9 +2,12 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
   findExpectedReleaseWorkflowRun,
+  evaluateRailwayDeployment,
+  isExpectedProductionHealth,
   isExpectedOriginUrl,
   isReleaseBranch,
   isSuccessfulReleaseWorkflowRun,
+  RAILWAY_PRODUCTION,
   RELEASE_REPOSITORY,
   RELEASE_WORKFLOW
 } from '../lib/release-policy.mjs';
@@ -55,6 +58,35 @@ async function githubRuns(workflowId, sha, branch) {
   return (await response.json()).workflow_runs || [];
 }
 
+function railwayDeployments() {
+  const output = run('railway', [
+    'deployment', 'list',
+    '--project', RAILWAY_PRODUCTION.project,
+    '--environment', RAILWAY_PRODUCTION.environment,
+    '--service', RAILWAY_PRODUCTION.service,
+    '--limit', '20',
+    '--json'
+  ], { timeout: 30_000 });
+  let deployments;
+  try {
+    deployments = JSON.parse(output);
+  } catch {
+    throw new Error('Railway CLI returned invalid deployment JSON');
+  }
+  assert.ok(Array.isArray(deployments), 'Railway CLI deployment response must be an array');
+  return deployments;
+}
+
+async function productionHealth() {
+  try {
+    const response = await fetch(`${baseUrl}/healthz`, { cache: 'no-store' });
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
 async function waitFor(label, check) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -91,6 +123,11 @@ if (!promote) {
   process.exit(0);
 }
 
+const prePromotionDeploymentIds = new Set(
+  railwayDeployments()
+    .map((deployment) => deployment?.id)
+    .filter((id) => typeof id === 'string' && id.length > 0)
+);
 run('git', ['push', 'origin', `${sha}:refs/heads/main`], { stdio: 'inherit' });
 console.log(`Promoted ${shortSha} to main.`);
 
@@ -102,15 +139,19 @@ await waitFor('main CI', async () => {
   return isSuccessfulReleaseWorkflowRun(item, mainCandidate) ? { done: true, value: item } : { done: false };
 });
 
-await waitFor('Railway production deployment', async () => {
-  try {
-    const response = await fetch(`${baseUrl}/healthz`, { cache: 'no-store' });
-    if (!response.ok) return { done: false };
-    const health = await response.json();
-    return String(health.version || '').startsWith(sha) ? { done: true, value: health } : { done: false };
-  } catch {
-    return { done: false };
-  }
+const railwayDeployment = await waitFor('Railway production deployment', async () => {
+  const result = evaluateRailwayDeployment(railwayDeployments(), { sha, excludedDeploymentIds: prePromotionDeploymentIds });
+  if (result.state === 'failed') return { failed: result.reason };
+  return result.state === 'succeeded'
+    ? { done: true, value: result.deployment }
+    : { done: false };
+});
+
+await waitFor('production exact SHA', async () => {
+  const health = await productionHealth();
+  return isExpectedProductionHealth(health, sha)
+    ? { done: true, value: health }
+    : { done: false };
 });
 
 const verification = spawnSync(process.execPath, ['scripts/verify-production.mjs'], {
@@ -118,4 +159,12 @@ const verification = spawnSync(process.execPath, ['scripts/verify-production.mjs
   stdio: 'inherit'
 });
 assert.equal(verification.status, 0, 'production verification failed');
-console.log(`Release complete: ${shortSha} is live and verified at ${baseUrl}.`);
+
+const finalRailwayState = evaluateRailwayDeployment(railwayDeployments(), {
+  sha,
+  excludedDeploymentIds: prePromotionDeploymentIds,
+  deploymentId: railwayDeployment.id
+});
+assert.equal(finalRailwayState.state, 'succeeded', finalRailwayState.reason || 'Railway deployment did not remain successful');
+assert.ok(isExpectedProductionHealth(await productionHealth(), sha), 'production no longer serves the exact release SHA');
+console.log(`Release complete: ${shortSha} is live at ${baseUrl} on successful Railway deployment ${railwayDeployment.id}.`);
