@@ -11,9 +11,17 @@ const INTEGRATION_FIELDS = [
   ['googleSheets', 'googleSheets']
 ];
 
-function cleanSha(value) {
-  const sha = String(value || '').trim();
-  return /^[a-f0-9]{7,64}$/i.test(sha) ? sha : null;
+function cleanDeployedSha(value) {
+  if (typeof value !== 'string' || !/^[a-f0-9]{40}$/i.test(value)) return null;
+  return value.toLowerCase();
+}
+
+function optionalExpectedSha(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string' || !/^[a-f0-9]{40}$/i.test(value)) {
+    throw new TypeError('invalid expected SHA');
+  }
+  return value.toLowerCase();
 }
 
 function state(value) {
@@ -31,7 +39,7 @@ export async function createHealthSloReceipt(options = {}) {
   const baseUrl = new URL(options.baseUrl || 'https://axoboard.io');
   if (!['http:', 'https:'].includes(baseUrl.protocol)) throw new TypeError('invalid base URL protocol');
   const origin = baseUrl.origin;
-  const expectedSha = cleanSha(options.expectedSha);
+  const expectedSha = optionalExpectedSha(options.expectedSha);
   const timeoutMs = positiveInteger(options.timeoutMs, DEFAULT_TIMEOUT_MS);
   const latencySloMs = positiveInteger(options.latencySloMs, DEFAULT_LATENCY_SLO_MS);
   const fetchImpl = options.fetchImpl || fetch;
@@ -66,7 +74,7 @@ export async function createHealthSloReceipt(options = {}) {
 
   const responseLatencyMs = Math.max(0, Math.round(monotonicNow() - startedAt));
   const httpStatus = response?.status ?? null;
-  const deployedSha = cleanSha(body?.version);
+  const deployedSha = cleanDeployedSha(body?.version);
   const databaseState = state(body?.database);
   const integrationStates = Object.fromEntries(
     INTEGRATION_FIELDS.map(([receiptName, healthName]) => [receiptName, state(body?.[healthName])])
@@ -78,7 +86,7 @@ export async function createHealthSloReceipt(options = {}) {
   if (responseLatencyMs > latencySloMs) reasons.push('latency_slo_exceeded');
   if (httpStatus !== null && httpStatus !== 200) reasons.push('http_status_not_200');
   if (body && body.ok !== true) reasons.push('health_not_ok');
-  if (expectedSha && body && (!deployedSha || !deployedSha.startsWith(expectedSha))) reasons.push('deployed_sha_mismatch');
+  if (expectedSha && body && deployedSha !== expectedSha) reasons.push('deployed_sha_mismatch');
   if (databaseState === 'unhealthy' || databaseState === 'unknown') reasons.push('database_unhealthy');
   if (['dependency_unavailable', 'degraded', 'stale', 'unknown'].includes(workerState)) reasons.push('worker_unhealthy');
 

@@ -8,7 +8,7 @@
 BASE_URL=https://axoboard.io EXPECTED_SHA="$DEPLOY_SHA" node scripts/health-slo-receipt.mjs >> var/health-slo-receipts.jsonl
 ```
 
-The probe removes the path, query string, fragment, and URL credentials before requesting or recording the origin. It sends no cookies or authorization data. `HEALTH_TIMEOUT_MS` defaults to 5000 ms and `HEALTH_LATENCY_SLO_MS` defaults to 2000 ms; both must be positive integer milliseconds. A SHA comparison is enforced when `EXPECTED_SHA` is a 7–64 character hexadecimal value. The deployed SHA may extend the expected SHA, matching the release verifier's prefix behavior.
+The probe removes the path, query string, fragment, and URL credentials before requesting or recording the origin. It sends no cookies or authorization data. `HEALTH_TIMEOUT_MS` defaults to 5000 ms and `HEALTH_LATENCY_SLO_MS` defaults to 2000 ms; both must be positive integer milliseconds. `EXPECTED_SHA` may be unset or exactly empty to disable release-identity comparison. Any supplied nonempty value must be exactly 40 hexadecimal characters; prefixes, surrounding whitespace, suffixes, and other lengths are invalid configuration. Valid uppercase input is normalized to lowercase, and the deployed SHA must equal the complete expected SHA.
 
 Exit code `0` means all evaluated contract and SLO checks passed. Exit code `1` means a receipt was emitted but at least one check failed. Exit code `2` means configuration was invalid and no receipt could safely be emitted. The command is cron-safe: it is non-interactive, has a bounded request timeout, produces one JSONL record on stdout, and sends only configuration failures to stderr. The destination directory must already exist.
 

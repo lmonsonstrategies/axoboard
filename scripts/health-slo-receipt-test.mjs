@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { canonicalJson, createHealthSloReceipt } from './health-slo-receipt.mjs';
 
 const expectedSha = '63877ddd82ba666ffcee80d0b6a0403e5b6e9aac';
@@ -70,6 +72,60 @@ assert.doesNotMatch(canonicalJson(healthy), /tenant|password|secret|cookie|autho
 const wrongSha = await probe(async () => response(200, { ...healthyBody, version: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }));
 assert.equal(wrongSha.passed, false);
 assert.deepEqual(wrongSha.reasons, ['deployed_sha_mismatch']);
+
+const uppercaseExpected = await probe(async () => response(200, healthyBody), {
+  expectedSha: expectedSha.toUpperCase()
+});
+assert.equal(uppercaseExpected.expectedSha, expectedSha);
+assert.equal(uppercaseExpected.passed, true);
+
+for (const unconfiguredExpectedSha of [undefined, null, '']) {
+  let fetchCount = 0;
+  const unpinned = await probe(async () => {
+    fetchCount += 1;
+    return response(200, { ...healthyBody, version: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' });
+  }, { expectedSha: unconfiguredExpectedSha });
+  assert.equal(fetchCount, 1);
+  assert.equal(unpinned.expectedSha, null);
+  assert.equal(unpinned.passed, true);
+}
+
+const malformedExpectedShas = [
+  '86ce390-typo',
+  `${expectedSha}junk`,
+  ` ${expectedSha}`,
+  `${expectedSha} `,
+  ' ',
+  expectedSha.slice(0, 7),
+  expectedSha.slice(0, 39),
+  `${expectedSha}0`,
+  'g'.repeat(40)
+];
+
+for (const malformedExpectedSha of malformedExpectedShas) {
+  let fetchCount = 0;
+  await assert.rejects(
+    () => probe(async () => {
+      fetchCount += 1;
+      return response(200, { ...healthyBody, version: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' });
+    }, { expectedSha: malformedExpectedSha }),
+    /invalid expected SHA/
+  );
+  assert.equal(fetchCount, 0);
+}
+
+const invalidCli = spawnSync(process.execPath, [fileURLToPath(new URL('./health-slo-receipt.mjs', import.meta.url))], {
+  encoding: 'utf8',
+  env: {
+    ...process.env,
+    BASE_URL: 'https://example.test',
+    EXPECTED_SHA: '86ce390-typo'
+  }
+});
+assert.equal(invalidCli.status, 2);
+assert.equal(invalidCli.stdout, '');
+assert.equal(invalidCli.stderr, 'health-slo-receipt: invalid configuration\n');
+assert.doesNotMatch(invalidCli.stderr, /86ce390|expected_sha/i);
 
 const unavailable = await probe(async () => response(503, { ...healthyBody, ok: false }));
 assert.deepEqual(unavailable.reasons, ['http_status_not_200', 'health_not_ok']);
