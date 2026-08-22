@@ -1,69 +1,47 @@
-# Handoff — AxoBoard Apple UI QA
+# Handoff — AxoBoard Apple UI QA hardening
 
 ## Delivery
 
 - Workspace: `/home/ops/.openclaw/workspace-personal/projects/axoboard-apple-qa`
 - Branch: `feat/apple-ui-qa`
 - Original base: `63877ddd82ba666ffcee80d0b6a0403e5b6e9aac`
-- Current foundation: merged `origin/main@40b414cc51d65dd3c9c76a92b5a62d4edd2196eb` in `45a6444`
-- QA commits: `2d22dec` scaffold preservation; `a654dcc` implementation; `e3ae3cb` source-manifest normalization; `786d6f7` SHA-bound provenance integration
-- Branch transport: `feat/apple-ui-qa` pushed over the pinned SSH/443 AxoBoard deploy-key route; no `main`, Railway, or production mutation
+- Latest integrated `origin/main`: `e29bcf8b341bf4f05e773eefc2d482582fdb0fb2`, merged by `3366997`
+- Evidence/browser hardening: `274f158`; performance-order fix: `377c34f`
+- Transport: the feature branch was pushed; `main`, Railway, production, credentials, and customer data were not mutated or accessed.
 
 ## Outcome
 
-The independent gate is complete and fail-closed. It uses dynamic ports, read-only browser routing, explicit route/state/theme/viewport inventory, hard runtime/layout/WCAG/keyboard/motion/font/performance gates, paired screenshot stability, independently approved visual baselines, a 12-dimension evidence rubric, and human-only authenticated-state evidence.
+The gate now proves its browser claim in real Chromium, Firefox, and WebKit. Gate and harness modes cannot omit an engine; missing, failed, or incomplete engine coverage fails closed. Browser identity flows through results, findings, screenshots, baselines, expert review, reports, and artifact manifests. A dedicated CI job installs all three engines plus their host dependencies and executes the complete deterministic gate.
 
-Current product does **not** pass Apple acceptance: the focused local audit found 19 P1 and 23 P2 findings. Authenticated app and paired-TV live states still require a disposable synthetic tenant; production/customer credentials are prohibited.
+Authenticated evidence is schema-validated and derived from artifacts instead of trusting a `passed` flag. Every scenario is bound to the exact candidate SHA, audited origin, synthetic tenant/workspace, run ID, required state/role/device/theme/viewport matrix, canonical fresh timestamps, and regular non-symlink files with exact byte size and SHA-256. Traversal, tampering, stale/future evidence, wrong bindings, duplicate manifests, and artifact reuse fail closed. The former unrelated-good-manifest false-certification pattern is an explicit regression test.
+
+The current product remains intentionally uncertified. Its last focused diagnostic found 19 P1 and 23 P2 issues; that historical result was not rerun against this branch. Release certification still requires a disposable synthetic tenant, independently approved browser-specific baselines, and an independent expert review for the exact candidate.
 
 ## Verification proof
 
-- `npm run qa:apple:lint`: 32 modules passed after release-foundation integration.
-- `npm run qa:apple:test`: 13/13 passed.
-- `npm run qa:apple:verify`: deterministic good fixture passed and deliberate bad fixture produced every required blocker.
-- `npm run verify`: passed with disposable PostgreSQL and no skipped database suite; provenance scanned 204 files with SHA-bound exceptions; dependency audit reported zero vulnerabilities.
-- `npm run check`; `npm run test:smoke`; `npm audit --omit=dev`: passed, public smoke without PostgreSQL, 0 vulnerabilities.
-- Good fixture: 26/26 checks, zero P0–P3; screenshots/report: `reports/runs/final-fixture-pass-20260821/`.
-- Bad fixture: expected-failure contract passed; every required blocker detected; report: `reports/runs/final-fixture-bad-20260821/`.
-- Local product: six checks, 19 P1/23 P2; report: `reports/runs/final-local-focused-20260821/`.
-- Gate proof observed missing-auth, missing-baseline, and missing-expert-review blockers: `reports/runs/final-gate-failclosed-20260821/`.
-- Committed hashes/counts: `artifacts/qa/apple-gate/verification-summary.json`.
+- Exact code SHA `377c34fe3b0e47d20f51b3c356759eed0ae2e943`: [GitHub Actions run 32540180602](https://github.com/lmonsonstrategies/axoboard/actions/runs/32540180602) passed `apple-qa`, `test`, `secrets`, and `image`.
+- Apple QA CI: 36 syntax modules; 21/21 tests; good fixture 78/78 checks (26 each in Chromium, Firefox, and WebKit) with zero P0–P3; deliberate bad fixture detected every required hard rule in every engine.
+- Product verification: disposable PostgreSQL, all six database-suite receipts, provenance scan of 211 files, zero dependency vulnerabilities, and production Docker image build all passed.
+- Adversarial evidence coverage: valid proof; old false-certification attack; tamper/size drift; traversal/symlink; wrong matrix/SHA/origin/tenant/time; reused manifest/artifact.
+- Local Chromium and Firefox diagnostics passed. Local WebKit correctly failed closed because its host libraries are absent; CI installed those dependencies and supplied the authoritative three-engine proof.
 
 ## File manifest
 
-- `.gitignore` 12 — valid
-- `.state.md` 282 — updated
-- `HANDOFF-APPLE-QA.md` 66 — complete
-- `QA_RUNBOOK.md` 194 — complete
-- `artifacts/qa/apple-gate/verification-summary.json` 86 — verified
-- `config/authenticated-evidence.template.json` 21 — valid
-- `config/quality-budgets.json` 117 — valid
-- `config/quality-budgets.schema.json` 128 — valid
-- `package-lock.json` 356 — valid
-- `package.json` 50 — valid
-- `playwright.config.mjs` 46 — checked
-- `scripts/approve-qa-baselines.mjs` 25 — tested
-- `scripts/check-source.mjs` 21 — checked
-- `src/audit.mjs` 393 — tested
-- `src/config.mjs` 100 — tested
-- `src/detectors.mjs` 392 — tested
-- `src/fixture-server.mjs` 44 — tested
-- `src/local-server.mjs` 78 — tested
-- `src/page-audit.mjs` 587 — tested
-- `src/qualitative-rubric.mjs` 84 — tested
-- `src/report.mjs` 84 — tested
-- `src/visual-baselines.mjs` 161 — tested
-- `tests/apple-qa/baselines/README.md` 7 — complete
-- `tests/apple-qa/config.test.mjs` 46 — passed
-- `tests/apple-qa/detectors.test.mjs` 34 — passed
-- `tests/apple-qa/fixture-integration.test.mjs` 28 — passed
-- `tests/apple-qa/fixtures/bad.html` 30 — proven failing
-- `tests/apple-qa/fixtures/fixture.css` 82 — passed
-- `tests/apple-qa/fixtures/fixture.js` 53 — passed
-- `tests/apple-qa/fixtures/good.html` 27 — passed
-- `tests/apple-qa/public-surface.spec.mjs` 17 — checked
-- `tests/apple-qa/qualitative-rubric.test.mjs` 33 — passed
-- `tests/apple-qa/visual-baselines.test.mjs` 43 — passed
+- Evidence contract: schemas, validator, and adversarial tests — 450 lines total.
+- Runner and browser result pipeline: `src/audit.mjs`, `src/page-audit.mjs`, `src/report.mjs`, `src/detectors.mjs` — 1,542 lines total.
+- Policy and CI: quality config/schema, Playwright config, package scripts, and workflow — 483 lines total.
+- Operator artifacts: `QA_RUNBOOK.md` 215, this handoff 47, `.state.md` 311, verification summary 87 — 660 lines total.
 
-## Rollback / next
+## Human blockers and rollback
 
-Rollback the integration with ordinary revert commits; do not rewrite shared history. Revert the current handoff tip, `786d6f7`, merge `45a6444`, and the QA implementation commits as needed. Next: exact-SHA CI plus independent review, then fix product P1s and obtain independent baseline, qualitative, and disposable-tenant approvals. The harness remains a release gate; it does not certify the currently red product.
+Human-only inputs are: (1) a disposable non-production synthetic tenant/display token, (2) independently approved browser-specific visual baselines, and (3) exact-candidate expert review. Customer credentials and production display tokens are prohibited.
+
+Use ordinary revert commits; never rewrite shared history:
+
+```bash
+git revert --no-edit 377c34fe3b0e47d20f51b3c356759eed0ae2e943
+git revert -m 1 --no-edit 33669974e0bced74b54ad6750c150b4a78ec626d
+git revert --no-edit 274f15832099321281e067bbfd752afd1dd6bc42
+```
+
+The merge revert is only needed if the integrated mainline changes must also be removed. Independent promotion review remains mandatory.

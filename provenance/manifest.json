@@ -6,9 +6,9 @@
   "exceptions": [
     {
       "path": ".state.md",
-      "sha256": "33bd8dafa913c8240f167a496ae1ed036984e7e731b939a8a170c7a68e3d2ace",
+      "sha256": "31560bb17ba6b7aa4172ad3c7f362e439019b55875bbd1c9a370dea6f91514da",
       "rules": ["company-identity", "legacy-workspace-path", "credential-material", "business-assumption"],
-      "rationale": "Preserve the exact historical project-state audit record plus the reviewed Apple QA and health-SLO handoff entries.",
+      "rationale": "Preserve the exact historical project-state audit record plus the reviewed Apple QA, Apple QA hardening, and health-SLO handoff entries.",
       "reviewedBy": "AxoBoard release gate",
       "reviewedAt": "2026-08-22T00:30:00.000Z"
     },

@@ -1,85 +1,86 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "kind": "axoboard-apple-qa-verification-summary",
   "runLabel": "personal-dashboard_qa-2026-08-21-apple-ui-gate",
-  "generatedAt": "2026-08-21",
-  "baseCommit": "63877ddd82ba666ffcee80d0b6a0403e5b6e9aac",
-  "environment": "local-read-only-no-credentials",
-  "unitAndBrowserTests": {
-    "command": "npm run qa:apple:lint && npm run qa:apple:test",
-    "syntaxModules": 27,
-    "passed": 13,
-    "failed": 0
+  "generatedAt": "2026-08-22T00:28:39.000Z",
+  "branch": "feat/apple-ui-qa",
+  "latestIntegratedMain": "e29bcf8b341bf4f05e773eefc2d482582fdb0fb2",
+  "verifiedCodeCommit": "377c34fe3b0e47d20f51b3c356759eed0ae2e943",
+  "exactCi": {
+    "runId": 32540180602,
+    "url": "https://github.com/lmonsonstrategies/axoboard/actions/runs/32540180602",
+    "status": "success",
+    "jobs": {
+      "apple-qa": { "jobId": 96948550206, "status": "success" },
+      "test": { "jobId": 96948550396, "status": "success" },
+      "secrets": { "jobId": 96948550509, "status": "success" },
+      "image": { "jobId": 96948550440, "status": "success" }
+    }
   },
-  "productRegression": {
-    "commands": ["npm run check", "npm run test:smoke", "npm audit --omit=dev"],
-    "syntax": "passed",
-    "publicRouteSmoke": "passed-without-postgresql",
-    "dependencyVulnerabilities": 0
+  "evidenceContract": {
+    "schemaVersion": 2,
+    "acceptanceDerivedByValidator": true,
+    "trustedPassedBoolean": false,
+    "oldFalseCertificationAttackRejected": true,
+    "bindings": [
+      "candidate-sha",
+      "target-origin",
+      "synthetic-tenant-and-workspace",
+      "scenario-and-run",
+      "state-role-device-theme-viewport-matrix",
+      "capture-and-review-time-window",
+      "regular-non-symlink-artifact-path",
+      "byte-size-and-sha256"
+    ],
+    "adversarialTestCases": 6
   },
-  "deterministicFixture": {
-    "command": "node src/audit.mjs --target fixture --mode harness --no-baselines --output reports/runs/final-fixture-pass-20260821",
-    "passed": true,
-    "checks": 26,
-    "findings": { "P0": 0, "P1": 0, "P2": 0, "P3": 0 },
-    "screenshots": 26,
-    "repeatScreenshots": 26,
-    "report": "reports/runs/final-fixture-pass-20260821/report.json",
-    "reportSha256": "1b41edf0f1d84a8f995212e5d824021c5b863677c97484965a951c9b7bef49c5",
-    "artifactManifest": "reports/runs/final-fixture-pass-20260821/artifact-manifest.json",
-    "artifactManifestSha256": "0b67492df7b54c724f58827edae48a8a9e2db769191e2c693debbf7d175830ac"
+  "browserGate": {
+    "requiredEngines": ["chromium", "firefox", "webkit"],
+    "missingEnginePolicy": "fail-closed",
+    "goodFixture": {
+      "passed": true,
+      "checks": 78,
+      "checksByEngine": { "chromium": 26, "firefox": 26, "webkit": 26 },
+      "findings": { "P0": 0, "P1": 0, "P2": 0, "P3": 0 }
+    },
+    "deliberateBadFixture": {
+      "passedExpectedFailureContract": true,
+      "checks": 3,
+      "checksByEngine": { "chromium": 1, "firefox": 1, "webkit": 1 },
+      "missingRequiredRulesByEngine": { "chromium": [], "firefox": [], "webkit": [] },
+      "hardFailureCount": 57
+    }
   },
-  "deliberateBadFixture": {
-    "command": "node src/audit.mjs --target fixture-bad --mode harness --no-baselines --expect-failure --output reports/runs/final-fixture-bad-20260821",
-    "passedExpectedFailureContract": true,
-    "checks": 1,
-    "findings": { "P0": 1, "P1": 19, "P2": 6, "P3": 0 },
-    "missingRequiredRules": [],
-    "report": "reports/runs/final-fixture-bad-20260821/report.json",
-    "reportSha256": "7cec3310b705bfc849a09ff6dab7c0ecca5e1258dc799295789d8055b3b5e11e",
-    "artifactManifest": "reports/runs/final-fixture-bad-20260821/artifact-manifest.json",
-    "artifactManifestSha256": "e1ba573c7294642347ad7782671e553364b2c351d6f5fe4a99674aec582e7b69"
+  "verification": {
+    "syntaxModules": 36,
+    "tests": { "passed": 21, "failed": 0 },
+    "productVerify": "passed-with-disposable-postgresql-and-six-suite-receipts",
+    "provenanceFilesScanned": 211,
+    "dependencyVulnerabilities": 0,
+    "productionDockerBuild": "passed"
   },
-  "focusedLocalProduct": {
-    "command": "node src/audit.mjs --target local --mode diagnostic --no-baselines --route home,login,app-auth-guard,tv-pairing --viewport phone-375,desktop-1440,tv-1920 --output reports/runs/final-local-focused-20260821",
+  "historicalProductDiagnostic": {
+    "notReexecutedForThisHardening": true,
     "passed": false,
     "checks": 6,
     "findings": { "P0": 0, "P1": 19, "P2": 23, "P3": 0 },
-    "p1ByRule": {
+    "primaryP1Rules": {
       "runtime.console-error": 6,
       "tv.legibility": 5,
       "typography.font-layout-shift": 4,
       "axe.color-contrast": 4
-    },
-    "report": "reports/runs/final-local-focused-20260821/report.json",
-    "reportSha256": "214e11490828ba545f5e9bd8038ab73c039eb56796a2f87ba350c172c362f7d7",
-    "artifactManifest": "reports/runs/final-local-focused-20260821/artifact-manifest.json",
-    "artifactManifestSha256": "7bfed9360eaa107e3d0343d6b05c8f3ae113cb64487af1b19114adf6cb1b4a00"
+    }
   },
-  "failClosedGate": {
-    "command": "node src/audit.mjs --target local --mode gate --route home --viewport phone-375 --output reports/runs/final-gate-failclosed-20260821",
-    "passed": false,
-    "requiredBlockersObserved": [
-      "coverage.authenticated-states-unverified",
-      "visual.baseline-missing",
-      "qualitative.expert-review-missing"
-    ],
-    "report": "reports/runs/final-gate-failclosed-20260821/report.json",
-    "reportSha256": "52d0183ecade29d08d83ec9ea5eb57942db72835bd0513fc449179e048ac37f5",
-    "artifactManifest": "reports/runs/final-gate-failclosed-20260821/artifact-manifest.json",
-    "artifactManifestSha256": "558f0f6ee8f784ff84a8b1b8a7919f47100b8c4f2997adf3b24c8712428bbccf"
-  },
-  "baselineProposalProof": {
-    "reviewState": "pending-independent-review",
-    "proposer": "dashboard_qa-builder",
-    "approvedBaselineUnchanged": true,
-    "manifest": "reports/runs/baseline-proposal-20260821/baseline-proposal.json",
-    "manifestSha256": "d65fa6d26e0a0b87f102658c525b011185d89c533096e717e58e677219d334b1"
-  },
+  "humanOnlyBlockers": [
+    "disposable-synthetic-tenant-and-display-token",
+    "independently-approved-browser-specific-baselines",
+    "independent-exact-candidate-expert-review"
+  ],
   "externalActions": {
-    "push": false,
-    "release": false,
-    "productionWrite": false,
+    "featureBranchPush": true,
+    "mainPush": false,
+    "railwayMutation": false,
+    "productionMutation": false,
     "credentialsUsed": false,
     "customerDataAccessed": false
   }
