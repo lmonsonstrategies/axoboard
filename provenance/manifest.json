@@ -142,7 +142,7 @@
     },
     {
       "path": "scripts/browser-performance-audit.mjs",
-      "sha256": "b14812dfc765e62a78109ee3d456c84df5323adffb8ddc2627111aad75f3cbe9",
+      "sha256": "c1d027d14c5ac7ccf45464ab6f8b134fe07408b727e602849a1bba52a736c3d1",
       "rules": ["tenant-provider-id"],
       "rationale": "Allow exact synthetic workspace selectors in a QA harness.",
       "reviewedBy": "AxoBoard release gate",
