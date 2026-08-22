@@ -92,6 +92,9 @@ const rolledBack = evaluateRailwayDeployment([railwayDeployment('FAILED')], { sh
 assert.equal(rolledBack.state, 'failed', 'a target-SHA deployment that later fails is release-blocking');
 assert.match(rolledBack.reason, /terminal status FAILED/);
 assert.equal(evaluateRailwayDeployment([railwayDeployment('CANCELED')], { sha }).state, 'failed', 'Railway cancellation fails immediately');
+const superseded = evaluateRailwayDeployment([railwayDeployment('SUPERSEDED')], { sha });
+assert.equal(superseded.state, 'failed', 'an identity-matching superseded deployment fails immediately');
+assert.match(superseded.reason, /terminal status SUPERSEDED/);
 
 const succeeded = evaluateRailwayDeployment([railwayDeployment('SUCCESS')], { sha });
 assert.equal(succeeded.state, 'succeeded');
