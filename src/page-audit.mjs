@@ -490,9 +490,11 @@ export async function runPageAudit({ page, requestContext, route, viewport, them
   await page.waitForTimeout(250);
 
   const snapshot = await collectDomSnapshot(page, viewport, config.budgets);
+  // Sample navigation performance before the harness generates keyboard input.
+  // Otherwise INP measures the QA probe itself, which produced false WebKit failures.
+  const metrics = await collectPerformance(page);
   const keyboard = await auditKeyboard(page);
   const reducedMotion = await collectReducedMotion(page, config.budgets.maximumMotionMsReduced);
-  const metrics = await collectPerformance(page);
   const fonts = await collectFontReadiness(page);
   const axe = await new AxeBuilder({ page }).analyze();
   const linkResults = checkLinks ? await checkSameOriginLinks(requestContext, snapshot.links, baseOrigin) : [];
