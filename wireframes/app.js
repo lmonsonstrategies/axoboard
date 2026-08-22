@@ -13,6 +13,77 @@ let activeOauthProvider = null;
 let layoutEditSnapshot = null;
 let layoutDraft = null;
 const dedicatedTvRuntime = location.pathname === '/tv';
+const kpiRecoveryKey = 'axoboard.kpi-recovery.v1';
+const kpiRecoveryVersion = 1;
+const kpiRecoveryTtlMs = 30 * 60 * 1000;
+const kpiRecoveryNonce = new URLSearchParams(location.search).get('recover');
+
+function recoveryNonce() {
+  const bytes = new Uint8Array(18);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
+}
+
+function clearKpiRecovery() {
+  try { sessionStorage.removeItem(kpiRecoveryKey); } catch { /* storage may be unavailable */ }
+}
+
+if (!kpiRecoveryNonce) clearKpiRecovery();
+
+function safeRecoveryControl(control) {
+  if (!(control instanceof Element)) return '';
+  if (control.id && kpiBuilderModal?.contains(control)) return control.id;
+  return '';
+}
+
+function captureKpiRecovery(interruptedControl = document.activeElement) {
+  const nonce = recoveryNonce();
+  const envelope = {
+    version: kpiRecoveryVersion,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + kpiRecoveryTtlMs,
+    nonce,
+    step: activeBuilderStep,
+    focusId: safeRecoveryControl(interruptedControl),
+    draft: {
+      source: activeKpiSource,
+      name: kpiName.value.trim().slice(0, 160),
+      displayType: activeDisplayType,
+      displayFormat: document.querySelector('#kpiFormat').value,
+      periodGranularity: document.querySelector('#periodGranularity').value,
+      goalDirection: document.querySelector('#goalDirection').value,
+      goalCalendar: document.querySelector('#goalCalendar').value,
+      goalTimezone: document.querySelector('#goalTimezone').value,
+      includeHeaders: document.querySelector('#sheetHasHeaders').checked,
+      comparisonIncludesHeaders: document.querySelector('#comparisonHasHeaders').checked
+    }
+  };
+  try { sessionStorage.setItem(kpiRecoveryKey, JSON.stringify(envelope)); }
+  catch { return null; }
+  return nonce;
+}
+
+function validKpiRecovery(envelope, nonce) {
+  const draft = envelope?.draft;
+  return envelope?.version === kpiRecoveryVersion
+    && Number.isFinite(envelope.createdAt) && Number.isFinite(envelope.expiresAt)
+    && envelope.expiresAt > Date.now() && envelope.expiresAt - envelope.createdAt <= kpiRecoveryTtlMs
+    && typeof nonce === 'string' && nonce.length === 36 && envelope.nonce === nonce
+    && Number.isInteger(envelope.step) && envelope.step >= 1 && envelope.step <= 3
+    && draft && typeof draft === 'object' && !Array.isArray(draft)
+    && Object.keys(envelope).every((key) => ['version', 'createdAt', 'expiresAt', 'nonce', 'step', 'focusId', 'draft'].includes(key))
+    && Object.keys(draft).every((key) => ['source', 'name', 'displayType', 'displayFormat', 'periodGranularity', 'goalDirection', 'goalCalendar', 'goalTimezone', 'includeHeaders', 'comparisonIncludesHeaders'].includes(key));
+}
+
+function redirectForKpiReauthentication(interruptedControl) {
+  const nonce = captureKpiRecovery(interruptedControl);
+  if (!nonce) {
+    clearKpiRecovery();
+    location.assign('/login?return=%2Fapp');
+    return;
+  }
+  location.assign(`/login?return=${encodeURIComponent(`/app?recover=${nonce}`)}`);
+}
 
 function currentDashboardCardKeys() {
   const cards = [...document.querySelectorAll('#dashboardKpiGrid .kpi-card')];
@@ -527,6 +598,13 @@ async function apiJson(path, options = {}) {
   const response = await fetch(path, { credentials: 'same-origin', ...options, headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if (response.status === 401 && kpiBuilderModal?.classList.contains('is-visible') && /^\/api\/axoboard\/kpis(?:\/|$)/.test(path)) {
+      redirectForKpiReauthentication(document.activeElement);
+      const recoveryError = new Error('Your session expired. Sign in to restore this KPI draft.');
+      recoveryError.code = 'SESSION_EXPIRED_RECOVERY';
+      recoveryError.status = 401;
+      throw recoveryError;
+    }
     const error = new Error(payload.error || 'AxoBoard could not complete that request.');
     error.code = payload.code || '';
     error.details = payload.details || null;
@@ -2651,6 +2729,39 @@ function closeKpiBuilder() {
   builderReturnFocus?.focus?.();
 }
 
+async function restoreKpiRecovery() {
+  const nonce = kpiRecoveryNonce;
+  if (!nonce) return false;
+  let envelope = null;
+  try { envelope = JSON.parse(sessionStorage.getItem(kpiRecoveryKey) || 'null'); } catch { /* invalid JSON is discarded below */ }
+  clearKpiRecovery();
+  if (!validKpiRecovery(envelope, nonce) || !activeGoogleConnection) {
+    showToast('KPI draft discarded', 'The recovery data was invalid, expired, opened in another tab, or its source is unavailable. No unsafe data was restored.');
+    return false;
+  }
+  openKpiBuilder(envelope.draft.source, document.querySelector('#addKpiButton'));
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  kpiName.value = envelope.draft.name;
+  previewKpiName.textContent = envelope.draft.name || 'Untitled KPI';
+  document.querySelector('#kpiFormat').value = envelope.draft.displayFormat;
+  document.querySelector('#periodGranularity').value = envelope.draft.periodGranularity;
+  document.querySelector('#goalDirection').value = envelope.draft.goalDirection;
+  document.querySelector('#goalCalendar').value = envelope.draft.goalCalendar;
+  document.querySelector('#goalTimezone').value = envelope.draft.goalTimezone;
+  document.querySelector('#sheetHasHeaders').checked = Boolean(envelope.draft.includeHeaders);
+  document.querySelector('#comparisonHasHeaders').checked = Boolean(envelope.draft.comparisonIncludesHeaders);
+  selectDisplayType(envelope.draft.displayType);
+  showBuilderStep(envelope.step);
+  const focusTarget = envelope.focusId && document.getElementById(envelope.focusId);
+  (focusTarget && kpiBuilderModal.contains(focusTarget) ? focusTarget : document.querySelector('#closeKpiBuilder')).focus();
+  showToast('Safe KPI draft restored', 'Your session expired, so AxoBoard restored the builder step and safe settings. Choose source cells again before previewing or saving.');
+  return true;
+}
+
+document.addEventListener('submit', (event) => {
+  if (event.target?.action?.includes('/api/auth/logout')) clearKpiRecovery();
+}, true);
+
 function spreadsheetModifiedLabel(value) {
   if (!value) return 'Modified date unavailable';
   const date = new Date(value);
@@ -4060,5 +4171,6 @@ if (location.search && !dedicatedTvRuntime) history.replaceState(null, '', `/app
     setTvConnectionState('loading');
   }
   const ready = await loadLiveData();
+  if (ready && !dedicatedTvRuntime) await restoreKpiRecovery();
   if (dedicatedTvRuntime && ready) openFeatureModal('tvPreviewModal', document.querySelector('#tvFullscreen'));
 })();
