@@ -14,21 +14,21 @@
     },
     {
       "path": "config/quality-budgets.json",
-      "sha256": "7783bfe31e79eef326a2dd76668496469f41c46b8bfcb849abba76232d53c109",
+      "sha256": "63c38a23dc0ffc6d6a311b688f0ae2e46cc6a99b4e8a0dc60544caf32b7cc0cd",
       "rules": [
         "company-identity",
         "legacy-workspace-path",
         "credential-material"
       ],
-      "rationale": "Allow exact negative sensitive-pattern assertions in the Apple QA redaction policy while adding the reviewed browser and authenticated evidence matrices; these strings are detection rules, not product defaults or credentials.",
+      "rationale": "Allow exact negative sensitive-pattern assertions in the Apple QA redaction policy while requiring full browser coverage for authenticated evidence; these strings are detection rules, not product defaults or credentials.",
       "reviewedBy": "AxoBoard Apple QA integration",
       "reviewedAt": "2026-08-22T00:30:00.000Z"
     },
     {
       "path": "tests/apple-qa/evidence.test.mjs",
-      "sha256": "158d661f069bfc16afcfb19e56158d2cc69b06bb3c6f4e86e4dabee4cedaf924",
+      "sha256": "d1d284f4171b0f80e8f4fe89b8b3a94766b9a6f39a955544344b2330223b17ba",
       "rules": ["tenant-provider-id"],
-      "rationale": "Allow only the exact clearly synthetic tenant/workspace binding fixtures used to adversarially test the authenticated evidence validator.",
+      "rationale": "Allow only the exact clearly synthetic tenant/workspace binding fixtures used to adversarially test signed authenticated evidence, cross-browser artifacts, and tenant isolation.",
       "reviewedBy": "AxoBoard Apple QA integration",
       "reviewedAt": "2026-08-22T00:30:00.000Z"
     },

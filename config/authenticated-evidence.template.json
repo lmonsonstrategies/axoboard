@@ -1,8 +1,9 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "kind": "axoboard-human-authenticated-qa-evidence",
-  "reviewer": "",
-  "reviewedAt": "",
+  "captureActor": "capture-operator-id",
+  "reviewerId": "trusted-reviewer-id",
+  "reviewedAt": "2000-01-01T00:00:00.000Z",
   "environment": "disposable-non-production",
   "candidateSha": "0000000000000000000000000000000000000000",
   "targetOrigin": "http://127.0.0.1:4173",
@@ -16,14 +17,22 @@
       "type": "authenticated-app",
       "runId": "qa-auth-app-example",
       "artifactManifest": "authenticated-app/manifest.json",
-      "notes": ""
+      "artifactManifestSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "notes": "Independent review notes for the exact signed capture."
     },
     {
       "id": "paired-tv-live-state",
       "type": "paired-tv",
       "runId": "qa-paired-tv-example",
       "artifactManifest": "paired-tv/manifest.json",
-      "notes": ""
+      "artifactManifestSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "notes": "Independent review notes for the exact signed capture."
     }
-  ]
+  ],
+  "attestation": {
+    "algorithm": "Ed25519",
+    "keyId": "trusted-reviewer-key-id",
+    "payloadSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+  }
 }

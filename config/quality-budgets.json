@@ -42,6 +42,7 @@
       "states": ["default", "empty", "loading", "error"],
       "viewports": ["phone-375", "tablet-portrait", "desktop-1440"],
       "themes": ["light"],
+      "browserEngines": ["chromium", "firefox", "webkit"],
       "requiredMatrix": [
         { "state": "default", "role": "owner", "device": "phone", "theme": "light", "viewport": "phone-375" },
         { "state": "default", "role": "viewer", "device": "desktop", "theme": "light", "viewport": "desktop-1440" },
@@ -61,6 +62,7 @@
       "states": ["live", "offline", "stale", "celebration"],
       "viewports": ["tablet-landscape", "tv-1920"],
       "themes": ["dark"],
+      "browserEngines": ["chromium", "firefox", "webkit"],
       "requiredMatrix": [
         { "state": "live", "role": "display-device", "device": "landscape-tablet", "theme": "dark", "viewport": "tablet-landscape" },
         { "state": "live", "role": "display-device", "device": "tv", "theme": "dark", "viewport": "tv-1920" },

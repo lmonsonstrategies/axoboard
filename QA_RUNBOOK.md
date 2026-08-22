@@ -63,17 +63,21 @@ Authenticated evidence uses two JSON Schemas: `config/authenticated-evidence.sch
 
 - The exact candidate Git SHA and audited HTTP(S) origin.
 - Clearly synthetic tenant and workspace IDs.
-- A unique scenario/run ID and the required state/role/device/theme/viewport matrix in `quality-budgets.json`.
+- A unique scenario/run ID and the required state/role/device/theme/viewport matrix in `quality-budgets.json`, executed in real Chromium, Firefox, and WebKit.
 - Canonical capture/review timestamps no older than 72 hours.
-- Regular, non-symlink artifact files beneath the evidence directory, with exact relative path, byte size, media type, and SHA-256.
+- One valid PNG screenshot and one ZIP-formatted Playwright trace per matrix cell, with engine/version identity, exact relative path, byte size, media type, and SHA-256.
+- The exact SHA-256 of each scenario manifest, so a manifest cannot be changed after approval.
 
-Path traversal, absolute paths, symlinks, stale/future timestamps, wrong target/SHA/tenant/matrix, missing files, tampering, duplicate manifests, and artifact reuse across matrix cells or scenario groups all fail closed. Authenticated app and paired-TV evidence must use distinct manifests and artifacts.
+The wrapper must carry an Ed25519 signature from a reviewer trusted for `authenticated-evidence` by an owner-controlled policy outside the candidate checkout. The policy path and exact digest come from protected `AXOBOARD_QA_TRUST_POLICY` and `AXOBOARD_QA_TRUST_POLICY_SHA256` environment values. The capture actor supplied with `--capture-actor` must match the bundle and cannot be its reviewer. Private signing keys never enter the repository or gate environment.
+
+Path traversal, absolute paths, symlinks, stale/future timestamps, wrong target/SHA/capture actor/tenant/matrix, missing files, non-PNG/non-ZIP claims, tampering, unsigned manifest replacement, duplicate manifests, and artifact reuse across matrix cells or scenario groups all fail closed. Authenticated app and paired-TV evidence must use distinct manifests and artifacts.
 
 ## Quantitative gates
 
 Every selected route/state/theme/viewport runs the same audit engine in each required browser:
 
 - Chromium, Firefox, and WebKit are all mandatory in gate and harness modes. Diagnostic mode may select a subset with `--browser` for troubleshooting only.
+- `--quick`, `--route`, `--viewport`, `--theme`, and `--browser` are rejected entirely in gate and harness modes. Only diagnostic mode may narrow the policy matrix.
 
 - Browser console errors, page exceptions, HTTP/resource failures, and attempted mutations.
 - Horizontal overflow measured against `documentElement.clientWidth`, including mobile layout-viewport behavior.
@@ -101,8 +105,8 @@ Budget values live in `config/quality-budgets.json`; their JSON Schema is `confi
 Gate mode additionally blocks when any of these is absent:
 
 1. Approved checkpoint baselines.
-2. Independent expert review for every exact route/state/theme/viewport.
-3. Cryptographically verified, exact-SHA/origin disposable-tenant evidence for every required human-only matrix cell.
+2. Owner-policy trusted, independently signed expert review for every exact route/state/theme/viewport/browser and current screenshot pair.
+3. Owner-policy trusted, independently signed exact-SHA/origin disposable-tenant evidence for every required human-only matrix cell.
 4. A qualitative score of at least 4.0 with zero P2 findings.
 
 Diagnostic and harness modes may omit those governance artifacts, but they still report hard findings and never rewrite baselines.
@@ -124,7 +128,7 @@ Each result contains a 0–5 evidence bundle for:
 11. Perceived polish
 12. Brand distinctiveness
 
-Automated values are labeled `automated-proxy`. The generated `expert-review-template.json` requires an independent reviewer to score every dimension and attach route- and browser-specific evidence. Missing dimensions, evidence, reviewer identity, timestamp, browser identity, or approval make the gate fail.
+Automated values are labeled `automated-proxy`. The generated `expert-review-template.json` binds the checked-out SHA, audited origin, capture actor, capture time, full route/state/theme/viewport/browser matrix, and both screenshot hashes. Every dimension needs a score and substantive evidence. A trusted reviewer distinct from the capture actor must sign the complete bundle with an owner-authorized Ed25519 key. Missing, stale, malformed, self-issued, untrusted, or artifact-mismatched approval fails closed.
 
 ## Visual baseline workflow
 
@@ -185,13 +189,16 @@ Use external mode only for an explicitly approved public/local origin. The allow
 
 ```bash
 AXOBOARD_BASE_URL=http://127.0.0.1:4173 \
-AXOBOARD_CANDIDATE_SHA="$(git rev-parse HEAD)" \
+AXOBOARD_QA_CAPTURE_ACTOR="capture-operator-id" \
+AXOBOARD_QA_TRUST_POLICY="/owner-controlled/axoboard-qa-trust-policy.json" \
+AXOBOARD_QA_TRUST_POLICY_SHA256="<protected-exact-digest>" \
 npm run qa:apple:candidate -- \
+  --capture-actor "capture-operator-id" \
   --expert-review /absolute/path/expert-review.json \
   --human-evidence /absolute/path/authenticated-evidence.json
 ```
 
-This remains read-only. The base URL must be the exact disposable candidate origin recorded in every evidence manifest. Prefer the isolated local runner for public surfaces, but do not attach authenticated evidence to a different ephemeral server or commit.
+This remains read-only. Candidate identity is always derived from checked-out `HEAD`; caller-supplied SHA overrides are rejected. External mode requires `/healthz` to return `ok: true` and that exact full SHA before a browser launches. The base URL must be the exact disposable candidate origin recorded in every signed evidence and expert-review bundle. Prefer the isolated local runner for public surfaces, but do not attach authenticated evidence to a different ephemeral server or commit.
 
 ## Common failures
 
@@ -199,7 +206,10 @@ This remains read-only. The base URL must be the exact disposable candidate orig
 - `qualitative.expert-review-missing`: complete the generated template with screenshots and interaction evidence.
 - `coverage.authenticated-states-unverified`: run the human checklist against a disposable synthetic tenant; never substitute customer credentials.
 - `browserCoverage.complete=false`: install the missing pinned Playwright engine and host dependencies; never remove the engine from gate/harness mode.
-- `Human evidence ... binding failed`: recapture the exact candidate/origin/scenario matrix. Do not edit a manifest to make old artifacts appear current.
+- `gate mode cannot reduce the policy matrix`: rerun the complete gate; use diagnostic mode for focused investigation.
+- `QA trust policy ...`: mount the owner-controlled external policy and protected exact digest; never add a private key or self-issued policy to the candidate.
+- `Human evidence ... binding failed`: recapture the exact candidate/origin/capture-actor/scenario/browser matrix and obtain a fresh independent signature. Do not edit a signed manifest to make old artifacts appear current.
+- `Expert review ...`: review the generated exact-candidate template, preserve both screenshot hashes, and sign it with a trusted reviewer key distinct from the capture operator.
 - `runtime.console-error` on font preconnect: inspect CSP `connect-src` and the console evidence in `report.json`.
 - `typography.font-layout-shift`: self-host or preload fonts with metric-compatible fallbacks; verify the geometry-shift evidence.
 - `visual.screenshot-instability`: remove clocks/random data, add a deterministic QA state, or fix JS-driven motion. Do not raise the threshold to hide instability.

@@ -25,6 +25,7 @@ export async function loadConfig() {
   const knownViewports = new Set(config.viewports.map((viewport) => viewport.id));
   for (const scenario of config.humanOnlyScenarios) {
     if ((scenario.type === 'authenticated-app') !== (scenario.surface === 'app')) throw new Error(`Human scenario ${scenario.id} has an inconsistent type/surface binding.`);
+    if (JSON.stringify(scenario.browserEngines) !== JSON.stringify(config.browserEngines)) throw new Error(`Human scenario ${scenario.id} must require the complete browser-engine policy.`);
     const matrixIds = new Set();
     const observed = { states: new Set(), viewports: new Set(), themes: new Set() };
     for (const entry of scenario.requiredMatrix) {

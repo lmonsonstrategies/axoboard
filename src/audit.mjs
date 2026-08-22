@@ -1,18 +1,20 @@
 #!/usr/bin/env node
 import { execFile } from 'node:child_process';
-import { mkdir, readFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { chromium, firefox, webkit } from '@playwright/test';
+import { loadTrustPolicy } from './attestation.mjs';
 import { createFinding } from './detectors.mjs';
 import { loadConfig, materializeRoutes, projectRoot, resolveChromiumExecutable, validateBaseUrl } from './config.mjs';
 import { loadHumanEvidence } from './evidence.mjs';
+import { loadExpertReviewBundle } from './expert-review.mjs';
 import { startFixtureServer } from './fixture-server.mjs';
 import { startLocalProductServer } from './local-server.mjs';
 import { runPageAudit } from './page-audit.mjs';
 import { scoreQualitativeRubric, validateExpertReview } from './qualitative-rubric.mjs';
 import { writeAuditReport } from './report.mjs';
-import { assessApprovedBaseline, compareRuntimeStability, screenshotName, writeBaselineProposal } from './visual-baselines.mjs';
+import { assessApprovedBaseline, compareRuntimeStability, screenshotName, sha256File, writeBaselineProposal } from './visual-baselines.mjs';
 
 const allowedTargets = new Set(['local', 'fixture', 'fixture-bad', 'url']);
 const allowedModes = new Set(['gate', 'diagnostic', 'harness']);
@@ -21,6 +23,17 @@ const execFileAsync = promisify(execFile);
 
 function splitValues(value) {
   return String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
+}
+
+export function assertFullPolicySelection(options) {
+  const selectionFlags = [
+    options.quick ? '--quick' : null,
+    options.routeIds?.length ? '--route' : null,
+    options.viewportIds?.length ? '--viewport' : null,
+    options.themes?.length ? '--theme' : null,
+    options.browserEngines?.length ? '--browser' : null
+  ].filter(Boolean);
+  if (selectionFlags.length && ['gate', 'harness'].includes(options.mode)) throw new Error(`${options.mode} mode cannot reduce the policy matrix with ${selectionFlags.join(', ')}; use diagnostic mode for focused work.`);
 }
 
 export function parseArguments(argv) {
@@ -45,9 +58,11 @@ export function parseArguments(argv) {
     proposer: process.env.AXOBOARD_QA_PROPOSER || '',
     expertReviewPath: null,
     humanEvidencePath: null,
-    candidateSha: process.env.AXOBOARD_CANDIDATE_SHA || process.env.GITHUB_SHA || null
+    captureActor: process.env.AXOBOARD_QA_CAPTURE_ACTOR || '',
+    trustPolicyPath: process.env.AXOBOARD_QA_TRUST_POLICY || null,
+    trustPolicySha256: process.env.AXOBOARD_QA_TRUST_POLICY_SHA256 || null
   };
-  const takesValue = new Set(['--target', '--mode', '--base-url', '--output', '--approved-root', '--route', '--viewport', '--theme', '--browser', '--reason', '--proposer', '--expert-review', '--human-evidence', '--candidate-sha']);
+  const takesValue = new Set(['--target', '--mode', '--base-url', '--output', '--approved-root', '--route', '--viewport', '--theme', '--browser', '--reason', '--proposer', '--expert-review', '--human-evidence', '--capture-actor']);
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (takesValue.has(argument)) {
@@ -67,7 +82,7 @@ export function parseArguments(argv) {
       if (argument === '--proposer') options.proposer = value;
       if (argument === '--expert-review') options.expertReviewPath = resolve(value);
       if (argument === '--human-evidence') options.humanEvidencePath = resolve(value);
-      if (argument === '--candidate-sha') options.candidateSha = value;
+      if (argument === '--capture-actor') options.captureActor = value;
       continue;
     }
     if (argument === '--quick') options.quick = true;
@@ -83,10 +98,12 @@ export function parseArguments(argv) {
   if (!allowedTargets.has(options.target)) throw new Error(`Unknown target: ${options.target}`);
   if (!allowedModes.has(options.mode)) throw new Error(`Unknown mode: ${options.mode}`);
   if (options.target === 'url' && !options.baseUrl) throw new Error('--target url requires --base-url.');
+  if (options.baseUrl && options.target !== 'url') throw new Error('--base-url is valid only with --target url.');
   if (options.proposeBaselines && options.noBaselines) throw new Error('--propose-baselines cannot be combined with --no-baselines.');
   if (options.mode === 'gate' && options.noBaselines) throw new Error('--no-baselines is prohibited in gate mode. Use diagnostic or harness mode.');
   if (options.proposeBaselines && (!options.reason.trim() || !options.proposer.trim())) throw new Error('--propose-baselines requires --reason and --proposer (or AXOBOARD_QA_PROPOSER).');
-  if (options.candidateSha && !/^[0-9a-f]{40}$/.test(options.candidateSha)) throw new Error('--candidate-sha must be an exact lowercase 40-character Git SHA.');
+  if (options.captureActor && !/^[a-z0-9][a-z0-9_-]{2,63}$/.test(options.captureActor)) throw new Error('--capture-actor must be a stable lowercase operator ID.');
+  assertFullPolicySelection(options);
   return options;
 }
 
@@ -100,11 +117,11 @@ function helpText() {
     'Inventory:',
     '  --list                 Print route/state/theme/viewport inventory without launching a browser',
     '  --dry-run              Validate and print the selected execution plan',
-    '  --quick                Checkpoint routes and canonical viewports only',
-    '  --route <a,b>          Limit route IDs',
-    '  --viewport <a,b>       Limit viewport IDs',
-    '  --theme <light,dark>   Limit supported themes',
-    '  --browser <engines>    Diagnostic-only subset; gate/harness require Chromium, Firefox, and WebKit',
+    '  --quick                Diagnostic-only checkpoint/canonical subset',
+    '  --route <a,b>          Diagnostic-only route subset',
+    '  --viewport <a,b>       Diagnostic-only viewport subset',
+    '  --theme <light,dark>   Diagnostic-only theme subset',
+    '  --browser <engines>    Diagnostic-only engine subset',
     '',
     'Evidence and policy:',
     '  --mode gate|diagnostic|harness',
@@ -114,7 +131,8 @@ function helpText() {
     '  --proposer <identity>  Required proposal author; cannot self-approve',
     '  --expert-review <json> Independent route/state review bundle',
     '  --human-evidence <json> Reviewed disposable-tenant evidence for authenticated app/TV states',
-    '  --candidate-sha <sha>  Exact candidate SHA; defaults to GITHUB_SHA or the checked-out HEAD',
+    '  --capture-actor <id>   Stable ID for the operator who generated the capture',
+    '  Candidate SHA is always derived from checked-out HEAD; URL /healthz must match it exactly.',
     '  --expect-failure       Pass only when the deliberate bad fixture triggers required hard gates',
     '  --output <directory>   Artifact destination (default unique reports/runs directory)',
     ''
@@ -128,6 +146,7 @@ function routesForTarget(config, target) {
 }
 
 export function buildPlan(config, options) {
+  assertFullPolicySelection(options);
   const allViewportIds = new Set(config.viewports.map((viewport) => viewport.id));
   const requestedViewports = new Set(options.viewportIds);
   const requestedRoutes = new Set(options.routeIds);
@@ -176,12 +195,25 @@ export function assessBrowserCoverage(requiredEngines, planLength, results, fail
   };
 }
 
-async function resolveCandidateSha(candidate) {
-  if (candidate) return candidate;
+export async function resolveCandidateSha() {
   const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: projectRoot });
   const sha = stdout.trim();
   if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error('Could not resolve an exact candidate Git SHA.');
   return sha;
+}
+
+export async function verifyServedCandidate(origin, candidateSha, fetchImpl = fetch) {
+  let response;
+  try {
+    response = await fetchImpl(`${origin}/healthz`, { method: 'GET', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(5_000) });
+  } catch (error) {
+    throw new Error(`Candidate /healthz identity check failed: ${String(error.message || error)}`);
+  }
+  if (response.status !== 200) throw new Error(`Candidate /healthz identity check returned HTTP ${response.status}.`);
+  let health;
+  try { health = await response.json(); } catch { throw new Error('Candidate /healthz identity check returned malformed JSON.'); }
+  if (health?.ok !== true || health?.version !== candidateSha) throw new Error(`Candidate /healthz must report ok=true and exact version ${candidateSha}.`);
+  return { ok: true, version: health.version };
 }
 
 function launchOptions(browserEngine) {
@@ -192,12 +224,6 @@ function launchOptions(browserEngine) {
     headless: true,
     args: ['--no-sandbox', '--disable-dev-shm-usage', '--font-render-hinting=none']
   };
-}
-
-async function loadExpertReviews(path) {
-  if (!path) return [];
-  const parsed = JSON.parse(await readFile(path, 'utf8'));
-  return Array.isArray(parsed) ? parsed : parsed.reviews || [parsed];
 }
 
 function matchingReview(reviews, entry, browserEngine) {
@@ -249,10 +275,14 @@ export async function runAudit(options, suppliedConfig = null) {
   const config = suppliedConfig || await loadConfig();
   const plan = buildPlan(config, options);
   const browserEngines = resolveBrowserEngines(config, options);
+  const candidateSha = await resolveCandidateSha();
+  const providedOrigin = options.target === 'url' ? validateBaseUrl(options.baseUrl, config.allowedBaseUrls) : null;
+  if (providedOrigin) await verifyServedCandidate(providedOrigin, candidateSha);
   const inventory = {
     schemaVersion: 1,
     target: options.target,
     mode: options.mode,
+    candidateSha,
     browserEngines,
     entries: plan.map(({ route, theme, viewport }) => ({ routeId: route.id, path: route.path, surface: route.surface, state: route.state, theme, viewport: viewport.id, size: `${viewport.width}x${viewport.height}`, baselineRequired: route.baselineRequired })),
     humanOnlyScenarios: config.humanOnlyScenarios
@@ -260,22 +290,41 @@ export async function runAudit(options, suppliedConfig = null) {
   if (options.list || options.dryRun) return { inventory, dryRun: true };
 
   await mkdir(options.outputRoot, { recursive: true });
-  const candidateSha = await resolveCandidateSha(options.candidateSha);
   const server = await resolveTarget(options, config);
   const results = [];
   const baselineRecords = [];
   const browserFailures = [];
   let humanEvidence = null;
   let reviews = [];
+  let expertReviewMetadata = null;
   let humanBlockerAdded = false;
   try {
-    reviews = await loadExpertReviews(options.expertReviewPath);
+    const needsTrustPolicy = Boolean(options.expertReviewPath || options.humanEvidencePath);
+    if (needsTrustPolicy && !options.captureActor) throw new Error('--capture-actor is required whenever signed human or expert evidence is supplied.');
+    const trustPolicy = needsTrustPolicy
+      ? await loadTrustPolicy({ path: options.trustPolicyPath, expectedSha256: options.trustPolicySha256 })
+      : null;
+    const expectedReviewIdentities = browserEngines.flatMap((browserEngine) => plan.map((entry) => ({ routeId: entry.route.id, state: entry.route.state, theme: entry.theme, viewport: entry.viewport.id, browserEngine })));
+    const expertBundle = await loadExpertReviewBundle({
+      path: options.expertReviewPath,
+      expectedCandidateSha: candidateSha,
+      expectedTargetOrigin: server.origin,
+      expectedCaptureActor: options.captureActor,
+      expectedIdentities: expectedReviewIdentities,
+      qualitativeDimensions: config.qualityPolicy.qualitativeDimensions,
+      evidencePolicy: config.evidencePolicy,
+      trustPolicy
+    });
+    reviews = expertBundle.reviews;
+    expertReviewMetadata = expertBundle.metadata;
     humanEvidence = await loadHumanEvidence({
       evidencePath: options.humanEvidencePath,
       requiredScenarios: config.humanOnlyScenarios,
       expectedCandidateSha: candidateSha,
       expectedTargetOrigin: server.origin,
-      policy: config.evidencePolicy
+      expectedCaptureActor: options.captureActor,
+      policy: config.evidencePolicy,
+      trustPolicy
     });
     for (const browserEngine of browserEngines) {
       let browser = null;
@@ -301,8 +350,8 @@ export async function runAudit(options, suppliedConfig = null) {
             if (!humanBlockerAdded && options.mode === 'gate' && config.humanOnlyScenarios.length && !humanEvidence) {
               result.findings.push(createFinding({
                 rule: 'coverage.authenticated-states-unverified', severity: 'P1', ...findingContext(result),
-                source: 'governance', message: 'Authenticated app and paired-TV critical states require cryptographically verified evidence from a disposable non-production tenant.',
-                evidence: { requiredScenarios: config.humanOnlyScenarios.map((scenario) => ({ id: scenario.id, type: scenario.type, matrixCells: scenario.requiredMatrix.length, blocker: scenario.blocker })), template: 'config/authenticated-evidence.template.json' }
+                source: 'governance', message: 'Authenticated app and paired-TV critical states require an owner-policy trusted, independently signed evidence attestation from a disposable non-production tenant.',
+                evidence: { requiredScenarios: config.humanOnlyScenarios.map((scenario) => ({ id: scenario.id, type: scenario.type, matrixCells: scenario.requiredMatrix.length * scenario.browserEngines.length, blocker: scenario.blocker })), template: 'config/authenticated-evidence.template.json' }
               }));
               humanBlockerAdded = true;
             }
@@ -322,6 +371,7 @@ export async function runAudit(options, suppliedConfig = null) {
             await page.waitForTimeout(80);
             await page.screenshot({ path: repeatPath, fullPage: true, animations: 'disabled', caret: 'hide' });
             const stability = await compareRuntimeStability({ currentPath: screenshotPath, repeatPath, diffPath: stabilityDiffPath, maximumDiffRatio: config.budgets.maximumScreenshotDiffRatio });
+            const [screenshotSha256, repeatScreenshotSha256] = await Promise.all([sha256File(screenshotPath), sha256File(repeatPath)]);
             if (!stability.stable) {
               result.findings.push(createFinding({
                 rule: 'visual.screenshot-instability', severity: 'P1', ...findingContext(result),
@@ -353,7 +403,7 @@ export async function runAudit(options, suppliedConfig = null) {
               }
             }
             const expertReview = matchingReview(reviews, entry, browserEngine);
-            if (expertReview) validateExpertReview(expertReview, result, config.qualityPolicy);
+            if (expertReview) validateExpertReview(expertReview, result, config.qualityPolicy, { candidateSha, targetOrigin: server.origin, screenshotSha256, repeatScreenshotSha256 });
             result.rubric = scoreQualitativeRubric(result, config.qualityPolicy, expertReview);
             if (options.mode === 'gate' && config.qualityPolicy.expertReviewRequired && !expertReview) {
               result.findings.push(createFinding({
@@ -373,7 +423,9 @@ export async function runAudit(options, suppliedConfig = null) {
             result.rubric = scoreQualitativeRubric(result, config.qualityPolicy, expertReview);
             result.artifacts = {
               screenshot: relative(options.outputRoot, screenshotPath),
+              screenshotSha256,
               repeatScreenshot: relative(options.outputRoot, repeatPath),
+              repeatScreenshotSha256,
               stabilityDiff: stability.diffPath ? relative(options.outputRoot, stability.diffPath) : null,
               approvedBaseline: baseline?.baselineExists ? baseline.approvedPath : null,
               baselineDiff: baseline?.comparison?.diffPath ? relative(options.outputRoot, baseline.comparison.diffPath) : null
@@ -392,6 +444,10 @@ export async function runAudit(options, suppliedConfig = null) {
   } finally {
     await server.close();
   }
+
+  const finalCheckoutSha = await resolveCandidateSha();
+  if (finalCheckoutSha !== candidateSha) throw new Error(`Candidate checkout changed during the audit: started ${candidateSha}, ended ${finalCheckoutSha}.`);
+  if (providedOrigin) await verifyServedCandidate(providedOrigin, candidateSha);
 
   const allFindings = results.flatMap((result) => result.findings);
   const severity = severityCounts(allFindings);
@@ -422,10 +478,12 @@ export async function runAudit(options, suppliedConfig = null) {
     mode: options.mode,
     origin: server.kind === 'provided-url' ? server.origin : `${server.kind}:ephemeral`,
     candidateSha,
+    captureActor: options.captureActor || null,
     requiredBrowserEngines: browserEngines,
     baselinePolicy: options.noBaselines ? 'runtime-stability-only' : (options.proposeBaselines ? 'candidate-proposal-pending-review' : 'approved-baselines-required'),
     hardFailurePolicy: config.failOn,
     qualitativeScoreCannotOverrideHardFailures: true,
+    expertReviewAttestation: expertReviewMetadata,
     humanAuthenticatedEvidence: humanEvidence
       ? humanEvidence
       : { status: 'human-only-blocker', scenarios: config.humanOnlyScenarios }

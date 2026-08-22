@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { assessBrowserCoverage, buildPlan, parseArguments, resolveBrowserEngines } from '../../src/audit.mjs';
+import { assessBrowserCoverage, buildPlan, parseArguments, resolveBrowserEngines, resolveCandidateSha, verifyServedCandidate } from '../../src/audit.mjs';
 import { loadConfig, materializeRoutes, validateBaseUrl } from '../../src/config.mjs';
 
 test('quality configuration validates and inventories every required surface', async () => {
@@ -34,7 +34,7 @@ test('optional public route is materialized only from a constrained environment 
 
 test('dry-run plan filters without launching a fixed-port server', async () => {
   const config = await loadConfig();
-  const options = parseArguments(['--target', 'fixture', '--dry-run', '--route', 'fixture-app-empty', '--viewport', 'phone-375', '--theme', 'dark']);
+  const options = parseArguments(['--target', 'fixture', '--mode', 'diagnostic', '--dry-run', '--route', 'fixture-app-empty', '--viewport', 'phone-375', '--theme', 'dark']);
   const plan = buildPlan(config, options);
   assert.equal(plan.length, 1);
   assert.equal(plan[0].route.state, 'empty');
@@ -48,8 +48,35 @@ test('release gate cannot bypass approved visual baselines', () => {
 
 test('gate and harness modes cannot omit a browser engine', async () => {
   const config = await loadConfig();
-  assert.throws(() => resolveBrowserEngines(config, parseArguments(['--target', 'fixture', '--mode', 'harness', '--browser', 'chromium,firefox'])), /cannot omit required browser engines/);
+  assert.throws(() => parseArguments(['--target', 'fixture', '--mode', 'harness', '--browser', 'chromium,firefox']), /cannot reduce the policy matrix/);
   assert.deepEqual(resolveBrowserEngines(config, parseArguments(['--target', 'fixture', '--mode', 'diagnostic', '--browser', 'webkit'])), ['webkit']);
+});
+
+test('gate and harness reject every caller-controlled matrix shrinker', async () => {
+  const config = await loadConfig();
+  const shrinkers = [
+    ['--quick'],
+    ['--route', 'app-auth-guard'],
+    ['--viewport', 'phone-390'],
+    ['--theme', 'light'],
+    ['--browser', 'chromium,firefox,webkit']
+  ];
+  for (const mode of ['gate', 'harness']) {
+    for (const args of shrinkers) assert.throws(() => parseArguments(['--target', mode === 'gate' ? 'local' : 'fixture', '--mode', mode, '--dry-run', ...args]), /cannot reduce the policy matrix/);
+  }
+  const forged = parseArguments(['--target', 'fixture', '--mode', 'diagnostic', '--route', 'fixture-app-empty']);
+  forged.mode = 'gate';
+  assert.throws(() => buildPlan(config, forged), /cannot reduce the policy matrix/);
+});
+
+test('candidate identity is checked against local HEAD and exact URL health', async () => {
+  assert.throws(() => parseArguments(['--candidate-sha', 'a'.repeat(40)]), /Unknown argument/);
+  const sha = await resolveCandidateSha();
+  const exact = async () => new Response(JSON.stringify({ ok: true, version: sha }), { status: 200, headers: { 'content-type': 'application/json' } });
+  assert.deepEqual(await verifyServedCandidate('http://127.0.0.1:4173', sha, exact), { ok: true, version: sha });
+  await assert.rejects(() => verifyServedCandidate('http://127.0.0.1:4173', sha, async () => new Response(JSON.stringify({ ok: true, version: sha.slice(0, 7) }), { status: 200 })), /exact version/);
+  await assert.rejects(() => verifyServedCandidate('http://127.0.0.1:4173', sha, async () => new Response('not-json', { status: 200 })), /malformed JSON/);
+  assert.throws(() => parseArguments(['--target', 'local', '--base-url', 'http://127.0.0.1:4173']), /only with --target url/);
 });
 
 test('missing, incomplete, or failed browser execution fails coverage closed', () => {

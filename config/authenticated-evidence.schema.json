@@ -1,13 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://axoboard.io/schemas/apple-qa-authenticated-evidence-v2.json",
+  "$id": "https://axoboard.io/schemas/apple-qa-authenticated-evidence-v3.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "kind", "reviewer", "reviewedAt", "environment", "candidateSha", "targetOrigin", "syntheticTenant", "scenarios"],
+  "required": ["schemaVersion", "kind", "captureActor", "reviewerId", "reviewedAt", "environment", "candidateSha", "targetOrigin", "syntheticTenant", "scenarios", "attestation"],
   "properties": {
-    "schemaVersion": { "const": 2 },
+    "schemaVersion": { "const": 3 },
     "kind": { "const": "axoboard-human-authenticated-qa-evidence" },
-    "reviewer": { "type": "string", "minLength": 2, "maxLength": 120 },
+    "captureActor": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{2,63}$" },
+    "reviewerId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{2,63}$" },
     "reviewedAt": { "type": "string", "minLength": 20, "maxLength": 40 },
     "environment": { "const": "disposable-non-production" },
     "candidateSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
@@ -27,14 +28,26 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "type", "runId", "artifactManifest", "notes"],
+        "required": ["id", "type", "runId", "artifactManifest", "artifactManifestSha256", "notes"],
         "properties": {
           "id": { "type": "string", "minLength": 1, "maxLength": 100 },
           "type": { "enum": ["authenticated-app", "paired-tv"] },
           "runId": { "type": "string", "pattern": "^qa-[a-z0-9][a-z0-9-]{7,63}$" },
           "artifactManifest": { "type": "string", "minLength": 1, "maxLength": 255 },
-          "notes": { "type": "string", "maxLength": 2000 }
+          "artifactManifestSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "notes": { "type": "string", "minLength": 10, "maxLength": 2000 }
         }
+      }
+    },
+    "attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "keyId", "payloadSha256", "signature"],
+      "properties": {
+        "algorithm": { "const": "Ed25519" },
+        "keyId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{2,95}$" },
+        "payloadSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "signature": { "type": "string", "minLength": 88, "maxLength": 88 }
       }
     }
   }

@@ -40,7 +40,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "type", "surface", "states", "viewports", "themes", "requiredMatrix", "blocker"],
+        "required": ["id", "type", "surface", "states", "viewports", "themes", "browserEngines", "requiredMatrix", "blocker"],
         "properties": {
           "id": { "type": "string", "minLength": 1 },
           "type": { "enum": ["authenticated-app", "paired-tv"] },
@@ -48,6 +48,7 @@
           "states": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
           "viewports": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
           "themes": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["light", "dark"] } },
+          "browserEngines": { "type": "array", "const": ["chromium", "firefox", "webkit"] },
           "requiredMatrix": {
             "type": "array",
             "minItems": 1,

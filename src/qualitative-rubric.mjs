@@ -1,3 +1,5 @@
+import { assertVerifiedExpertReview } from './expert-review.mjs';
+
 const clamp = (value) => Math.max(0, Math.min(5, Math.round(value * 10) / 10));
 
 function findingCount(findings, prefixes) {
@@ -58,7 +60,7 @@ export function scoreQualitativeRubric(result, policy, expertReview = null) {
     scale: '0-5',
     scoreType: expertReview ? 'expert-reviewed' : 'automated-proxy',
     expertReviewStatus,
-    reviewer: expertReview?.reviewer || null,
+    reviewer: expertReview?.reviewerId || null,
     dimensions,
     hardFailureCount,
     cannotOverrideHardFailures: true,
@@ -66,19 +68,6 @@ export function scoreQualitativeRubric(result, policy, expertReview = null) {
   };
 }
 
-export function validateExpertReview(review, result, policy) {
-  if (!review || typeof review !== 'object') throw new Error('Expert review must be a JSON object.');
-  if (!review.reviewer || !review.approved || !review.reviewedAt) throw new Error('Expert review requires reviewer, approved=true, and reviewedAt.');
-  if (review.routeId !== result.routeId || review.state !== result.state || review.theme !== result.theme || review.viewport !== result.viewport.id) {
-    throw new Error('Expert review identity does not match the audited route/state/theme/viewport.');
-  }
-  const expected = new Set(policy.qualitativeDimensions);
-  const received = new Set((review.dimensions || []).map((dimensionValue) => dimensionValue.id));
-  for (const id of expected) if (!received.has(id)) throw new Error(`Expert review is missing qualitative dimension: ${id}`);
-  for (const item of review.dimensions) {
-    if (!Number.isFinite(item.score) || item.score < 0 || item.score > 5 || !String(item.evidence || '').trim()) {
-      throw new Error(`Expert review dimension ${item.id} requires a 0-5 score and evidence.`);
-    }
-  }
-  return review;
+export function validateExpertReview(review, result, policy, expected = {}) {
+  return assertVerifiedExpertReview(review, result, policy, expected);
 }

@@ -42,21 +42,33 @@ body{margin:0;padding:32px;color:#172033;background:#f5f7fb;font:15px/1.5 system
 
 function reviewTemplate(report) {
   return {
-    schemaVersion: 1,
-    kind: 'axoboard-qualitative-review-template',
-    generatedFrom: 'report.json',
-    instructions: 'An independent reviewer must score every dimension 0-5 with route-specific evidence. Set approved=true only after reviewing screenshots and interactions.',
+    schemaVersion: 2,
+    kind: 'axoboard-expert-review-attestation',
+    candidateSha: report.metadata.candidateSha,
+    targetOrigin: report.metadata.origin.startsWith('http') ? report.metadata.origin : '',
+    captureActor: report.metadata.captureActor || '',
+    reviewerId: '',
+    capturedAt: report.metadata.generatedAt,
+    reviewedAt: '',
     reviews: report.results.map((result) => ({
       routeId: result.routeId,
       state: result.state,
       theme: result.theme,
       viewport: result.viewport.id,
       browserEngine: result.browserEngine,
-      reviewer: '',
-      reviewedAt: '',
       approved: false,
+      artifacts: {
+        screenshotSha256: result.artifacts?.screenshotSha256 || '',
+        repeatScreenshotSha256: result.artifacts?.repeatScreenshotSha256 || ''
+      },
       dimensions: result.rubric.dimensions.map((dimension) => ({ id: dimension.id, score: null, evidence: '' }))
-    }))
+    })),
+    attestation: {
+      algorithm: 'Ed25519',
+      keyId: '',
+      payloadSha256: '',
+      signature: ''
+    }
   };
 }
 

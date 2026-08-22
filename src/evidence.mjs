@@ -2,10 +2,14 @@ import { createHash } from 'node:crypto';
 import { lstat, readFile, realpath, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import Ajv2020 from 'ajv/dist/2020.js';
+import { PNG } from 'pngjs';
+import { parseCanonicalTime, readStrictJsonFile, verifySignedAttestation } from './attestation.mjs';
 import { projectRoot } from './config.mjs';
 
 const evidenceSchemaPath = resolve(projectRoot, 'config/authenticated-evidence.schema.json');
 const artifactSchemaPath = resolve(projectRoot, 'config/authenticated-artifact-manifest.schema.json');
+const pngMagic = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const zipMagic = new Set(['504b0304', '504b0506', '504b0708']);
 let validatorsPromise;
 
 function schemaFailure(label, validate) {
@@ -21,12 +25,6 @@ async function validators() {
   return validatorsPromise;
 }
 
-function parseTime(value, label) {
-  const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString() !== value) throw new Error(`${label} must be a canonical ISO-8601 timestamp.`);
-  return timestamp;
-}
-
 function normalizedOrigin(value, label) {
   let url;
   try { url = new URL(value); } catch { throw new Error(`${label} must be an absolute HTTP(S) origin.`); }
@@ -36,8 +34,8 @@ function normalizedOrigin(value, label) {
   return url.origin;
 }
 
-function matrixIdentity(entry) {
-  return [entry.state, entry.role, entry.device, entry.theme, entry.viewport].join('|');
+export function matrixIdentity(entry) {
+  return [entry.state, entry.role, entry.device, entry.theme, entry.viewport, entry.browserEngine].join('|');
 }
 
 function expectedScenarioType(scenario) {
@@ -80,8 +78,12 @@ async function resolveSafeFile(root, relativePath, label) {
   return { path: candidate, realPath: candidateReal, details };
 }
 
+function expectedMatrix(required) {
+  return required.requiredMatrix.flatMap((entry) => required.browserEngines.map((browserEngine) => ({ ...entry, browserEngine })));
+}
+
 function compareMatrix(required, actual, scenarioId) {
-  const expectedIds = (required || []).map(matrixIdentity).sort();
+  const expectedIds = expectedMatrix(required).map(matrixIdentity).sort();
   const actualIds = (actual || []).map(matrixIdentity).sort();
   ensureUnique(expectedIds, `Required matrix for ${scenarioId}`);
   ensureUnique(actualIds, `Evidence matrix for ${scenarioId}`);
@@ -102,14 +104,38 @@ function verifyTimestampWindow({ reviewedAt, startedAt, completedAt, nowMs, maxi
   if (nowMs - startedAt > maximumAgeHours * 3_600_000) throw new Error(`Evidence is stale for ${scenarioId}.`);
 }
 
-export async function loadHumanEvidence({ evidencePath, requiredScenarios, expectedCandidateSha, expectedTargetOrigin, policy, now = new Date() }) {
+function verifyArtifactSemantics(artifact, bytes) {
+  if (artifact.kind === 'screenshot') {
+    if (!bytes.subarray(0, pngMagic.length).equals(pngMagic)) throw new Error(`Screenshot artifact is not PNG data: ${artifact.path}.`);
+    let decoded;
+    try { decoded = PNG.sync.read(bytes); } catch { throw new Error(`Screenshot artifact is not a valid PNG: ${artifact.path}.`); }
+    if (decoded.width < 1 || decoded.height < 1 || decoded.width > 20_000 || decoded.height > 20_000) throw new Error(`Screenshot dimensions are invalid: ${artifact.path}.`);
+    return;
+  }
+  if (artifact.kind === 'playwright-trace') {
+    if (bytes.length < 22 || !zipMagic.has(bytes.subarray(0, 4).toString('hex'))) throw new Error(`Playwright trace artifact is not ZIP data: ${artifact.path}.`);
+    return;
+  }
+  throw new Error(`Unsupported authenticated evidence artifact kind: ${artifact.kind}.`);
+}
+
+function verifyCellArtifactKinds(manifest, scenarioId) {
+  const byPath = new Map(manifest.artifacts.map((artifact) => [artifact.path, artifact]));
+  for (const cell of manifest.matrix) {
+    const kinds = cell.artifactPaths.map((path) => byPath.get(path)?.kind).sort();
+    if (JSON.stringify(kinds) !== JSON.stringify(['playwright-trace', 'screenshot'])) {
+      throw new Error(`Matrix cell ${matrixIdentity(cell)} for ${scenarioId} requires one screenshot and one Playwright trace.`);
+    }
+  }
+}
+
+export async function loadHumanEvidence({ evidencePath, requiredScenarios, expectedCandidateSha, expectedTargetOrigin, expectedCaptureActor, policy, trustPolicy, now = new Date() }) {
   if (!evidencePath) return null;
   if (!/^[0-9a-f]{40}$/.test(expectedCandidateSha || '')) throw new Error('Expected candidate SHA must be an exact lowercase 40-character Git SHA.');
-  const absoluteEvidencePath = resolve(evidencePath);
-  const evidenceRoot = dirname(absoluteEvidencePath);
-  const evidenceDetails = await lstat(absoluteEvidencePath);
-  if (evidenceDetails.isSymbolicLink() || !evidenceDetails.isFile()) throw new Error('Human evidence document must be a regular non-symlink file.');
-  const parsed = JSON.parse(await readFile(absoluteEvidencePath, 'utf8'));
+  if (!expectedCaptureActor) throw new Error('Expected capture actor is required for human evidence verification.');
+  const evidenceDocument = await readStrictJsonFile(evidencePath, 'Human evidence document');
+  const evidenceRoot = dirname(evidenceDocument.absolutePath);
+  const parsed = evidenceDocument.value;
   const compiled = await validators();
   if (!compiled.evidence(parsed)) throw schemaFailure('Human evidence', compiled.evidence);
 
@@ -117,7 +143,9 @@ export async function loadHumanEvidence({ evidencePath, requiredScenarios, expec
   const evidenceOrigin = normalizedOrigin(parsed.targetOrigin, 'Human evidence targetOrigin');
   if (parsed.candidateSha !== expectedCandidateSha) throw new Error('Human evidence candidate SHA does not match the exact audited candidate.');
   if (evidenceOrigin !== expectedOrigin) throw new Error('Human evidence target origin does not match the exact audited origin.');
-  const reviewedAt = parseTime(parsed.reviewedAt, 'reviewedAt');
+  if (parsed.captureActor !== expectedCaptureActor) throw new Error('Human evidence capture actor does not match the asserted capture operator.');
+  const signedBy = verifySignedAttestation(parsed, trustPolicy, 'authenticated-evidence');
+  const reviewedAt = parseCanonicalTime(parsed.reviewedAt, 'reviewedAt');
   const nowMs = now instanceof Date ? now.getTime() : Number(now);
   const maximumAgeHours = policy?.maximumAgeHours ?? 72;
   const maximumClockSkewMinutes = policy?.maximumClockSkewMinutes ?? 5;
@@ -129,6 +157,7 @@ export async function loadHumanEvidence({ evidencePath, requiredScenarios, expec
   if (JSON.stringify([...requiredIds].sort()) !== JSON.stringify([...providedIds].sort())) throw new Error('Human evidence must contain exactly the required scenario IDs.');
   ensureUnique(parsed.scenarios.map((scenario) => scenario.runId), 'Human evidence run IDs');
   ensureUnique(parsed.scenarios.map((scenario) => scenario.artifactManifest), 'Human evidence artifact manifests');
+  ensureUnique(parsed.scenarios.map((scenario) => scenario.artifactManifestSha256), 'Human evidence artifact manifest hashes');
 
   const usedArtifactPaths = new Set();
   const usedArtifactHashes = new Set();
@@ -139,16 +168,21 @@ export async function loadHumanEvidence({ evidencePath, requiredScenarios, expec
     const requiredType = expectedScenarioType(required);
     if (reference.type !== requiredType) throw new Error(`Scenario type mismatch for ${required.id}.`);
     const manifestFile = await resolveSafeFile(evidenceRoot, reference.artifactManifest, `Artifact manifest for ${required.id}`);
-    const manifest = JSON.parse(await readFile(manifestFile.path, 'utf8'));
+    const manifestBytes = await readFile(manifestFile.path);
+    const manifestHash = createHash('sha256').update(manifestBytes).digest('hex');
+    if (manifestHash !== reference.artifactManifestSha256) throw new Error(`Signed artifact manifest digest mismatch for ${required.id}.`);
+    const manifest = JSON.parse(manifestBytes.toString('utf8'));
     if (!compiled.artifact(manifest)) throw schemaFailure(`Artifact manifest for ${required.id}`, compiled.artifact);
     if (manifest.scenarioId !== required.id || manifest.scenarioType !== requiredType || manifest.runId !== reference.runId) throw new Error(`Artifact manifest scenario/run binding failed for ${required.id}.`);
+    if (manifest.captureActor !== parsed.captureActor) throw new Error(`Artifact manifest capture-actor binding failed for ${required.id}.`);
     if (manifest.candidateSha !== parsed.candidateSha || normalizedOrigin(manifest.targetOrigin, `Manifest targetOrigin for ${required.id}`) !== evidenceOrigin) throw new Error(`Artifact manifest candidate/target binding failed for ${required.id}.`);
     if (manifest.syntheticTenant.tenantId !== parsed.syntheticTenant.tenantId || manifest.syntheticTenant.workspaceId !== parsed.syntheticTenant.workspaceId) throw new Error(`Artifact manifest synthetic tenant binding failed for ${required.id}.`);
 
-    const startedAt = parseTime(manifest.captureStartedAt, `captureStartedAt for ${required.id}`);
-    const completedAt = parseTime(manifest.captureCompletedAt, `captureCompletedAt for ${required.id}`);
+    const startedAt = parseCanonicalTime(manifest.captureStartedAt, `captureStartedAt for ${required.id}`);
+    const completedAt = parseCanonicalTime(manifest.captureCompletedAt, `captureCompletedAt for ${required.id}`);
     verifyTimestampWindow({ reviewedAt, startedAt, completedAt, nowMs, maximumAgeHours, maximumClockSkewMinutes, scenarioId: required.id });
-    compareMatrix(required.requiredMatrix, manifest.matrix, required.id);
+    compareMatrix(required, manifest.matrix, required.id);
+    verifyCellArtifactKinds(manifest, required.id);
 
     const artifactPaths = manifest.artifacts.map((artifact) => artifact.path);
     ensureUnique(artifactPaths, `Artifact records for ${required.id}`);
@@ -161,24 +195,28 @@ export async function loadHumanEvidence({ evidencePath, requiredScenarios, expec
       const inode = `${file.details.dev}:${file.details.ino}`;
       if (usedArtifactPaths.has(file.realPath) || usedArtifactInodes.has(inode) || usedArtifactHashes.has(artifact.sha256)) throw new Error(`Duplicate artifact reuse detected for ${required.id}: ${artifact.path}.`);
       if (file.details.size !== artifact.bytes) throw new Error(`Artifact byte-size mismatch for ${artifact.path}.`);
-      const actualHash = createHash('sha256').update(await readFile(file.path)).digest('hex');
+      const bytes = await readFile(file.path);
+      const actualHash = createHash('sha256').update(bytes).digest('hex');
       if (actualHash !== artifact.sha256) throw new Error(`Artifact SHA-256 mismatch for ${artifact.path}.`);
+      verifyArtifactSemantics(artifact, bytes);
       usedArtifactPaths.add(file.realPath);
       usedArtifactInodes.add(inode);
       usedArtifactHashes.add(actualHash);
     }
-    verifiedScenarios.push({ id: required.id, type: requiredType, runId: reference.runId, manifest: reference.artifactManifest, matrixCells: manifest.matrix.length, artifacts: manifest.artifacts.length, captureCompletedAt: manifest.captureCompletedAt });
+    verifiedScenarios.push({ id: required.id, type: requiredType, runId: reference.runId, manifest: reference.artifactManifest, manifestSha256: manifestHash, matrixCells: manifest.matrix.length, artifacts: manifest.artifacts.length, captureCompletedAt: manifest.captureCompletedAt });
   }
 
   return {
-    status: 'cryptographically-verified',
-    reviewer: parsed.reviewer,
+    status: 'trusted-signed-attestation',
+    captureActor: parsed.captureActor,
+    reviewerId: parsed.reviewerId,
     reviewedAt: parsed.reviewedAt,
     candidateSha: parsed.candidateSha,
     targetOrigin: evidenceOrigin,
     syntheticTenant: parsed.syntheticTenant,
+    signature: signedBy,
     scenarios: verifiedScenarios
   };
 }
 
-export { artifactSchemaPath, evidenceSchemaPath, matrixIdentity };
+export { artifactSchemaPath, evidenceSchemaPath };
