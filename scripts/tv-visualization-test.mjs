@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [styles, app] = await Promise.all([
+const [styles, app, tv, tvStyles] = await Promise.all([
   readFile(new URL('../wireframes/styles.css', import.meta.url), 'utf8'),
-  readFile(new URL('../wireframes/app.js', import.meta.url), 'utf8')
+  readFile(new URL('../wireframes/app.js', import.meta.url), 'utf8'),
+  readFile(new URL('../wireframes/tv.js', import.meta.url), 'utf8'),
+  readFile(new URL('../wireframes/tv.css', import.meta.url), 'utf8')
 ]);
 
 assert.match(styles, /--aqua-400:\s*#[0-9a-f]{6};/i, 'the shared aqua-400 token must resolve');
@@ -33,5 +35,11 @@ for (const contract of [
   /\.tv-trend-current\s*\{\s*stroke:\s*var\(--tv-brand-primary\)/i,
   /\.tv-trend-comparison\s*\{\s*stroke:\s*var\(--tv-brand-secondary\)/i
 ]) assert.match(overrides, contract, 'every TV chart paint must use the safe brand contract');
+
+assert.match(tvStyles, /aspect-ratio:16\/9/, 'TV stage is explicitly constrained to 16:9');
+assert.match(tvStyles, /grid-template-columns:repeat\(12/, 'TV composition uses the canonical 12-column grid');
+assert.match(tvStyles, /grid-template-rows:repeat\(6/, 'TV composition uses the canonical 6-row grid');
+assert.match(tv, /grid\.dataset\.layout='executive'/, 'paired TV selects the authored Executive layout');
+assert.match(tv, /tv-card-hero/, 'Executive layout marks the first KPI as the hero');
 
 console.log('AxoBoard TV visualization test passed: gauge, progress, rep, category, and trend paints resolve through customer-brand fallbacks.');

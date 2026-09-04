@@ -6,6 +6,10 @@ A TV opens `https://tv.axoboard.io` (or `/tv` on the primary app), enters an eig
 
 The TV surface is customer-white-labeled. AxoBoard branding remains on the authenticated administration surface only.
 
+## TV composition contract
+
+The paired player is constrained to a 16:9 stage and renders each four-KPI page as an authored Executive composition on a 12-column by 6-row grid. The first KPI is the large hero panel; up to three remaining KPIs are stacked as supporting panels. At fewer than four KPIs, the same contract collapses to a readable one-, two-, or three-panel layout without introducing page overflow.
+
 ## Runtime flow
 
 1. An authenticated workspace administrator creates a pending display and receives a one-time code valid for ten minutes.
