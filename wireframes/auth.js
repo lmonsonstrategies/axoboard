@@ -83,7 +83,7 @@ signupForm?.addEventListener('submit', async (event) => {
     const response = await fetch('/api/auth/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(payload) });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Could not create your workspace.');
-    location.assign(authReturnTarget || result.redirect || '/app');
+    location.assign(result.redirect === '/app' ? (authReturnTarget || '/app') : (result.redirect || '/app'));
   } catch (error) {
     showAlert(signupForm, error.message);
     setLoading(signupForm, false);
@@ -100,7 +100,7 @@ loginForm?.addEventListener('submit', async (event) => {
     const response = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(Object.fromEntries(new FormData(loginForm).entries())) });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Could not log in.');
-    location.assign(result.redirect || '/app');
+    location.assign(result.redirect === '/app' ? (authReturnTarget || '/app') : (result.redirect || '/app'));
   } catch (error) {
     showAlert(loginForm, error.message);
     setLoading(loginForm, false);

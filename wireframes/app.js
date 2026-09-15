@@ -14,7 +14,7 @@ let layoutEditSnapshot = null;
 let layoutDraft = null;
 const dedicatedTvRuntime = location.pathname === '/tv';
 const kpiRecoveryKey = 'axoboard.kpi-recovery.v1';
-const kpiRecoveryVersion = 1;
+const kpiRecoveryVersion = 2;
 const kpiRecoveryTtlMs = 30 * 60 * 1000;
 const kpiRecoveryNonce = new URLSearchParams(location.search).get('recover');
 
@@ -37,13 +37,16 @@ function safeRecoveryControl(control) {
 }
 
 function captureKpiRecovery(interruptedControl = document.activeElement) {
+  if (!liveUserId || !liveWorkspaceId) return null;
   const nonce = recoveryNonce();
   const envelope = {
     version: kpiRecoveryVersion,
+    userId: liveUserId,
+    workspaceId: liveWorkspaceId,
     createdAt: Date.now(),
     expiresAt: Date.now() + kpiRecoveryTtlMs,
     nonce,
-    step: activeBuilderStep,
+    step: Math.min(3, activeBuilderStep),
     focusId: safeRecoveryControl(interruptedControl),
     draft: {
       source: activeKpiSource,
@@ -67,11 +70,16 @@ function validKpiRecovery(envelope, nonce) {
   const draft = envelope?.draft;
   return envelope?.version === kpiRecoveryVersion
     && Number.isFinite(envelope.createdAt) && Number.isFinite(envelope.expiresAt)
+    && envelope.createdAt <= Date.now() && envelope.expiresAt > envelope.createdAt
     && envelope.expiresAt > Date.now() && envelope.expiresAt - envelope.createdAt <= kpiRecoveryTtlMs
-    && typeof nonce === 'string' && nonce.length === 36 && envelope.nonce === nonce
+    && Boolean(liveUserId && liveWorkspaceId) && envelope.userId === liveUserId && envelope.workspaceId === liveWorkspaceId
+    && typeof nonce === 'string' && /^[a-f0-9]{36}$/.test(nonce) && envelope.nonce === nonce
     && Number.isInteger(envelope.step) && envelope.step >= 1 && envelope.step <= 3
     && draft && typeof draft === 'object' && !Array.isArray(draft)
-    && Object.keys(envelope).every((key) => ['version', 'createdAt', 'expiresAt', 'nonce', 'step', 'focusId', 'draft'].includes(key))
+    && typeof draft.name === 'string' && draft.name.length <= 160
+    && draft.source === 'google' && typeof draft.displayType === 'string'
+    && ['number', 'currency', 'percentage'].includes(draft.displayFormat)
+    && Object.keys(envelope).every((key) => ['version', 'userId', 'workspaceId', 'createdAt', 'expiresAt', 'nonce', 'step', 'focusId', 'draft'].includes(key))
     && Object.keys(draft).every((key) => ['source', 'name', 'displayType', 'displayFormat', 'periodGranularity', 'goalDirection', 'goalCalendar', 'goalTimezone', 'includeHeaders', 'comparisonIncludesHeaders'].includes(key));
 }
 
@@ -540,6 +548,7 @@ let liveConnections = [];
 let liveKpis = [];
 let liveDisplays = [];
 let liveWorkspaceId = '';
+let liveUserId = '';
 let liveWorkspaceName = '';
 let liveDashboardLayout = null;
 let liveEngagement = { summary: {}, events: [] };
@@ -2474,6 +2483,7 @@ async function loadLiveData() {
     liveDisplays = displayPayload.displays || [];
     if (session.user?.workspace_name) {
       liveWorkspaceId = session.user.workspace_id;
+      liveUserId = session.user.id;
       liveWorkspaceName = session.user.workspace_name;
       liveDashboardLayout = normalizeDashboardLayout(dashboardPayload.dashboard?.layout || {}, liveKpis.map((kpi) => kpi.id));
       document.body.dataset.activeWorkspace = 'live';
@@ -2751,10 +2761,11 @@ async function restoreKpiRecovery() {
   document.querySelector('#sheetHasHeaders').checked = Boolean(envelope.draft.includeHeaders);
   document.querySelector('#comparisonHasHeaders').checked = Boolean(envelope.draft.comparisonIncludesHeaders);
   selectDisplayType(envelope.draft.displayType);
-  showBuilderStep(envelope.step);
+  // Source cells are intentionally not persisted: resume at source selection.
+  showBuilderStep(1);
   const focusTarget = envelope.focusId && document.getElementById(envelope.focusId);
-  (focusTarget && kpiBuilderModal.contains(focusTarget) ? focusTarget : document.querySelector('#closeKpiBuilder')).focus();
-  showToast('Safe KPI draft restored', 'Your session expired, so AxoBoard restored the builder step and safe settings. Choose source cells again before previewing or saving.');
+  (focusTarget && kpiBuilderModal.contains(focusTarget) && focusTarget.getClientRects().length ? focusTarget : document.querySelector('#closeKpiBuilder')).focus();
+  showToast('KPI settings restored', 'Your draft settings are back. Choose source cells again before previewing or saving.');
   return true;
 }
 
