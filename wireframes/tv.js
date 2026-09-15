@@ -5,6 +5,8 @@ const pairingCode = document.querySelector('#pairingCode');
 const pairingError = document.querySelector('#pairingError');
 const grid = document.querySelector('#runtimeGrid');
 const cacheKey = 'axoboard.display.last-good.v1';
+const cacheLifetimeMs = 24 * 60 * 60 * 1000;
+let runtimeVerifiedAt = 0;
 const automationCursorKey = 'axoboard.display.automation-cursor.v1';
 const pageSize = 4;
 let runtime = null;
@@ -29,7 +31,40 @@ async function api(path, options = {}) { const response = await fetch(path, { cr
 function orderedKpis() { const kpis=runtime?.kpis || []; const order=runtime?.dashboard?.layout?.kpiOrder || []; const index=new Map(order.map((id,i)=>[id,i])); return [...kpis].sort((a,b)=>(index.get(a.id)??9999)-(index.get(b.id)??9999)); }
 function context(kpi) { if (kpi.intelligence) return `${String(kpi.intelligence.status || '').replace('_',' ')} · projected ${format(kpi.intelligence.projectedFinish,kpi.displayFormat)}`; if (kpi.goalValue) return `${clamp(Number(kpi.value)/Number(kpi.goalValue)*100).toFixed(0)}% of goal`; return `${kpi.status === 'active' ? 'Live' : 'Needs attention'} · ${timeAgo(kpi.fetchedAt)}`; }
 function meta(kpi) { return `<div class="card-meta"><span>${escapeHtml(kpi.sheetTitle || 'Verified source')}</span><b>${escapeHtml(timeAgo(kpi.fetchedAt))}</b></div>`; }
-function heading(kpi) { return `<header><div><small>${escapeHtml((kpi.displayType || 'scorecard').replaceAll('_',' '))}</small><h2>${escapeHtml(kpi.name)}</h2></div><span class="live-chip">● Live</span></header>`; }
+function metricFreshness(kpi, now = Date.now()) {
+  const fetchedAt = Date.parse(kpi.fetchedAt);
+  const staleAfter = Number(kpi.staleAfterSeconds);
+  if (!Number.isFinite(fetchedAt) || fetchedAt > now || !Number.isFinite(staleAfter) || staleAfter <= 0) return 'Unknown';
+  if (kpi.status !== 'active' || (kpi.certification && kpi.certification.status !== 'certified')) return 'Needs attention';
+  return now - fetchedAt >= staleAfter * 1000 ? 'Stale' : 'Fresh';
+}
+function heading(kpi) { const freshness=metricFreshness(kpi);return `<header><div><small>${escapeHtml((kpi.displayType || 'scorecard').replaceAll('_',' '))}</small><h2>${escapeHtml(kpi.name)}</h2></div><span class="live-chip" data-freshness="${freshness}">${freshness==='Fresh'?'●':'◷'} ${freshness}</span></header>`; }
+function updateFreshness() {
+  const kpis=orderedKpis();
+  const attention=kpis.filter(kpi=>metricFreshness(kpi)!=='Fresh').length;
+  const timestamps=kpis.map(kpi=>Date.parse(kpi.fetchedAt)).filter(Number.isFinite);
+  document.querySelector('#runtimeFreshness').textContent=kpis.length
+    ? `${attention ? `${attention} of ${kpis.length} need attention` : 'All metrics fresh'} · Oldest update ${timestamps.length ? timeAgo(new Date(Math.min(...timestamps))) : 'unknown'}`
+    : 'Waiting for assigned content';
+  grid.querySelectorAll('.tv-card[data-position]').forEach(card=>{
+    const kpi=kpis[pageIndex*pageSize+Number(card.dataset.position)];
+    const chip=card.querySelector('.live-chip');
+    if(kpi&&chip){const freshness=metricFreshness(kpi);chip.dataset.freshness=freshness;chip.textContent=`${freshness==='Fresh'?'●':'◷'} ${freshness}`;}
+  });
+}
+function enforceRuntimeLifetime() {
+  if(!runtime || Date.now()-runtimeVerifiedAt<cacheLifetimeMs)return;
+  clearCache();
+  grid.replaceChildren(Object.assign(document.createElement('article'),{className:'tv-card empty-card',textContent:'Saved dashboard expired. Reconnecting…'}));
+  document.querySelector('#runtimeTitle').textContent='Waiting for verified dashboard';
+  document.querySelector('#runtimeEyebrow').textContent='DISPLAY OFFLINE';
+  document.querySelector('#customerMark').textContent='TV';
+  document.querySelector('#runtimeFreshness').textContent='No current verified data';
+  document.querySelector('#pageDots').replaceChildren();
+  document.querySelector('#previousPage').disabled=true;
+  document.querySelector('#nextPage').disabled=true;
+  setConnection('offline');
+}
 function trend(items=[]) { const points=items.filter(x=>Number.isFinite(Number(x.value))); if(!points.length)return '<span>No numeric trend points</span>'; const values=points.map(x=>Number(x.value)),min=Math.min(...values),max=Math.max(...values),range=max-min||1; const coords=points.map((x,i)=>`${points.length===1?320:20+i/(points.length-1)*600},${205-(Number(x.value)-min)/range*170}`).join(' '); return `<div class="trend"><svg viewBox="0 0 640 220" preserveAspectRatio="none"><line x1="20" y1="205" x2="620" y2="205"/><polyline points="${coords}"/></svg><div><span>${escapeHtml(points[0].label)}</span><span>${escapeHtml(points.at(-1).label)}</span></div></div>`; }
 function renderCard(kpi, position = 0) {
   const type=kpi.displayType || 'scorecard', payload=kpi.displayPayload || {}, card=document.createElement('article'); card.className=`tv-card tv-card-${type} ${position===0?'tv-card-hero':'tv-card-support'}`; card.dataset.type=type; card.dataset.position=String(position);
@@ -55,14 +90,14 @@ function closeAutomationCelebration(){window.clearTimeout(celebrationTimer);docu
 function showNextAutomationCelebration(){if(celebrationActive||!celebrationQueue.length)return;const event=celebrationQueue.shift(),overlay=document.querySelector('#automationCelebration'),durationMs=Math.max(2000,Math.min(60000,Number(event.durationSeconds||8)*1000));celebrationActive=true;overlay.dataset.theme=String(event.theme||'brand').slice(0,40);document.querySelector('#automationCelebrationMark').textContent=(runtime?.brand?.name||runtime?.workspace?.name||'W').trim().charAt(0).toUpperCase();document.querySelector('#automationCelebrationTitle').textContent=event.title||event.ruleName||'Goal reached';document.querySelector('#automationCelebrationMessage').textContent=event.message||'A trusted metric triggered this celebration.';document.querySelector('#automationCelebrationSource').textContent=event.metricName?`${event.metricName} · verified ${timeAgo(event.occurredAt)}`:`Verified ${timeAgo(event.occurredAt)}`;overlay.hidden=false;celebrationTimer=window.setTimeout(closeAutomationCelebration,durationMs);}
 function enqueueAutomationCelebration(event){if(!event?.id||seenCelebrationIds.has(event.id))return;seenCelebrationIds.add(event.id);if(seenCelebrationIds.size>100)seenCelebrationIds.delete(seenCelebrationIds.values().next().value);celebrationQueue.push(event);showNextAutomationCelebration();}
 async function loadAutomationEvents(){if(!runtime||automationPolling)return;automationPolling=true;try{const payload=await api(`/api/display/automation-events?after=${encodeURIComponent(automationCursor)}`);const events=Array.isArray(payload.events)?payload.events:[];events.sort((a,b)=>new Date(a.occurredAt)-new Date(b.occurredAt)).forEach(enqueueAutomationCelebration);if(payload.cursor){automationCursor=payload.cursor;try{localStorage.setItem(automationCursorKey,automationCursor);}catch{}}}catch(error){if(error.status===401){clearCache();showPairing();}}finally{automationPolling=false;}}
-function cacheRuntime(){try{localStorage.setItem(cacheKey,JSON.stringify({savedAt:Date.now(),runtime}));}catch{}}
-function restoreCache(){try{const cached=JSON.parse(localStorage.getItem(cacheKey)||'null');if(cached?.runtime&&Date.now()-cached.savedAt<24*60*60*1000){runtime=cached.runtime;showPlayer();render();setConnection('offline');return true;}}catch{}return false;}
+function cacheRuntime(){runtimeVerifiedAt=Date.now();try{localStorage.setItem(cacheKey,JSON.stringify({savedAt:runtimeVerifiedAt,runtime}));}catch{}}
+function restoreCache(){try{const cached=JSON.parse(localStorage.getItem(cacheKey)||'null');const age=Date.now()-cached?.savedAt;if(cached?.runtime&&Number.isFinite(age)&&age>=0&&age<cacheLifetimeMs){runtime=cached.runtime;runtimeVerifiedAt=cached.savedAt;showPlayer();render();updateFreshness();setConnection('offline');return true;}}catch{}return false;}
 function clearCache(){window.clearTimeout(celebrationTimer);celebrationTimer=null;celebrationActive=false;automationCursor=new Date().toISOString();seenCelebrationIds.clear();celebrationQueue.length=0;runtime=null;pageIndex=0;const overlay=document.querySelector('#automationCelebration');if(overlay)overlay.hidden=true;try{localStorage.removeItem(cacheKey);localStorage.removeItem(automationCursorKey);}catch{}}
 function showPlayer(){pairingShell.hidden=true;playerShell.hidden=false;}
 function showPairing(){window.clearInterval(timer);playerShell.hidden=true;pairingShell.hidden=false;pairingCode.focus();}
 async function loadRuntime(){try{const payload=await api('/api/display/runtime');runtime=payload;rotationSeconds=Math.max(5,Math.min(300,Number(payload.display?.rotationSeconds)||15));showPlayer();render();cacheRuntime();setConnection('live');return true;}catch(error){if(error.status===401){clearCache();showPairing();}else if(!runtime)restoreCache();else setConnection('offline');return false;}}
 function movePage(delta){const pages=Math.max(1,Math.ceil(orderedKpis().length/pageSize));pageIndex=(pageIndex+delta+pages)%pages;rotationSeconds=Math.max(5,Number(runtime?.display?.rotationSeconds)||15);render();}
-function updateClock(){const node=document.querySelector('#runtimeClock');node.dateTime=new Date().toISOString();node.textContent=new Intl.DateTimeFormat([],{hour:'numeric',minute:'2-digit'}).format(new Date());}
+function updateClock(){enforceRuntimeLifetime();if(runtime)updateFreshness();const node=document.querySelector('#runtimeClock');node.dateTime=new Date().toISOString();node.textContent=new Intl.DateTimeFormat([],{hour:'numeric',minute:'2-digit'}).format(new Date());}
 function startTimer(){window.clearInterval(timer);refreshSeconds=45;automationPollSeconds=1;rotationSeconds=Math.max(5,Number(runtime?.display?.rotationSeconds)||15);timer=window.setInterval(async()=>{refreshSeconds-=1;automationPollSeconds-=1;if(!rotationPaused&&orderedKpis().length>pageSize)rotationSeconds-=1;if(rotationSeconds<=0)movePage(1);if(refreshSeconds<=0){refreshSeconds=45;await loadRuntime();}if(automationPollSeconds<=0){automationPollSeconds=5;await loadAutomationEvents();}document.querySelector('#refreshCountdown').textContent=refreshSeconds;updateClock();},1000);}
 pairingCode.addEventListener('input',()=>{pairingCode.value=pairingCode.value.toUpperCase().replace(/[^2-9A-HJ-NP-Z]/g,'').slice(0,8);pairingError.textContent='';});
 pairingForm.addEventListener('submit',async event=>{event.preventDefault();const button=pairingForm.querySelector('button');button.disabled=true;pairingError.textContent='';try{await api('/api/display/pair',{method:'POST',body:JSON.stringify({code:pairingCode.value})});pairingCode.value='';await loadRuntime();startTimer();}catch(error){pairingError.textContent=error.message;}finally{button.disabled=false;}});

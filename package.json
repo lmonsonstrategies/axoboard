@@ -13,7 +13,7 @@
     "test:engagement": "node scripts/engagement-core-test.mjs",
     "test:display": "node scripts/display-runtime-test.mjs",
     "test:automation": "node scripts/automation-runtime-test.mjs",
-    "test:tv-visuals": "node scripts/tv-visualization-test.mjs",
+    "test:tv-visuals": "node scripts/tv-visualization-test.mjs && node scripts/tv-freshness-test.mjs",
     "test:release-foundation": "node scripts/release-foundation-test.mjs && node scripts/provenance-scan-test.mjs",
     "test:provenance": "node scripts/provenance-scan.mjs",
     "verify": "node scripts/verify.mjs",
