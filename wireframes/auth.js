@@ -1,4 +1,12 @@
 const currentView = location.pathname === '/signup' ? 'signup' : 'login';
+const authReturnTarget = (() => {
+  const candidate = new URLSearchParams(location.search).get('return');
+  if (!candidate || !candidate.startsWith('/') || candidate.startsWith('//') || candidate.includes('\\')) return '';
+  try {
+    const parsed = new URL(candidate, location.origin);
+    return parsed.origin === location.origin && parsed.pathname === '/app' ? `${parsed.pathname}${parsed.search}${parsed.hash}` : '';
+  } catch { return ''; }
+})();
 document.title = currentView === 'signup' ? 'Create your account — AxoBoard' : 'Log in — AxoBoard';
 document.body.dataset.auth = currentView;
 document.querySelectorAll('[data-year]').forEach((element) => { element.textContent = String(new Date().getFullYear()); });
@@ -75,7 +83,7 @@ signupForm?.addEventListener('submit', async (event) => {
     const response = await fetch('/api/auth/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(payload) });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Could not create your workspace.');
-    location.assign(result.redirect || '/app');
+    location.assign(authReturnTarget || result.redirect || '/app');
   } catch (error) {
     showAlert(signupForm, error.message);
     setLoading(signupForm, false);
@@ -103,5 +111,5 @@ document.querySelector('[data-forgot]')?.addEventListener('click', () => showAle
 
 fetch('/api/auth/session', { credentials: 'same-origin' }).then((response) => response.ok ? response.json() : null).then((session) => {
   if (!session?.authenticated) return;
-  location.replace(session.canAccessApp ? '/app' : '/pricing?access=subscription_required');
+  location.replace(session.canAccessApp ? (authReturnTarget || '/app') : '/pricing?access=subscription_required');
 }).catch(() => {});
