@@ -106,7 +106,7 @@ const contentTypes = new Map([
   ['.css', 'text/css; charset=utf-8'], ['.html', 'text/html; charset=utf-8'],
   ['.js', 'text/javascript; charset=utf-8'], ['.json', 'application/json; charset=utf-8'],
   ['.png', 'image/png'], ['.svg', 'image/svg+xml; charset=utf-8'], ['.txt', 'text/plain; charset=utf-8'],
-  ['.webp', 'image/webp'], ['.xml', 'application/xml; charset=utf-8']
+  ['.webp', 'image/webp'], ['.woff2', 'font/woff2'], ['.xml', 'application/xml; charset=utf-8']
 ]);
 
 const pageRoutes = new Map([
@@ -127,6 +127,10 @@ const publicAssetFiles = new Set([
   'assets/providers/microsoft-excel.svg',
   'assets/providers/hubspot.svg',
   'assets/providers/salesforce.svg'
+]);
+const publicFontFiles = new Set([
+  'assets/fonts/dm-sans/dm-sans-latin.woff2',
+  'assets/fonts/fredoka/fredoka-latin.woff2'
 ]);
 const productFiles = new Map([
   ['/app', 'index.html'],
@@ -511,7 +515,7 @@ function resolvePublicFile(pathname) {
   if (decoded.split(/[\\/]+/).includes('..')) return { error: 'invalid_path' };
   const routeFile = pageRoutes.get(decoded);
   const normalizedRelative = normalize(decoded).replace(/^[/\\]+/, '');
-  const relative = routeFile || (publicStaticFiles.has(normalizedRelative) || publicAssetFiles.has(normalizedRelative) ? normalizedRelative : '');
+  const relative = routeFile || (publicStaticFiles.has(normalizedRelative) || publicAssetFiles.has(normalizedRelative) || publicFontFiles.has(normalizedRelative) ? normalizedRelative : '');
   if (!relative) return { error: 'not_found' };
   const candidate = resolve(publicRoot, relative);
   if (candidate !== publicRoot && !candidate.startsWith(`${publicRoot}${sep}`)) return { error: 'invalid_path' };
@@ -670,7 +674,7 @@ const server = createServer(async (req, res) => {
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'SAMEORIGIN', 'Referrer-Policy': 'strict-origin-when-cross-origin',
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-      'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'",
+      'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'",
       'Cross-Origin-Opener-Policy': 'same-origin',
       'X-Permitted-Cross-Domain-Policies': 'none',
       ...(forwardedProto === 'https' ? { 'Strict-Transport-Security': 'max-age=31536000; includeSubDomains' } : {})
