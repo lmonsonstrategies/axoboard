@@ -342,6 +342,13 @@ async function api(path, { method = 'GET', cookie, body } = {}) {
   });
 }
 
+async function activationFor(cookie) {
+  const response = await api('/api/axoboard/bootstrap', { cookie });
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  return body.engagement.activation;
+}
+
 try {
   const health = await waitForHealth();
   assert.equal(health.googleSheets, 'configured');
@@ -776,9 +783,91 @@ try {
   assert.equal(bootstrapBody.kpis.kpis.length, 1);
   assert.deepEqual(bootstrapBody.dashboard.dashboard.layout.kpiOrder, [createdKpi.id]);
 
+  const firstConnectedAt = new Date('2026-08-21T10:00:00.000Z');
+  const firstKpiAt = new Date('2026-08-21T10:09:59.000Z');
+  await pool.query('UPDATE integration_connections SET created_at=$1 WHERE id=$2 AND workspace_id=$3', [firstConnectedAt, connection.id, first.workspaceId]);
+  await pool.query('UPDATE kpi_mappings SET created_at=$1 WHERE id=$2 AND workspace_id=$3', [firstKpiAt, createdKpi.id, first.workspaceId]);
+  await pool.query(`INSERT INTO kpi_mappings
+    (id,workspace_id,connection_id,name,provider,spreadsheet_id,spreadsheet_title,sheet_id,sheet_title,a1_range,aggregation,status,created_at)
+    VALUES ($1,$2,$3,'Deleted KPI','google_sheets','deleted-sheet','Deleted Sheet',0,'Summary','A1','single_value','deleted',$4)`,
+  [randomUUID(), first.workspaceId, connection.id, new Date('2026-08-21T10:30:00.000Z')]);
+  const isolatedConnectionId = randomUUID();
+  const isolatedKpiId = randomUUID();
+  const isolatedConnectedAt = new Date('2026-08-20T08:00:00.000Z');
+  const isolatedKpiAt = new Date('2026-08-20T08:20:00.000Z');
+  await pool.query(`INSERT INTO integration_connections
+    (id,workspace_id,provider,external_account_id,external_account_email,scopes,status,token_ciphertext,token_iv,token_auth_tag,created_at)
+    VALUES ($1,$2,'google_sheets','isolated-account','isolated@example.com','{}','healthy',$3,$4,$5,$6)`,
+  [isolatedConnectionId, second.workspaceId, Buffer.from('ciphertext'), Buffer.alloc(12), Buffer.alloc(16), isolatedConnectedAt]);
+  await pool.query(`INSERT INTO kpi_mappings
+    (id,workspace_id,connection_id,name,provider,spreadsheet_id,spreadsheet_title,sheet_id,sheet_title,a1_range,aggregation,status,created_at)
+    VALUES ($1,$2,$3,'Isolated KPI','google_sheets','isolated-sheet','Isolated Sheet',0,'Summary','A1','single_value','active',$4)`,
+  [isolatedKpiId, second.workspaceId, isolatedConnectionId, isolatedKpiAt]);
+
+  const ownerActivationBootstrap = await api('/api/axoboard/bootstrap', { cookie: first.cookie });
+  const ownerActivationBody = await ownerActivationBootstrap.json();
+  assert.deepEqual(ownerActivationBody.engagement.activation, {
+    connectedAt: firstConnectedAt.toISOString(), firstKpiAt: firstKpiAt.toISOString(), secondsToFirstKpi: 599,
+    reachedFirstKpi: true, underTenMinutes: true
+  }, 'owner activation timing is derived only from the authenticated workspace');
+  assert.deepEqual(await activationFor(first.cookie), ownerActivationBody.engagement.activation,
+    'repeated bootstrap preserves the first-success activation timeline');
+
+  for (const status of ['degraded', 'reauthorization_required', 'healthy']) {
+    await pool.query('UPDATE integration_connections SET status=$1,updated_at=NOW() WHERE id=$2 AND workspace_id=$3',
+      [status, connection.id, first.workspaceId]);
+    assert.deepEqual(await activationFor(first.cookie), ownerActivationBody.engagement.activation,
+      `${status} status does not rewrite first-success activation timing`);
+  }
+
+  const laterConnectionId = randomUUID();
+  await pool.query(`INSERT INTO integration_connections
+    (id,workspace_id,provider,external_account_id,external_account_email,scopes,status,token_ciphertext,token_iv,token_auth_tag,created_at)
+    VALUES ($1,$2,'google_sheets','later-account','later@example.com','{}','healthy',$3,$4,$5,$6)`,
+  [laterConnectionId, first.workspaceId, Buffer.from('later-ciphertext'), Buffer.alloc(12), Buffer.alloc(16), new Date('2026-08-21T11:00:00.000Z')]);
+  assert.deepEqual(await activationFor(first.cookie), ownerActivationBody.engagement.activation,
+    'a later successful connection cannot replace the first-success timestamp');
+  await pool.query("UPDATE integration_connections SET status='disconnected',disconnected_at=NOW(),updated_at=NOW() WHERE id=$1 AND workspace_id=$2",
+    [laterConnectionId, first.workspaceId]);
+  assert.deepEqual(await activationFor(first.cookie), ownerActivationBody.engagement.activation,
+    'a later connection status change cannot replace the first-success timestamp');
+  await pool.query('DELETE FROM integration_connections WHERE id=$1 AND workspace_id=$2', [laterConnectionId, first.workspaceId]);
+  assert.deepEqual(await activationFor(first.cookie), ownerActivationBody.engagement.activation,
+    'deleting a later connection cannot replace the first-success timestamp');
+
+  const isolatedActivationBootstrap = await api('/api/axoboard/bootstrap', { cookie: second.cookie });
+  const isolatedActivationBody = await isolatedActivationBootstrap.json();
+  assert.deepEqual(isolatedActivationBody.engagement.activation, {
+    connectedAt: isolatedConnectedAt.toISOString(), firstKpiAt: isolatedKpiAt.toISOString(), secondsToFirstKpi: 1200,
+    reachedFirstKpi: true, underTenMinutes: false
+  }, 'another owner receives only its workspace activation timing');
+  assert.notEqual(isolatedActivationBody.engagement.activation.connectedAt, ownerActivationBody.engagement.activation.connectedAt);
+  assert.notEqual(isolatedActivationBody.engagement.activation.firstKpiAt, ownerActivationBody.engagement.activation.firstKpiAt);
+  assert.notEqual(isolatedActivationBody.engagement.activation.secondsToFirstKpi, ownerActivationBody.engagement.activation.secondsToFirstKpi);
+  await pool.query(`UPDATE integration_connections SET created_at=NOW()-INTERVAL '5 minutes' WHERE id=$1 AND workspace_id=$2`,
+    [isolatedConnectionId, second.workspaceId]);
+  await pool.query(`UPDATE kpi_mappings SET created_at=NOW()-INTERVAL '10 minutes' WHERE id=$1 AND workspace_id=$2`,
+    [isolatedKpiId, second.workspaceId]);
+  const outOfOrderConnectedAt = (await pool.query('SELECT created_at FROM integration_connections WHERE id=$1 AND workspace_id=$2',
+    [isolatedConnectionId, second.workspaceId])).rows[0].created_at.toISOString();
+  assert.deepEqual(await activationFor(second.cookie), {
+    connectedAt: outOfOrderConnectedAt, firstKpiAt: null, secondsToFirstKpi: null,
+    reachedFirstKpi: true, underTenMinutes: false
+  }, 'out-of-order source timestamps fail closed without returning a negative duration');
+  await pool.query(`UPDATE integration_connections SET created_at=NOW()+INTERVAL '2 hours' WHERE id=$1 AND workspace_id=$2`,
+    [isolatedConnectionId, second.workspaceId]);
+  await pool.query(`UPDATE kpi_mappings SET created_at=NOW()+INTERVAL '3 hours' WHERE id=$1 AND workspace_id=$2`,
+    [isolatedKpiId, second.workspaceId]);
+  assert.deepEqual(await activationFor(second.cookie), {
+    connectedAt: null, firstKpiAt: null, secondsToFirstKpi: null,
+    reachedFirstKpi: true, underTenMinutes: false
+  }, 'future source timestamps fail closed and never enter activation telemetry');
+  await pool.query('DELETE FROM integration_connections WHERE id=$1 AND workspace_id=$2', [isolatedConnectionId, second.workspaceId]);
+
   const adminBootstrap = await api('/api/axoboard/bootstrap', { cookie: admin.cookie });
   const adminBootstrapBody = await adminBootstrap.json();
   assert.equal(adminBootstrap.status, 200);
+  assert.deepEqual(adminBootstrapBody.engagement.activation, ownerActivationBody.engagement.activation, 'admin receives workspace activation timing');
   assert.equal(adminBootstrapBody.session.capabilities.manageAutomationDrafts, true);
   assert.equal(adminBootstrapBody.session.capabilities.publishAutomations, true);
   assert.equal(adminBootstrapBody.session.capabilities.manageAutomationDestinations, true);
@@ -787,6 +876,7 @@ try {
   const editorBootstrap = await api('/api/axoboard/bootstrap', { cookie: editor.cookie });
   const editorBootstrapBody = await editorBootstrap.json();
   assert.equal(editorBootstrap.status, 200);
+  assert.deepEqual(editorBootstrapBody.engagement.activation, { reachedFirstKpi: true }, 'editor receives no exact activation timing');
   assert.equal(editorBootstrapBody.session.capabilities.manageKpis, true);
   assert.equal(editorBootstrapBody.session.capabilities.readDisplays, false);
   assert.equal(editorBootstrapBody.session.capabilities.readEvents, true);
@@ -807,6 +897,7 @@ try {
   const viewerBootstrapText = await viewerBootstrap.text();
   const viewerBootstrapBody = JSON.parse(viewerBootstrapText);
   assert.equal(viewerBootstrap.status, 200);
+  assert.deepEqual(viewerBootstrapBody.engagement.activation, { reachedFirstKpi: true }, 'viewer receives only safe activation completion state');
   assert.equal(viewerBootstrapBody.session.capabilities.readKpis, true);
   assert.equal(viewerBootstrapBody.session.capabilities.manageKpis, false);
   assert.equal(viewerBootstrapBody.session.capabilities.readDisplays, false);
@@ -898,6 +989,9 @@ try {
   const disconnectedText = await disconnected.text();
   assert.equal(disconnected.status, 200, disconnectedText);
   assert.equal(revokeCalls, 1);
+  const activationAfterDisconnect = await api('/api/axoboard/bootstrap', { cookie: first.cookie });
+  assert.deepEqual((await activationAfterDisconnect.json()).engagement.activation, ownerActivationBody.engagement.activation,
+    'disconnect preserves the immutable first-success activation timeline');
   const afterDisconnect = await api(`/api/axoboard/kpis/${createdKpi.id}/sync`, { method: 'POST', cookie: first.cookie });
   assert.equal(afterDisconnect.status, 409);
   const retained = await api('/api/axoboard/kpis', { cookie: first.cookie });
@@ -905,6 +999,28 @@ try {
   assert.equal(retainedKpi.value, 20, 'disconnect preserves last known good value');
   assert.equal(retainedKpi.status, 'degraded');
   assert.equal(retainedKpi.lastErrorCode, 'connection_disconnected');
+
+  const reconnectStart = await api('/api/axoboard/integrations/oauth/start', { method: 'POST', cookie: first.cookie, body: { provider: 'google' } });
+  const reconnectAuthorizationUrl = new URL((await reconnectStart.json()).authorizationUrl);
+  assert.equal(reconnectStart.status, 200);
+  expectedChallenge = reconnectAuthorizationUrl.searchParams.get('code_challenge');
+  const reconnectState = reconnectAuthorizationUrl.searchParams.get('state');
+  const reconnectCallback = await api(`/api/integrations/oauth/google/callback?state=${encodeURIComponent(reconnectState)}&code=valid-google-code`, { cookie: first.cookie });
+  assert.equal(reconnectCallback.status, 302);
+  assert.equal(reconnectCallback.headers.get('location'), '/app?integration=google&status=connected');
+  const reconnectedRow = (await pool.query('SELECT id,status,created_at FROM integration_connections WHERE id=$1 AND workspace_id=$2',
+    [connection.id, first.workspaceId])).rows[0];
+  assert.equal(reconnectedRow.id, connection.id, 'reconnect revives the same tenant-owned account row');
+  assert.equal(reconnectedRow.status, 'healthy');
+  assert.equal(reconnectedRow.created_at.toISOString(), firstConnectedAt.toISOString(), 'reconnect preserves the immutable first-success timestamp');
+  assert.deepEqual(await activationFor(first.cookie), ownerActivationBody.engagement.activation,
+    'reconnect preserves the complete first-success activation timeline');
+
+  const providerCallsBeforeSecondTenantProbe = driveCalls + metadataCalls + valuesCalls;
+  const secondTenantProbe = await api(`/api/axoboard/integrations/google/spreadsheets?connectionId=${connection.id}`, { cookie: second.cookie });
+  assert.equal(secondTenantProbe.status, 403);
+  assert.equal(driveCalls + metadataCalls + valuesCalls, providerCallsBeforeSecondTenantProbe,
+    'tenant switching after reconnect makes zero provider calls');
 
   const crossTenantDelete = await api(`/api/axoboard/kpis/${createdKpi.id}`, { method: 'DELETE', cookie: second.cookie });
   assert.equal(crossTenantDelete.status, 404, 'another workspace cannot discover or delete the KPI');
@@ -924,9 +1040,11 @@ try {
   assert.equal(deleteSecond.status, 200);
   const emptyList = await api('/api/axoboard/kpis', { cookie: first.cookie });
   assert.deepEqual((await emptyList.json()).kpis, [], 'soft-deleted KPIs no longer render on the workspace dashboard');
+  assert.deepEqual(await activationFor(first.cookie), ownerActivationBody.engagement.activation,
+    'soft deletion of every KPI preserves the immutable first-KPI timeline');
 
-  recordDatabaseSuitePass('google', { coverage: 'OAuth, mapping, sync, disconnect, tenant isolation' });
-  console.log('AxoBoard Google integration test passed: OAuth, recent-first discovery, virtual-scroll grid preview, non-adjacent ranges, rep-metric-goal scorecards, header-aware comparisons, workspace layout, delete, sync, disconnect, and tenant isolation.');
+  recordDatabaseSuitePass('google', { coverage: 'OAuth, mapping, sync, immutable activation timing, disconnect, reconnect, tenant isolation' });
+  console.log('AxoBoard Google integration test passed: OAuth, recent-first discovery, virtual-scroll grid preview, non-adjacent ranges, rep-metric-goal scorecards, header-aware comparisons, workspace layout, immutable activation timing, delete, sync, disconnect, reconnect, and tenant isolation.');
 } finally {
   app.kill('SIGTERM');
   await new Promise((resolveExit) => app.once('exit', resolveExit));

@@ -150,11 +150,11 @@
     },
     {
       "path": "scripts/google-integration-test.mjs",
-      "sha256": "c3c4ceba5f915cc1ea4cfb83b779795af01c4eb076b475569518113985c895cb",
+      "sha256": "12a83f6727dc5df0542f54f05d03e8d169956da9106c6c42912abfed182b28b6",
       "rules": ["tenant-provider-id", "credential-material"],
-      "rationale": "Allow exact synthetic provider IDs and secrets in the test double.",
+      "rationale": "Allow exact synthetic provider IDs and secrets in tenant-isolation and role-redaction test doubles.",
       "reviewedBy": "AxoBoard release gate",
-      "reviewedAt": "2026-08-21T18:00:00.000Z"
+      "reviewedAt": "2026-08-22T00:23:52.000Z"
     },
     {
       "path": "scripts/smoke-test.mjs",
